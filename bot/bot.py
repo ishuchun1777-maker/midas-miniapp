@@ -415,6 +415,21 @@ async def admin_text_handler(update: Update, ctx: ContextTypes.DEFAULT_TYPE):
 
 # ==================== MAIN ====================
 
+async def health_server():
+    """Render uchun HTTP health check server"""
+    from aiohttp import web
+    async def handle(request):
+        return web.Response(text="MIDAS Bot ishlayapti!")
+    app = web.Application()
+    app.router.add_get("/", handle)
+    app.router.add_get("/health", handle)
+    runner = web.AppRunner(app)
+    await runner.setup()
+    port = int(os.getenv("PORT", 8080))
+    site = web.TCPSite(runner, "0.0.0.0", port)
+    await site.start()
+    logger.info(f"✅ Health server port {port} da ishga tushdi")
+
 async def main():
     app = Application.builder().token(BOT_TOKEN).build()
 
@@ -427,6 +442,7 @@ async def main():
     app.add_handler(MessageHandler(filters.TEXT & ~filters.COMMAND, admin_text_handler))
 
     logger.info("🤖 MIDAS Bot ishga tushdi!")
+    await health_server()
     await app.initialize()
     await app.start()
     await app.updater.start_polling(drop_pending_updates=True)
