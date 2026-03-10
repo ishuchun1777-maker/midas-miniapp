@@ -20,8 +20,8 @@ from telegram.ext import (
 )
 
 BOT_TOKEN    = os.getenv("BOT_TOKEN", "")
-MINI_APP_URL = os.getenv("MINI_APP_URL", "https://midas-frontend.onrender.com")
-API_URL      = os.getenv("API_URL",      "https://midas-backend.onrender.com")
+MINI_APP_URL = os.getenv("MINI_APP_URL", "")
+API_URL      = os.getenv("API_URL", "")
 ADMIN_IDS    = [int(x.strip()) for x in os.getenv("ADMIN_IDS", "").split(",") if x.strip().isdigit()]
 
 logging.basicConfig(level=logging.INFO, format="%(asctime)s - %(levelname)s - %(message)s")
