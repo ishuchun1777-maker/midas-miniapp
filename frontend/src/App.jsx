@@ -23,7 +23,7 @@ function BottomNav({ tab, setTab, role, unread, lang, theme, isAdmin }) {
     { v:"match",     icon:"🎯", uz:"Match",     ru:"Матч"      },
     { v:"tender",    icon:"📋", uz:"Tender",    ru:"Тендер"    },
     { v:"notifs",    icon:"🔔", uz:"Xabarlar",  ru:"Уведомл."  },
-    { v:"analytics", icon:"📊", uz:"Analitik",  ru:"Аналитика" },
+    { v:"chats",     icon:"💬", uz:"Chatlar",   ru:"Чаты"      },
     { v:"profile",   icon:"👤", uz:"Profil",    ru:"Профиль"   },
   ] : [
     { v:"match",    icon:"🎯", uz:"Match",    ru:"Матч"    },
@@ -377,7 +377,7 @@ export default function App() {
       case "tender":    return <TenderPage user={user} lang={lang} theme={theme}/>;
       case "notifs":    return <NotifOffersPage user={user} lang={lang} theme={theme}/>;
       case "chats":     return <ChatsPage user={user} lang={lang} theme={theme}/>;
-      case "analytics": return <AnalyticsPage user={user} lang={lang} theme={theme}/>;
+      case "analytics": return user.role === "reklamachi" ? <AnalyticsPage user={user} lang={lang} theme={theme}/> : <AIAdvisorPage user={user} lang={lang} theme={theme}/>;
       case "ai":        return <AIAdvisorPage user={user} lang={lang} theme={theme}/>;
       case "profile":
         return <ProfilePage
