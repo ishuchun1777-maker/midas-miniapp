@@ -1,0 +1,47 @@
+# render.yaml — Render.com deploy konfiguratsiyasi
+# Bu faylni loyiha root papkasiga qo'ying
+
+services:
+  # ===== BACKEND (FastAPI) =====
+  - type: web
+    name: midas-backend
+    runtime: python
+    rootDir: backend
+    buildCommand: pip install -r requirements.txt
+    startCommand: uvicorn main:app --host 0.0.0.0 --port $PORT
+    envVars:
+      - key: BOT_TOKEN
+        sync: false          # Render dashboard da qo'lda kiritasiz
+      - key: ADMIN_IDS
+        sync: false          # Telegram admin ID lari
+      - key: DB_PATH
+        value: /opt/render/project/src/midas.db
+    disk:
+      name: midas-db
+      mountPath: /opt/render/project/src
+      sizeGB: 1              # Tekin plan: 1GB
+
+  # ===== FRONTEND (React → Static Site) =====
+  - type: web
+    name: midas-frontend
+    runtime: static
+    rootDir: frontend
+    buildCommand: npm install && npm run build
+    staticPublishPath: build
+    envVars:
+      - key: REACT_APP_API_URL
+        fromService:
+          name: midas-backend
+          type: web
+          property: host
+          # Bu avtomatik backend URL ni oladi
+      - key: REACT_APP_ADMIN_IDS
+        sync: false          # Admin ID lari
+    headers:
+      - path: /*
+        name: Cache-Control
+        value: no-cache
+    routes:
+      - type: rewrite
+        source: /*
+        destination: /index.html
