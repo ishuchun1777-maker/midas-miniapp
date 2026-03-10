@@ -1,13 +1,15 @@
-# render.yaml — Render.com deploy konfiguratsiyasi (v6 tuzatilgan)
+# ═══════════════════════════════════════════════════════
+# MIDAS V8 — RENDER.YAML
+# ═══════════════════════════════════════════════════════
 
 services:
-  # ===== BACKEND (Flask + Gunicorn) =====
+  # ── BACKEND ───────────────────────────────────────────
   - type: web
     name: midas-backend
     runtime: python
     rootDir: backend
     buildCommand: pip install -r requirements.txt
-    startCommand: gunicorn main:app --bind 0.0.0.0:$PORT --workers 2 --timeout 120
+    startCommand: gunicorn main:app --bind 0.0.0.0:$PORT --workers 2 --timeout 120 --preload
     envVars:
       - key: BOT_TOKEN
         sync: false
@@ -20,7 +22,7 @@ services:
       mountPath: /opt/render/project/src
       sizeGB: 1
 
-  # ===== BOT (python-telegram-bot) =====
+  # ── BOT (worker — PORT yo'q) ──────────────────────────
   - type: worker
     name: midas-bot
     runtime: python
@@ -29,6 +31,8 @@ services:
     startCommand: python bot.py
     envVars:
       - key: BOT_TOKEN
+        sync: false
+      - key: ADMIN_IDS
         sync: false
       - key: MINI_APP_URL
         fromService:
@@ -40,10 +44,8 @@ services:
           name: midas-backend
           type: web
           property: hostWithScheme
-      - key: ADMIN_IDS
-        sync: false
 
-  # ===== FRONTEND (React Static Site) =====
+  # ── FRONTEND ──────────────────────────────────────────
   - type: web
     name: midas-frontend
     runtime: static
@@ -61,7 +63,13 @@ services:
     headers:
       - path: /*
         name: Cache-Control
-        value: no-cache
+        value: no-cache, no-store, must-revalidate
+      - path: /*
+        name: X-Content-Type-Options
+        value: nosniff
+      - path: /*
+        name: X-Frame-Options
+        value: DENY
     routes:
       - type: rewrite
         source: /*

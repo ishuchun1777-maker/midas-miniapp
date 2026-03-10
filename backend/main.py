@@ -1,1316 +1,1094 @@
-"""
-MIDAS Platform - Flask Backend v3.0
-"""
-import os
-import json
-import sqlite3
-import re
+# ═══════════════════════════════════════════════════════
+# MIDAS V8 — BACKEND (Flask)
+# 5 rol, portfel, campaigns, kafolat, bozor analitika,
+# referral, xavfsizlik, rate limiting
+# ═══════════════════════════════════════════════════════
+import os, sqlite3, json, time, hashlib, hmac, logging
+from datetime import datetime, timedelta
+from functools import wraps
 from flask import Flask, request, jsonify
 from flask_cors import CORS
-from ai_advisor import generate_advice
-from matching import calc_score, calc_offline_score, PLATFORMS_OFFLINE
+from matching import calc_score as _calc_score
 
-BOT_TOKEN = os.getenv("BOT_TOKEN", "YOUR_BOT_TOKEN")
-DB_PATH = os.getenv("DB_PATH", "midas.db")
-ADMIN_IDS_STR = os.getenv("ADMIN_IDS", "123456789")
-ADMIN_IDS = [int(x.strip()) for x in ADMIN_IDS_STR.split(",") if x.strip()]
+OFFLINE_PLATFORMS = {"billboard","tv","radio","print","event","influencer"}
+
+def calculate_match_score(user, candidate):
+    try:
+        c_plats = candidate.get("platforms") or []
+        if isinstance(c_plats, str):
+            try: c_plats = json.loads(c_plats)
+            except: c_plats = []
+        return _calc_score(user, candidate)
+    except Exception:
+        return 50
+
+logging.basicConfig(level=logging.INFO, format="%(asctime)s %(levelname)s %(message)s")
+logger = logging.getLogger(__name__)
 
 app = Flask(__name__)
 CORS(app)
 
-# ==================== DB ====================
-def get_conn():
-    conn = sqlite3.connect(DB_PATH, check_same_thread=False)
+DB_PATH    = os.getenv("DB_PATH",    "/opt/render/project/src/midas.db")
+BOT_TOKEN  = os.getenv("BOT_TOKEN",  "")
+ADMIN_IDS  = [int(x) for x in os.getenv("ADMIN_IDS","").split(",") if x.strip().isdigit()]
+
+# ── RATE LIMITING ─────────────────────────────────────
+_rate_store = {}  # {ip: [timestamps]}
+def rate_limit(max_calls=60, window=60):
+    def decorator(f):
+        @wraps(f)
+        def wrapper(*args, **kwargs):
+            ip = request.remote_addr or "unknown"
+            now = time.time()
+            calls = _rate_store.get(ip, [])
+            calls = [t for t in calls if now - t < window]
+            if len(calls) >= max_calls:
+                return jsonify({"error": "Rate limit exceeded"}), 429
+            calls.append(now)
+            _rate_store[ip] = calls
+            return f(*args, **kwargs)
+        return wrapper
+    return decorator
+
+# ── DB YORDAMCHI ─────────────────────────────────────
+def get_db():
+    conn = sqlite3.connect(DB_PATH)
     conn.row_factory = sqlite3.Row
     conn.execute("PRAGMA journal_mode=WAL")
+    conn.execute("PRAGMA foreign_keys=ON")
     return conn
 
-def init_db():
-    conn = get_conn()
-    c = conn.cursor()
-    c.execute("""CREATE TABLE IF NOT EXISTS users (
-        id INTEGER PRIMARY KEY AUTOINCREMENT,
-        telegram_id INTEGER UNIQUE NOT NULL,
-        username TEXT, full_name TEXT,
-        role TEXT DEFAULT 'user', phone TEXT,
-        lang TEXT DEFAULT 'uz',
-        rating REAL DEFAULT 5.0, rating_count INTEGER DEFAULT 0,
-        is_premium INTEGER DEFAULT 0, is_active INTEGER DEFAULT 1,
-        is_blocked INTEGER DEFAULT 0, block_reason TEXT,
-        created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
-    )""")
-    c.execute("""CREATE TABLE IF NOT EXISTS business_targets (
-        id INTEGER PRIMARY KEY AUTOINCREMENT,
-        user_id INTEGER UNIQUE NOT NULL,
-        sector TEXT DEFAULT '', sub_sector TEXT DEFAULT '',
-        preferred_platforms TEXT DEFAULT '[]',
-        ages TEXT DEFAULT '[]', target_gender TEXT DEFAULT 'all',
-        location TEXT DEFAULT '[]', interests TEXT DEFAULT '[]',
-        min_followers INTEGER DEFAULT 0, max_budget INTEGER DEFAULT 0,
-        campaign_goal TEXT DEFAULT '',
-        created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-        updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
-    )""")
-    c.execute("""CREATE TABLE IF NOT EXISTS reklamachi_profiles (
-        id INTEGER PRIMARY KEY AUTOINCREMENT,
-        user_id INTEGER UNIQUE NOT NULL,
-        platform TEXT DEFAULT '', username TEXT DEFAULT '',
-        profile_link TEXT DEFAULT '', address TEXT DEFAULT '',
-        coordinates TEXT DEFAULT '',
-        followers INTEGER DEFAULT 0, engagement REAL DEFAULT 0,
-        price_post INTEGER DEFAULT 0, price_story INTEGER DEFAULT 0,
-        price_video INTEGER DEFAULT 0, price_description TEXT DEFAULT '',
-        audience_ages TEXT DEFAULT '[]', audience_gender TEXT DEFAULT 'all',
-        audience_location TEXT DEFAULT 'all', interests TEXT DEFAULT '[]',
-        verified INTEGER DEFAULT 0, is_offline INTEGER DEFAULT 0,
-        free_offer_used INTEGER DEFAULT 0,
-        created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-        updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
-    )""")
-    c.execute("""CREATE TABLE IF NOT EXISTS offers (
-        id INTEGER PRIMARY KEY AUTOINCREMENT,
-        from_id INTEGER NOT NULL, to_id INTEGER NOT NULL,
-        message TEXT, status TEXT DEFAULT 'pending',
-        is_free INTEGER DEFAULT 0,
-        rating INTEGER DEFAULT 0, rated INTEGER DEFAULT 0,
-        created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-        updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
-    )""")
-    c.execute("""CREATE TABLE IF NOT EXISTS private_chats (
-        id INTEGER PRIMARY KEY AUTOINCREMENT,
-        user1_id INTEGER NOT NULL, user2_id INTEGER NOT NULL,
-        offer_id INTEGER, last_message TEXT,
-        last_message_time TIMESTAMP, status TEXT DEFAULT 'active',
-        created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-        updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-        UNIQUE(user1_id, user2_id)
-    )""")
-    c.execute("""CREATE TABLE IF NOT EXISTS messages (
-        id INTEGER PRIMARY KEY AUTOINCREMENT,
-        chat_id INTEGER NOT NULL, sender_id INTEGER NOT NULL,
-        receiver_id INTEGER NOT NULL, message_text TEXT,
-        message_type TEXT DEFAULT 'text',
-        is_read INTEGER DEFAULT 0,
-        created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
-    )""")
-    c.execute("""CREATE TABLE IF NOT EXISTS notifications (
-        id INTEGER PRIMARY KEY AUTOINCREMENT,
-        user_id INTEGER NOT NULL, title TEXT, body TEXT,
-        type TEXT DEFAULT 'info', is_read INTEGER DEFAULT 0,
-        ref_id INTEGER DEFAULT 0,
-        created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
-    )""")
-    # Admin broadcast xabarlari
-    c.execute("""CREATE TABLE IF NOT EXISTS broadcasts (
-        id INTEGER PRIMARY KEY AUTOINCREMENT,
-        sender_id INTEGER NOT NULL,
-        target TEXT DEFAULT 'all',
-        message_text TEXT, message_type TEXT DEFAULT 'text',
-        created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
-    )""")
-    conn.commit()
-    conn.close()
+def row2dict(row):
+    return dict(row) if row else None
 
-init_db()
+def rows2list(rows):
+    return [dict(r) for r in rows]
 
-# ==================== HELPERS ====================
-def jl(val, default=None):
-    if default is None: default = []
-    try: return json.loads(val) if val else default
-    except: return default
+# ── MIGRATSIYA ────────────────────────────────────────
+def run_migrations():
+    with get_db() as db:
+        # Asosiy foydalanuvchilar jadvali
+        db.execute("""CREATE TABLE IF NOT EXISTS users (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            telegram_id INTEGER UNIQUE NOT NULL,
+            username TEXT, full_name TEXT, phone TEXT,
+            role TEXT NOT NULL DEFAULT 'reklamachi',
+            lang TEXT DEFAULT 'uz',
+            bio TEXT, address TEXT, sector TEXT, region TEXT,
+            regions TEXT DEFAULT '[]',
+            company_name TEXT, website TEXT, profile_link TEXT,
+            platforms TEXT DEFAULT '[]',
+            followers INTEGER DEFAULT 0,
+            engagement REAL DEFAULT 0,
+            price_post INTEGER DEFAULT 0,
+            price_story INTEGER DEFAULT 0,
+            price_video INTEGER DEFAULT 0,
+            monthly_budget INTEGER DEFAULT 0,
+            min_budget INTEGER DEFAULT 0,
+            managed_budget INTEGER DEFAULT 0,
+            roi_avg REAL DEFAULT 0,
+            team_size INTEGER DEFAULT 0,
+            portfolio_url TEXT,
+            design_tools TEXT,
+            content_types TEXT DEFAULT '[]',
+            audience_gender TEXT DEFAULT 'all',
+            audience_ages TEXT DEFAULT '[]',
+            audience_regions TEXT DEFAULT '[]',
+            instagram TEXT, telegram_channel TEXT,
+            tiktok TEXT, youtube TEXT,
+            rating REAL DEFAULT 5.0,
+            rating_count INTEGER DEFAULT 0,
+            trust_score INTEGER DEFAULT 50,
+            is_verified INTEGER DEFAULT 0,
+            is_premium INTEGER DEFAULT 0,
+            premium_until TEXT,
+            is_blocked INTEGER DEFAULT 0,
+            profile_views INTEGER DEFAULT 0,
+            referral_code TEXT UNIQUE,
+            referred_by TEXT,
+            notif_settings TEXT DEFAULT '{"offers":true,"match":true,"messages":true,"deals":true}',
+            created_at TEXT DEFAULT (datetime('now')),
+            updated_at TEXT DEFAULT (datetime('now'))
+        )""")
 
-def ok(data=None):
-    if data is None: return jsonify({"success": True})
-    return jsonify(data)
+        # Takliflar
+        db.execute("""CREATE TABLE IF NOT EXISTS offers (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            from_id INTEGER, to_id INTEGER,
+            message TEXT, status TEXT DEFAULT 'pending',
+            is_free INTEGER DEFAULT 0,
+            created_at TEXT DEFAULT (datetime('now'))
+        )""")
 
-def err(msg, code=400):
-    return jsonify({"error": msg}), code
+        # Chatlar
+        db.execute("""CREATE TABLE IF NOT EXISTS chats (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            user1_id INTEGER, user2_id INTEGER,
+            offer_id INTEGER,
+            status TEXT DEFAULT 'active',
+            created_at TEXT DEFAULT (datetime('now')),
+            updated_at TEXT DEFAULT (datetime('now'))
+        )""")
 
-def add_notif(conn, user_id, title, body, ntype="info", ref_id=0):
+        # Xabarlar
+        db.execute("""CREATE TABLE IF NOT EXISTS messages (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            chat_id INTEGER, sender_id INTEGER, receiver_id INTEGER,
+            message_text TEXT, is_read INTEGER DEFAULT 0,
+            created_at TEXT DEFAULT (datetime('now'))
+        )""")
+
+        # Tenderlar
+        db.execute("""CREATE TABLE IF NOT EXISTS tenders (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            owner_id INTEGER, title TEXT, sector TEXT,
+            description TEXT,
+            budget_min INTEGER DEFAULT 0, budget_max INTEGER DEFAULT 0,
+            deadline TEXT, goal TEXT,
+            platforms TEXT DEFAULT '[]', regions TEXT DEFAULT '[]',
+            status TEXT DEFAULT 'active',
+            is_open INTEGER DEFAULT 1,
+            proposal_count INTEGER DEFAULT 0,
+            created_at TEXT DEFAULT (datetime('now')),
+            updated_at TEXT DEFAULT (datetime('now'))
+        )""")
+
+        # Tender takliflari
+        db.execute("""CREATE TABLE IF NOT EXISTS tender_proposals (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            tender_id INTEGER, user_id INTEGER,
+            price INTEGER, timeline TEXT, message TEXT,
+            status TEXT DEFAULT 'pending',
+            created_at TEXT DEFAULT (datetime('now'))
+        )""")
+
+        # Bildirishnomalar
+        db.execute("""CREATE TABLE IF NOT EXISTS notifications (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            user_id INTEGER, type TEXT, title TEXT, body TEXT,
+            is_read INTEGER DEFAULT 0,
+            created_at TEXT DEFAULT (datetime('now'))
+        )""")
+
+        # Reytinglar
+        db.execute("""CREATE TABLE IF NOT EXISTS ratings (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            from_id INTEGER, to_id INTEGER,
+            rating INTEGER, review_text TEXT,
+            tags TEXT DEFAULT '[]',
+            created_at TEXT DEFAULT (datetime('now'))
+        )""")
+
+        # Portfolio
+        db.execute("""CREATE TABLE IF NOT EXISTS portfolio (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            user_id INTEGER, title TEXT, platform TEXT,
+            sector TEXT, client_name TEXT,
+            description TEXT, link TEXT,
+            reach INTEGER DEFAULT 0, clicks INTEGER DEFAULT 0,
+            roi INTEGER DEFAULT 0, sales INTEGER DEFAULT 0,
+            created_at TEXT DEFAULT (datetime('now')),
+            updated_at TEXT DEFAULT (datetime('now'))
+        )""")
+
+        # Kampaniyalar
+        db.execute("""CREATE TABLE IF NOT EXISTS campaigns (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            user_id INTEGER, name TEXT, platform TEXT,
+            goal TEXT, status TEXT DEFAULT 'active',
+            budget INTEGER DEFAULT 0, spent INTEGER DEFAULT 0,
+            revenue INTEGER DEFAULT 0,
+            reach INTEGER DEFAULT 0, clicks INTEGER DEFAULT 0,
+            start_date TEXT, end_date TEXT,
+            created_at TEXT DEFAULT (datetime('now'))
+        )""")
+
+        # Kafolat/tasdiqlash
+        db.execute("""CREATE TABLE IF NOT EXISTS guarantees (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            deal_id INTEGER, user_id INTEGER,
+            proof_link TEXT, proof_type TEXT,
+            notes TEXT, status TEXT DEFAULT 'pending',
+            created_at TEXT DEFAULT (datetime('now'))
+        )""")
+
+        # Bitimlar
+        db.execute("""CREATE TABLE IF NOT EXISTS deals (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            user1_id INTEGER, user2_id INTEGER,
+            offer_id INTEGER, status TEXT DEFAULT 'active',
+            proof_status TEXT DEFAULT 'none',
+            created_at TEXT DEFAULT (datetime('now'))
+        )""")
+
+        # Referral bonuslar
+        db.execute("""CREATE TABLE IF NOT EXISTS referral_bonuses (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            referrer_id INTEGER, referred_id INTEGER,
+            bonus_days INTEGER,
+            created_at TEXT DEFAULT (datetime('now'))
+        )""")
+
+        # Foydalanuvchilar profiliga yangi ustunlar qo'shish (mavjud DB uchun)
+        for col, definition in [
+            ("instagram",         "TEXT"),
+            ("telegram_channel",  "TEXT"),
+            ("tiktok",            "TEXT"),
+            ("youtube",           "TEXT"),
+            ("roi_avg",           "REAL DEFAULT 0"),
+            ("managed_budget",    "INTEGER DEFAULT 0"),
+            ("design_tools",      "TEXT"),
+            ("portfolio_url",     "TEXT"),
+            ("team_size",         "INTEGER DEFAULT 0"),
+            ("min_budget",        "INTEGER DEFAULT 0"),
+            ("regions",           "TEXT DEFAULT '[]'"),
+            ("audience_ages",     "TEXT DEFAULT '[]'"),
+            ("audience_regions",  "TEXT DEFAULT '[]'"),
+            ("profile_views",     "INTEGER DEFAULT 0"),
+        ]:
+            try:
+                db.execute(f"ALTER TABLE users ADD COLUMN {col} {definition}")
+            except Exception:
+                pass
+
+        db.commit()
+    logger.info("✅ Migrations OK")
+
+# ── YORDAMCHI ─────────────────────────────────────────
+def now_str():
+    return datetime.utcnow().isoformat()
+
+def send_notification(db, user_id, ntype, title, body):
     try:
-        conn.execute(
-            "INSERT INTO notifications(user_id,title,body,type,ref_id) VALUES(?,?,?,?,?)",
-            (user_id, title, body, ntype, ref_id))
-        conn.commit()
-    except: pass
+        db.execute(
+            "INSERT INTO notifications (user_id, type, title, body) VALUES (?,?,?,?)",
+            (user_id, ntype, title, body)
+        )
+    except Exception as e:
+        logger.warning(f"Notification: {e}")
+
+def recalc_trust(db, user_id):
+    u = row2dict(db.execute("SELECT * FROM users WHERE telegram_id=?", (user_id,)).fetchone())
+    if not u: return 50
+    score = 20
+    if u.get("is_verified"):       score += 20
+    if u.get("phone"):             score += 5
+    if u.get("bio"):               score += 5
+    if u.get("profile_link"):      score += 5
+    if u.get("company_name"):      score += 5
+    deals  = db.execute("SELECT COUNT(*) FROM deals WHERE (user1_id=? OR user2_id=?) AND status='completed'", (user_id, user_id)).fetchone()[0]
+    pf     = db.execute("SELECT COUNT(*) FROM portfolio WHERE user_id=?", (user_id,)).fetchone()[0]
+    gf     = db.execute("SELECT COUNT(*) FROM guarantees WHERE user_id=? AND status='verified'", (user_id,)).fetchone()[0]
+    ratings = db.execute("SELECT AVG(rating), COUNT(*) FROM ratings WHERE to_id=?", (user_id,)).fetchone()
+    score += min(deals * 3, 15)
+    score += min(pf * 2, 10)
+    score += min(gf * 5, 15)
+    if ratings[1] and ratings[1] >= 3:
+        score += int((ratings[0] / 5) * 10)
+    score = max(0, min(score, 100))
+    db.execute("UPDATE users SET trust_score=? WHERE telegram_id=?", (score, user_id))
+    return score
 
-def validate_phone(phone):
-    """O'zbek telefon raqami tekshirish"""
-    pattern = r'^\+998[0-9]{9}$'
-    return bool(re.match(pattern, phone.replace(" ", "").replace("-", "")))
-
-OFFLINE_PLATFORMS = [p["v"] for p in PLATFORMS_OFFLINE]
-
-# ==================== ROUTES ====================
-
-@app.route("/api/ai/advice/<int:tg_id>", methods=["POST"])
-def ai_advice(tg_id):
-    conn = get_conn()
-    u = conn.execute("SELECT * FROM users WHERE telegram_id=?", (tg_id,)).fetchone()
-    if not u: conn.close(); return err("Topilmadi", 404)
-    lang = u["lang"] or "uz"
-    
-    user_data = {"role": u["role"], "lang": lang}
-    
-    if u["role"] == "tadbirkor":
-        bt = conn.execute("SELECT * FROM business_targets WHERE user_id=?", (tg_id,)).fetchone()
-        if bt:
-            user_data.update({
-                "sector": bt["sector"],
-                "budget": bt["max_budget"],
-                "location": json.loads(bt["location"] or "[]"),
-            })
-    elif u["role"] == "reklamachi":
-        rp = conn.execute("SELECT * FROM reklamachi_profiles WHERE user_id=?", (tg_id,)).fetchone()
-        if rp:
-            user_data.update({
-                "platform": rp["platform"],
-                "followers": rp["followers"],
-                "engagement": rp["engagement"],
-            })
-    
-    conn.close()
-    result = generate_advice(user_data, lang)
-    return ok(result)
-
-
-
-@app.route("/")
-def root(): return ok({"status": "ok", "app": "MIDAS API v3.0"})
-
-@app.route("/health")
-def health(): return ok({"status": "healthy"})
-
-# ---- USERS ----
-
-@app.route("/api/users/register", methods=["POST"])
-def register():
-    d = request.json
-    phone = d.get("phone", "")
-    if phone and not validate_phone(phone):
-        return err("Telefon raqam noto'g'ri. Format: +998XXXXXXXXX")
-    conn = get_conn()
-    conn.execute("""INSERT OR REPLACE INTO users
-        (telegram_id,username,full_name,role,phone,lang)
-        VALUES(?,?,?,?,?,?)""",
-        (d["telegram_id"], d.get("username"), d["full_name"],
-         d["role"], phone, d.get("lang","uz")))
-    conn.commit(); conn.close()
-    return ok()
-
-@app.route("/api/users/<int:tg_id>")
-def get_user(tg_id):
-    conn = get_conn()
-    row = conn.execute("SELECT * FROM users WHERE telegram_id=?", (tg_id,)).fetchone()
-    conn.close()
-    if not row: return err("Topilmadi", 404)
-    return ok(dict(row))
-
-@app.route("/api/users/<int:tg_id>", methods=["PUT"])
-def update_user(tg_id):
-    d = request.json
-    phone = d.get("phone", "")
-    if phone and not validate_phone(phone):
-        return err("Telefon raqam noto'g'ri. Format: +998XXXXXXXXX")
-    conn = get_conn()
-    fields = []
-    vals = []
-    for k in ["full_name", "phone", "lang"]:
-        if k in d:
-            fields.append(f"{k}=?")
-            vals.append(d[k])
-    if fields:
-        vals.append(tg_id)
-        conn.execute(f"UPDATE users SET {','.join(fields)} WHERE telegram_id=?", vals)
-        conn.commit()
-    conn.close()
-    return ok()
-
-@app.route("/api/users/<int:tg_id>/lang", methods=["PUT"])
-def set_lang(tg_id):
-    lang = request.args.get("lang", "uz")
-    conn = get_conn()
-    conn.execute("UPDATE users SET lang=? WHERE telegram_id=?", (lang, tg_id))
-    conn.commit(); conn.close()
-    return ok()
-
-@app.route("/api/users/<int:tg_id>/stats")
-def user_stats(tg_id):
-    conn = get_conn()
-    def q(sql, *args): return conn.execute(sql, args).fetchone()[0]
-    data = {
-        "deals": q("SELECT COUNT(*) FROM offers WHERE status='accepted' AND (from_id=? OR to_id=?)", tg_id, tg_id),
-        "total_offers": q("SELECT COUNT(*) FROM offers WHERE from_id=? OR to_id=?", tg_id, tg_id),
-        "chats": q("SELECT COUNT(*) FROM private_chats WHERE user1_id=? OR user2_id=?", tg_id, tg_id),
-    }
-    r = conn.execute("SELECT rating FROM users WHERE telegram_id=?", (tg_id,)).fetchone()
-    data["rating"] = r[0] if r else 5.0
-    conn.close()
-    return ok(data)
-
-# ---- BUSINESS TARGETS ----
-
-@app.route("/api/business-targets/<int:tg_id>", methods=["POST"])
-def save_bt(tg_id):
-    d = request.json
-    conn = get_conn()
-    conn.execute("""INSERT OR REPLACE INTO business_targets
-        (user_id,sector,sub_sector,preferred_platforms,ages,target_gender,
-         location,interests,min_followers,max_budget,campaign_goal,updated_at)
-        VALUES(?,?,?,?,?,?,?,?,?,?,?,CURRENT_TIMESTAMP)""",
-        (tg_id, d.get("sector",""), d.get("sub_sector",""),
-         json.dumps(d.get("preferred_platforms",[])),
-         json.dumps(d.get("ages",[])), d.get("target_gender","all"),
-         json.dumps(d.get("location",[])), json.dumps(d.get("interests",[])),
-         d.get("min_followers",0), d.get("max_budget",0),
-         d.get("campaign_goal","")))
-    conn.commit(); conn.close()
-    return ok()
-
-@app.route("/api/business-targets/<int:tg_id>")
-def get_bt(tg_id):
-    conn = get_conn()
-    row = conn.execute("SELECT * FROM business_targets WHERE user_id=?", (tg_id,)).fetchone()
-    conn.close()
-    if not row: return err("Topilmadi", 404)
-    d = dict(row)
-    for k in ["ages","interests","location","preferred_platforms"]:
-        d[k] = jl(d.get(k))
-    return ok(d)
-
-# ---- REKLAMACHI PROFILES ----
-
-@app.route("/api/reklamachi-profiles/<int:tg_id>", methods=["POST"])
-def save_rp(tg_id):
-    d = request.json
-    platform = d.get("platform","")
-    is_offline = 1 if platform in OFFLINE_PLATFORMS else 0
-    conn = get_conn()
-    conn.execute("""INSERT OR REPLACE INTO reklamachi_profiles
-        (user_id,platform,username,profile_link,address,coordinates,
-         followers,engagement,price_post,price_story,price_video,price_description,
-         audience_ages,audience_gender,audience_location,interests,
-         is_offline,updated_at)
-        VALUES(?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,CURRENT_TIMESTAMP)""",
-        (tg_id, platform, d.get("username",""), d.get("profile_link",""),
-         d.get("address",""), d.get("coordinates",""),
-         d.get("followers",0), d.get("engagement",0),
-         d.get("price_post",0), d.get("price_story",0), d.get("price_video",0),
-         d.get("price_description",""),
-         json.dumps(d.get("audience_ages",[])), d.get("audience_gender","all"),
-         d.get("audience_location","all"), json.dumps(d.get("interests",[])),
-         is_offline))
-    conn.commit(); conn.close()
-    return ok()
-
-@app.route("/api/reklamachi-profiles/<int:tg_id>", methods=["PUT"])
-def update_rp_field(tg_id):
-    """Alohida maydonni yangilash"""
-    d = request.json
-    conn = get_conn()
-    allowed = ["platform","username","profile_link","address","coordinates",
-               "followers","engagement","price_post","price_story","price_video",
-               "price_description","audience_ages","audience_gender",
-               "audience_location","interests"]
-    fields = []; vals = []
-    for k in allowed:
-        if k in d:
-            fields.append(f"{k}=?")
-            v = json.dumps(d[k]) if isinstance(d[k], list) else d[k]
-            vals.append(v)
-    if fields:
-        vals.append(tg_id)
-        conn.execute(f"UPDATE reklamachi_profiles SET {','.join(fields)},updated_at=CURRENT_TIMESTAMP WHERE user_id=?", vals)
-        conn.commit()
-    conn.close()
-    return ok()
-
-@app.route("/api/reklamachi-profiles/<int:tg_id>")
-def get_rp(tg_id):
-    conn = get_conn()
-    row = conn.execute("""SELECT rp.*, u.full_name, u.rating, u.is_premium, u.phone
-        FROM reklamachi_profiles rp
-        JOIN users u ON u.telegram_id=rp.user_id
-        WHERE rp.user_id=?""", (tg_id,)).fetchone()
-    conn.close()
-    if not row: return err("Topilmadi", 404)
-    d = dict(row)
-    d["audience_ages"] = jl(d["audience_ages"])
-    d["interests"] = jl(d["interests"])
-    return ok(d)
-
-# ---- MATCHING ----
-
-@app.route("/api/match/<int:tg_id>")
-def get_matches(tg_id):
-    conn = get_conn()
-    u = conn.execute("SELECT role FROM users WHERE telegram_id=?", (tg_id,)).fetchone()
-    if not u: conn.close(); return err("Topilmadi", 404)
-    role = u[0]
-    results = []
-    platform_filter = request.args.get("platform_filter", "")
-
-    if role == "tadbirkor":
-        bt = conn.execute("SELECT * FROM business_targets WHERE user_id=?", (tg_id,)).fetchone()
-        if not bt: conn.close(); return ok([])
-        target = dict(bt)
-        for k in ["ages","interests","location","preferred_platforms"]:
-            target[k] = jl(target.get(k))
-
-        # Platforma filteri
-        if platform_filter in OFFLINE_PLATFORMS:
-            # Offline reklamachilar
-            rows = conn.execute("""SELECT rp.*,u.full_name,u.rating,u.is_premium,u.telegram_id as uid
-                FROM reklamachi_profiles rp
-                JOIN users u ON u.telegram_id=rp.user_id
-                WHERE u.is_active=1 AND u.is_blocked=0 AND u.telegram_id!=?
-                AND rp.is_offline=1 AND rp.platform=?""",
-                (tg_id, platform_filter)).fetchall()
-            for row in rows:
-                rek = dict(row)
-                rek["audience_ages"] = jl(rek["audience_ages"])
-                rek["interests"] = jl(rek["interests"])
-                score = calc_offline_score(target, rek)
-                if score >= 20:
-                    results.append({**rek, "match_score": score})
-        else:
-            # Online reklamachilar
-            query = """SELECT rp.*,u.full_name,u.rating,u.is_premium,u.telegram_id as uid
-                FROM reklamachi_profiles rp
-                JOIN users u ON u.telegram_id=rp.user_id
-                WHERE u.is_active=1 AND u.is_blocked=0 AND u.telegram_id!=?
-                AND rp.is_offline=0"""
-            params = [tg_id]
-            if platform_filter:
-                query += " AND rp.platform=?"
-                params.append(platform_filter)
-            else:
-                query += " AND rp.verified=1"
-            rows = conn.execute(query, params).fetchall()
-            for row in rows:
-                rek = dict(row)
-                rek["audience_ages"] = jl(rek["audience_ages"])
-                rek["interests"] = jl(rek["interests"])
-                score = calc_score(target, rek)
-                if score >= 20:
-                    results.append({**rek, "match_score": score})
-
-    elif role == "reklamachi":
-        rp = conn.execute("SELECT * FROM reklamachi_profiles WHERE user_id=?", (tg_id,)).fetchone()
-        if not rp: conn.close(); return ok([])
-        rek = dict(rp)
-        rek["audience_ages"] = jl(rek["audience_ages"])
-        rek["interests"] = jl(rek["interests"])
-
-        rows = conn.execute("""SELECT bt.*,u.full_name,u.rating,u.is_premium,u.telegram_id as uid
-            FROM business_targets bt
-            JOIN users u ON u.telegram_id=bt.user_id
-            WHERE u.is_active=1 AND u.is_blocked=0 AND u.telegram_id!=?""",
-            (tg_id,)).fetchall()
-        for row in rows:
-            target = dict(row)
-            for k in ["ages","interests","location","preferred_platforms"]:
-                target[k] = jl(target.get(k))
-            score = calc_score(target, rek)
-            if score >= 20:
-                results.append({**target, "match_score": score})
-
-    conn.close()
-    results.sort(key=lambda x: (x.get("is_premium",0), x["match_score"]), reverse=True)
-    return ok(results[:30])
-
-# ---- OFFERS ----
-
-@app.route("/api/offers", methods=["POST"])
-def create_offer():
-    d = request.json
-    conn = get_conn()
-    is_free = d.get("is_free", 0)
-
-    # Tekin taklif tekshirish
-    if is_free:
-        used = conn.execute(
-            "SELECT free_offer_used FROM reklamachi_profiles WHERE user_id=?",
-            (d["from_id"],)).fetchone()
-        if used and used[0]:
-            conn.close()
-            return err("Tekin taklif allaqachon ishlatilgan")
-
-    existing = conn.execute(
-        "SELECT id FROM offers WHERE from_id=? AND to_id=? AND status='pending'",
-        (d["from_id"], d["to_id"])).fetchone()
-    if existing: conn.close(); return err("Allaqachon taklif yuborilgan")
-
-    conn.execute("INSERT INTO offers(from_id,to_id,message,is_free) VALUES(?,?,?,?)",
-                 (d["from_id"], d["to_id"], d.get("message"), is_free))
-    conn.commit()
-    offer_id = conn.execute("SELECT last_insert_rowid()").fetchone()[0]
-
-    if is_free:
-        conn.execute("UPDATE reklamachi_profiles SET free_offer_used=1 WHERE user_id=?", (d["from_id"],))
-        conn.commit()
-
-    sender = conn.execute("SELECT full_name FROM users WHERE telegram_id=?", (d["from_id"],)).fetchone()
-    name = sender[0] if sender else "Kimdir"
-    free_text = " (Tekin taklif)" if is_free else ""
-    add_notif(conn, d["to_id"], f"📩 Yangi taklif{free_text}!", f"{name} sizga hamkorlik taklif qildi", "offer", offer_id)
-    conn.close()
-    return ok({"offer_id": offer_id})
-
-@app.route("/api/offers/<int:tg_id>")
-def get_offers(tg_id):
-    conn = get_conn()
-    rows = conn.execute("""SELECT o.*,
-        u1.full_name as from_name, u2.full_name as to_name,
-        u1.rating as from_rating, u2.rating as to_rating
-        FROM offers o
-        LEFT JOIN users u1 ON u1.telegram_id=o.from_id
-        LEFT JOIN users u2 ON u2.telegram_id=o.to_id
-        WHERE o.from_id=? OR o.to_id=?
-        ORDER BY o.created_at DESC""", (tg_id, tg_id)).fetchall()
-    conn.close()
-    return ok([dict(r) for r in rows])
-
-@app.route("/api/offers/<int:offer_id>/status", methods=["PUT"])
-def update_offer_status(offer_id):
-    status = request.args.get("status")
-    conn = get_conn()
-    offer = conn.execute("SELECT from_id,to_id FROM offers WHERE id=?", (offer_id,)).fetchone()
-    if not offer: conn.close(); return err("Topilmadi", 404)
-    conn.execute("UPDATE offers SET status=?,updated_at=CURRENT_TIMESTAMP WHERE id=?", (status, offer_id))
-    conn.commit()
-    if status == "accepted":
-        try:
-            conn.execute("INSERT OR IGNORE INTO private_chats(user1_id,user2_id,offer_id) VALUES(?,?,?)",
-                         (offer[0], offer[1], offer_id))
-            conn.commit()
-        except: pass
-        n = conn.execute("SELECT full_name FROM users WHERE telegram_id=?", (offer[1],)).fetchone()
-        add_notif(conn, offer[0], "✅ Taklif qabul qilindi!", f"{n[0] if n else 'Kimdir'} taklifingizni qabul qildi", "offer", offer_id)
-    elif status == "rejected":
-        n = conn.execute("SELECT full_name FROM users WHERE telegram_id=?", (offer[1],)).fetchone()
-        add_notif(conn, offer[0], "❌ Taklif rad etildi", f"{n[0] if n else 'Kimdir'} taklifingizni rad etdi", "offer", offer_id)
-    conn.close()
-    return ok()
-
-@app.route("/api/offers/<int:offer_id>/rate", methods=["POST"])
-def rate_offer(offer_id):
-    d = request.json
-    conn = get_conn()
-    row = conn.execute("SELECT to_id FROM offers WHERE id=?", (offer_id,)).fetchone()
-    if not row: conn.close(); return err("Topilmadi", 404)
-    conn.execute("UPDATE offers SET rating=?,rated=1 WHERE id=?", (d["rating"], offer_id))
-    conn.execute("""UPDATE users SET
-        rating=(rating*rating_count+?)/(rating_count+1),
-        rating_count=rating_count+1 WHERE telegram_id=?""", (d["rating"], row[0]))
-    conn.commit(); conn.close()
-    return ok()
-
-# ---- CHATS ----
-
-@app.route("/api/chats/<int:tg_id>")
-def get_chats(tg_id):
-    conn = get_conn()
-    rows = conn.execute("""SELECT c.*,
-        u1.full_name as u1name, u2.full_name as u2name,
-        (SELECT COUNT(*) FROM messages WHERE chat_id=c.id AND receiver_id=? AND is_read=0) as unread
-        FROM private_chats c
-        JOIN users u1 ON u1.telegram_id=c.user1_id
-        JOIN users u2 ON u2.telegram_id=c.user2_id
-        WHERE (c.user1_id=? OR c.user2_id=?) AND c.status='active'
-        ORDER BY c.updated_at DESC""", (tg_id, tg_id, tg_id)).fetchall()
-    conn.close()
-    chats = []
-    for row in rows:
-        ch = dict(row)
-        ch["partner_id"] = ch["user2_id"] if ch["user1_id"]==tg_id else ch["user1_id"]
-        ch["partner_name"] = ch["u2name"] if ch["user1_id"]==tg_id else ch["u1name"]
-        chats.append(ch)
-    return ok(chats)
-
-@app.route("/api/chats/<int:chat_id>/messages")
-def get_messages(chat_id):
-    limit = request.args.get("limit", 50, type=int)
-    conn = get_conn()
-    rows = conn.execute("""SELECT m.*, u.full_name as sender_name
-        FROM messages m JOIN users u ON u.telegram_id=m.sender_id
-        WHERE m.chat_id=? ORDER BY m.created_at ASC LIMIT ?""", (chat_id, limit)).fetchall()
-    conn.close()
-    return ok([dict(r) for r in rows])
-
-@app.route("/api/messages", methods=["POST"])
-def send_message():
-    d = request.json
-    conn = get_conn()
-    conn.execute("INSERT INTO messages(chat_id,sender_id,receiver_id,message_text,message_type) VALUES(?,?,?,?,?)",
-                 (d["chat_id"], d["sender_id"], d["receiver_id"],
-                  d["message_text"], d.get("message_type","text")))
-    conn.execute("""UPDATE private_chats SET last_message=?,last_message_time=CURRENT_TIMESTAMP,
-        updated_at=CURRENT_TIMESTAMP WHERE id=?""", (d["message_text"][:60], d["chat_id"]))
-    conn.commit()
-    msg_id = conn.execute("SELECT last_insert_rowid()").fetchone()[0]
-    sname = conn.execute("SELECT full_name FROM users WHERE telegram_id=?", (d["sender_id"],)).fetchone()
-    if sname:
-        add_notif(conn, d["receiver_id"], f"💬 {sname[0]}", d["message_text"][:60], "message", d["chat_id"])
-    conn.close()
-    return ok({"message_id": msg_id})
-
-@app.route("/api/chats/<int:chat_id>/read", methods=["PUT"])
-def mark_read(chat_id):
-    tg_id = request.args.get("tg_id", type=int)
-    conn = get_conn()
-    conn.execute("UPDATE messages SET is_read=1 WHERE chat_id=? AND receiver_id=? AND is_read=0", (chat_id, tg_id))
-    conn.commit(); conn.close()
-    return ok()
-
-# MIDAS admin chati
-@app.route("/api/broadcasts")
-def get_broadcasts():
-    tg_id = request.args.get("tg_id", type=int)
-    conn = get_conn()
-    u = conn.execute("SELECT role FROM users WHERE telegram_id=?", (tg_id,)).fetchone()
-    role = u[0] if u else "user"
-    rows = conn.execute("""SELECT b.*, u.full_name as sender_name
-        FROM broadcasts b JOIN users u ON u.telegram_id=b.sender_id
-        WHERE b.target='all' OR b.target=?
-        ORDER BY b.created_at DESC LIMIT 30""", (role,)).fetchall()
-    conn.close()
-    return ok([dict(r) for r in rows])
-
-@app.route("/api/broadcasts", methods=["POST"])
-def create_broadcast():
-    d = request.json
-    admin_id = d.get("sender_id")
-    if admin_id not in ADMIN_IDS:
-        return err("Ruxsat yo'q", 403)
-    conn = get_conn()
-    conn.execute("INSERT INTO broadcasts(sender_id,target,message_text,message_type) VALUES(?,?,?,?)",
-                 (admin_id, d.get("target","all"), d.get("message_text",""), d.get("message_type","text")))
-    conn.commit(); conn.close()
-    return ok()
-
-# ---- NOTIFICATIONS ----
-
-@app.route("/api/notifications/<int:tg_id>")
-def get_notifications(tg_id):
-    conn = get_conn()
-    rows = conn.execute("SELECT * FROM notifications WHERE user_id=? ORDER BY created_at DESC LIMIT 30", (tg_id,)).fetchall()
-    conn.close()
-    return ok([dict(r) for r in rows])
-
-@app.route("/api/notifications/<int:tg_id>/read", methods=["PUT"])
-def read_notifications(tg_id):
-    conn = get_conn()
-    conn.execute("UPDATE notifications SET is_read=1 WHERE user_id=?", (tg_id,))
-    conn.commit(); conn.close()
-    return ok()
-
-@app.route("/api/notifications/<int:tg_id>/count")
-def notif_count(tg_id):
-    conn = get_conn()
-    count = conn.execute("SELECT COUNT(*) FROM notifications WHERE user_id=? AND is_read=0", (tg_id,)).fetchone()[0]
-    conn.close()
-    return ok({"count": count})
-
-# ---- ADMIN ----
-
-@app.route("/api/admin/stats")
-def admin_stats():
-    admin_id = request.args.get("admin_id", type=int)
-    if admin_id not in ADMIN_IDS: return err("Ruxsat yo'q", 403)
-    conn = get_conn()
-    def q(sql): return conn.execute(sql).fetchone()[0]
-    data = {
-        "total_users":     q("SELECT COUNT(*) FROM users"),
-        "tadbirkorlar":    q("SELECT COUNT(*) FROM users WHERE role='tadbirkor'"),
-        "reklamachilar":   q("SELECT COUNT(*) FROM users WHERE role='reklamachi'"),
-        "premium":         q("SELECT COUNT(*) FROM users WHERE is_premium=1"),
-        "blocked":         q("SELECT COUNT(*) FROM users WHERE is_blocked=1"),
-        "total_offers":    q("SELECT COUNT(*) FROM offers"),
-        "accepted_offers": q("SELECT COUNT(*) FROM offers WHERE status='accepted'"),
-        "active_chats":    q("SELECT COUNT(*) FROM private_chats WHERE status='active'"),
-        "total_messages":  q("SELECT COUNT(*) FROM messages"),
-        "unverified":      q("SELECT COUNT(*) FROM reklamachi_profiles WHERE verified=0 AND is_offline=0"),
-    }
-    conn.close()
-    return ok(data)
-
-@app.route("/api/admin/users")
-def admin_users():
-    admin_id = request.args.get("admin_id", type=int)
-    if admin_id not in ADMIN_IDS: return err("Ruxsat yo'q", 403)
-    page = request.args.get("page", 1, type=int)
-    search = request.args.get("search", "")
-    conn = get_conn()
-    if search:
-        rows = conn.execute("""SELECT * FROM users WHERE full_name LIKE ? OR phone LIKE ?
-            ORDER BY created_at DESC LIMIT 20 OFFSET ?""",
-            (f"%{search}%", f"%{search}%", (page-1)*20)).fetchall()
-    else:
-        rows = conn.execute("SELECT * FROM users ORDER BY created_at DESC LIMIT 20 OFFSET ?",
-                            ((page-1)*20,)).fetchall()
-    conn.close()
-    return ok([dict(r) for r in rows])
-
-@app.route("/api/admin/users/<int:tg_id>/premium", methods=["PUT"])
-def admin_premium(tg_id):
-    admin_id = request.args.get("admin_id", type=int)
-    if admin_id not in ADMIN_IDS: return err("Ruxsat yo'q", 403)
-    value = request.args.get("value", 1, type=int)
-    conn = get_conn()
-    conn.execute("UPDATE users SET is_premium=? WHERE telegram_id=?", (value, tg_id))
-    conn.commit()
-    msg = "⭐ Sizga PREMIUM statusi berildi!" if value else "Premium statusingiz olib tashlandi."
-    add_notif(conn, tg_id, "⭐ Premium status", msg, "info")
-    conn.close()
-    return ok()
-
-@app.route("/api/admin/users/<int:tg_id>/block", methods=["PUT"])
-def admin_block(tg_id):
-    admin_id = request.args.get("admin_id", type=int)
-    if admin_id not in ADMIN_IDS: return err("Ruxsat yo'q", 403)
-    reason = request.args.get("reason", "")
-    conn = get_conn()
-    conn.execute("UPDATE users SET is_blocked=1,block_reason=? WHERE telegram_id=?", (reason, tg_id))
-    conn.commit()
-    add_notif(conn, tg_id, "🚫 Hisob bloklandi", f"Sabab: {reason}", "warning")
-    conn.close()
-    return ok()
-
-@app.route("/api/admin/users/<int:tg_id>/unblock", methods=["PUT"])
-def admin_unblock(tg_id):
-    admin_id = request.args.get("admin_id", type=int)
-    if admin_id not in ADMIN_IDS: return err("Ruxsat yo'q", 403)
-    conn = get_conn()
-    conn.execute("UPDATE users SET is_blocked=0,block_reason='' WHERE telegram_id=?", (tg_id,))
-    conn.commit()
-    add_notif(conn, tg_id, "✅ Hisob blokdan chiqarildi", "Endi platformadan foydalanishingiz mumkin.", "info")
-    conn.close()
-    return ok()
-
-@app.route("/api/admin/verify-queue")
-def verify_queue():
-    admin_id = request.args.get("admin_id", type=int)
-    if admin_id not in ADMIN_IDS: return err("Ruxsat yo'q", 403)
-    conn = get_conn()
-    rows = conn.execute("""SELECT rp.*, u.full_name, u.rating FROM reklamachi_profiles rp
-        JOIN users u ON u.telegram_id=rp.user_id
-        WHERE rp.verified=0 AND rp.is_offline=0
-        ORDER BY rp.created_at ASC""").fetchall()
-    conn.close()
-    res = []
-    for row in rows:
-        d = dict(row)
-        d["audience_ages"] = jl(d["audience_ages"])
-        d["interests"] = jl(d["interests"])
-        res.append(d)
-    return ok(res)
-
-@app.route("/api/admin/verify/<int:tg_id>", methods=["PUT"])
-def admin_verify(tg_id):
-    admin_id = request.args.get("admin_id", type=int)
-    if admin_id not in ADMIN_IDS: return err("Ruxsat yo'q", 403)
-    value = request.args.get("value", 1, type=int)
-    conn = get_conn()
-    conn.execute("UPDATE reklamachi_profiles SET verified=? WHERE user_id=?", (value, tg_id))
-    conn.commit()
-    if value == 1:
-        add_notif(conn, tg_id, "✅ Profil tasdiqlandi!", "Profilingiz admin tomonidan tasdiqlandi. Endi ko'rinasiz!", "success")
-    else:
-        add_notif(conn, tg_id, "❌ Profil tasdiqlanmadi", "Ma'lumotlarni to'g'rilab qayta yuboring.", "warning")
-    conn.close()
-    return ok()
-
-@app.route("/api/admin/broadcast", methods=["POST"])
-def admin_broadcast():
-    d = request.json
-    admin_id = d.get("sender_id")
-    if admin_id not in ADMIN_IDS: return err("Ruxsat yo'q", 403)
-    conn = get_conn()
-    conn.execute("INSERT INTO broadcasts(sender_id,target,message_text,message_type) VALUES(?,?,?,?)",
-                 (admin_id, d.get("target","all"), d.get("message_text",""), d.get("message_type","text")))
-    conn.commit()
-    # Notification ham yuborish
-    target = d.get("target","all")
-    if target == "all":
-        users = conn.execute("SELECT telegram_id FROM users WHERE is_blocked=0").fetchall()
-    else:
-        users = conn.execute("SELECT telegram_id FROM users WHERE role=? AND is_blocked=0", (target,)).fetchall()
-    for u in users:
-        add_notif(conn, u[0], "📢 MIDAS xabari", d.get("message_text","")[:100], "broadcast")
-    conn.close()
-    return ok()
-
-# ---- VALIDATE ----
-@app.route("/api/validate/phone", methods=["POST"])
-def validate_phone_api():
-    d = request.json
-    phone = d.get("phone", "")
-    if validate_phone(phone):
-        return ok({"valid": True})
-    return ok({"valid": False, "message": "Format: +998XXXXXXXXX (masalan: +998901234567)"})
-
-if __name__ == "__main__":
-    port = int(os.getenv("PORT", 8000))
-    app.run(host="0.0.0.0", port=port, debug=False)
-
-
-# ==================== YANGI ENDPOINTLAR (v5 frontend uchun) ====================
-
-# ---- FOMO BAR ----
-@app.route("/api/fomo")
-def fomo():
-    tg_id = request.args.get("tg_id", type=int)
-    conn = get_conn()
-    streak = 1  # Oddiy hisoblash
-    new_tenders = conn.execute(
-        "SELECT COUNT(*) FROM tenders WHERE DATE(created_at)=DATE('now') AND status='open'"
-    ).fetchone()[0] if _table_exists(conn, "tenders") else 0
-    new_partners = conn.execute(
-        "SELECT COUNT(*) FROM users WHERE DATE(created_at)=DATE('now') AND is_active=1"
-    ).fetchone()[0]
-    conn.close()
-    return ok({"streak": streak, "new_tenders": new_tenders, "new_partners": new_partners})
-
-def _table_exists(conn, name):
-    r = conn.execute("SELECT name FROM sqlite_master WHERE type='table' AND name=?", (name,)).fetchone()
-    return bool(r)
-
-# ---- PROFIL PROGRESSI ----
-@app.route("/api/users/<int:tg_id>/progress")
-def user_progress(tg_id):
-    conn = get_conn()
-    u = conn.execute("SELECT * FROM users WHERE telegram_id=?", (tg_id,)).fetchone()
-    if not u: conn.close(); return ok({"percent": 0})
-    pct = 20  # Asosiy ro'yxat
-    if u["phone"]: pct += 20
-    if u["role"] == "tadbirkor":
-        bt = conn.execute("SELECT * FROM business_targets WHERE user_id=?", (tg_id,)).fetchone()
-        if bt: pct += 40
-        if bt and bt["sector"]: pct += 20
-    elif u["role"] == "reklamachi":
-        rp = conn.execute("SELECT * FROM reklamachi_profiles WHERE user_id=?", (tg_id,)).fetchone()
-        if rp: pct += 40
-        if rp and rp["platform"]: pct += 20
-    conn.close()
-    return ok({"percent": min(pct, 100)})
-
-# ---- O'QILMAGAN XABARLAR ----
-@app.route("/api/unread/<int:tg_id>")
-def get_unread(tg_id):
-    conn = get_conn()
-    notifs = conn.execute(
-        "SELECT COUNT(*) FROM notifications WHERE user_id=? AND is_read=0", (tg_id,)
-    ).fetchone()[0]
-    chats = conn.execute(
-        "SELECT COUNT(*) FROM messages WHERE receiver_id=? AND is_read=0", (tg_id,)
-    ).fetchone()[0]
-    conn.close()
-    return ok({"notifs": notifs, "chats": chats})
-
-# ---- TENDER ----
-def _init_tenders(conn):
-    conn.execute("""CREATE TABLE IF NOT EXISTS tenders (
-        id INTEGER PRIMARY KEY AUTOINCREMENT,
-        owner_id INTEGER NOT NULL,
-        title TEXT, description TEXT,
-        budget INTEGER DEFAULT 0,
-        category TEXT DEFAULT '',
-        deadline TEXT DEFAULT '',
-        status TEXT DEFAULT 'open',
-        created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
-    )""")
-    conn.execute("""CREATE TABLE IF NOT EXISTS tender_proposals (
-        id INTEGER PRIMARY KEY AUTOINCREMENT,
-        tender_id INTEGER NOT NULL,
-        bidder_id INTEGER NOT NULL,
-        message TEXT, price INTEGER DEFAULT 0,
-        delivery_days INTEGER DEFAULT 0,
-        portfolio TEXT DEFAULT '',
-        status TEXT DEFAULT 'pending',
-        created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
-    )""")
-    conn.commit()
-
-@app.route("/api/tenders")
-def get_tenders():
-    conn = get_conn()
-    _init_tenders(conn)
-    tg_id = request.args.get("tg_id", type=int)
-    my = request.args.get("my", "0")
-    if my == "1" and tg_id:
-        rows = conn.execute(
-            "SELECT t.*, u.full_name as owner_name FROM tenders t JOIN users u ON u.telegram_id=t.owner_id WHERE t.owner_id=? ORDER BY t.created_at DESC",
-            (tg_id,)
-        ).fetchall()
-    else:
-        rows = conn.execute(
-            "SELECT t.*, u.full_name as owner_name FROM tenders t JOIN users u ON u.telegram_id=t.owner_id WHERE t.status='open' ORDER BY t.created_at DESC LIMIT 50"
-        ).fetchall()
-    conn.close()
-    return ok([dict(r) for r in rows])
-
-@app.route("/api/tenders", methods=["POST"])
-def create_tender():
-    d = request.json
-    conn = get_conn()
-    _init_tenders(conn)
-    conn.execute(
-        "INSERT INTO tenders(owner_id,title,description,budget,category,deadline) VALUES(?,?,?,?,?,?)",
-        (d["owner_id"], d.get("title",""), d.get("description",""),
-         d.get("budget",0), d.get("category",""), d.get("deadline",""))
-    )
-    conn.commit()
-    tid = conn.execute("SELECT last_insert_rowid()").fetchone()[0]
-    conn.close()
-    return ok({"tender_id": tid})
-
-@app.route("/api/tenders/<int:tid>")
-def get_tender(tid):
-    conn = get_conn()
-    _init_tenders(conn)
-    row = conn.execute(
-        "SELECT t.*, u.full_name as owner_name FROM tenders t JOIN users u ON u.telegram_id=t.owner_id WHERE t.id=?",
-        (tid,)
-    ).fetchone()
-    conn.close()
-    if not row: return err("Topilmadi", 404)
-    return ok(dict(row))
-
-@app.route("/api/tenders/<int:tid>/proposals")
-def get_proposals(tid):
-    conn = get_conn()
-    _init_tenders(conn)
-    rows = conn.execute(
-        "SELECT tp.*, u.full_name as bidder_name, u.rating FROM tender_proposals tp JOIN users u ON u.telegram_id=tp.bidder_id WHERE tp.tender_id=? ORDER BY tp.created_at DESC",
-        (tid,)
-    ).fetchall()
-    conn.close()
-    return ok([dict(r) for r in rows])
-
-@app.route("/api/tenders/<int:tid>/proposals", methods=["POST"])
-def submit_proposal(tid):
-    d = request.json
-    conn = get_conn()
-    _init_tenders(conn)
-    existing = conn.execute(
-        "SELECT id FROM tender_proposals WHERE tender_id=? AND bidder_id=?",
-        (tid, d["bidder_id"])
-    ).fetchone()
-    if existing: conn.close(); return err("Allaqachon taklif yuborilgan")
-    conn.execute(
-        "INSERT INTO tender_proposals(tender_id,bidder_id,message,price,delivery_days,portfolio) VALUES(?,?,?,?,?,?)",
-        (tid, d["bidder_id"], d.get("message",""), d.get("price",0),
-         d.get("delivery_days",0), d.get("portfolio",""))
-    )
-    conn.commit()
-    # Tender egasiga bildirishnoma
-    t = conn.execute("SELECT owner_id, title FROM tenders WHERE id=?", (tid,)).fetchone()
-    if t:
-        bidder = conn.execute("SELECT full_name FROM users WHERE telegram_id=?", (d["bidder_id"],)).fetchone()
-        name = bidder[0] if bidder else "Kimdir"
-        add_notif(conn, t[0], "📋 Yangi taklif!", f"{name} '{t[1]}' tenderiga taklif yubordi", "tender", tid)
-    conn.close()
-    return ok()
-
-@app.route("/api/proposals/<int:pid>/accept", methods=["PUT"])
-def accept_proposal(pid):
-    conn = get_conn()
-    _init_tenders(conn)
-    p = conn.execute("SELECT tender_id, bidder_id FROM tender_proposals WHERE id=?", (pid,)).fetchone()
-    if not p: conn.close(); return err("Topilmadi", 404)
-    conn.execute("UPDATE tender_proposals SET status='accepted' WHERE id=?", (pid,))
-    conn.execute("UPDATE tenders SET status='closed' WHERE id=?", (p[0],))
-    conn.commit()
-    add_notif(conn, p[1], "✅ Taklifingiz qabul qilindi!", "Tender bo'yicha taklifingiz qabul qilindi.", "tender", p[0])
-    conn.close()
-    return ok()
-
-# ---- ANALYTICS ----
-def _init_analytics(conn):
-    conn.execute("""CREATE TABLE IF NOT EXISTS campaigns (
-        id INTEGER PRIMARY KEY AUTOINCREMENT,
-        owner_id INTEGER NOT NULL,
-        name TEXT, platform TEXT DEFAULT '',
-        start_date TEXT DEFAULT '', end_date TEXT DEFAULT '',
-        budget INTEGER DEFAULT 0,
-        status TEXT DEFAULT 'active',
-        created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
-    )""")
-    conn.execute("""CREATE TABLE IF NOT EXISTS campaign_results (
-        id INTEGER PRIMARY KEY AUTOINCREMENT,
-        campaign_id INTEGER NOT NULL,
-        date TEXT,
-        reach INTEGER DEFAULT 0, impressions INTEGER DEFAULT 0,
-        clicks INTEGER DEFAULT 0, conversions INTEGER DEFAULT 0,
-        spend INTEGER DEFAULT 0,
-        created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
-    )""")
-    conn.commit()
-
-@app.route("/api/analytics/<int:tg_id>")
-def get_analytics(tg_id):
-    conn = get_conn()
-    _init_analytics(conn)
-    deals = conn.execute(
-        "SELECT COUNT(*) FROM offers WHERE status='accepted' AND (from_id=? OR to_id=?)", (tg_id, tg_id)
-    ).fetchone()[0]
-    active_camps = conn.execute(
-        "SELECT COUNT(*) FROM campaigns WHERE owner_id=? AND status='active'", (tg_id,)
-    ).fetchone()[0]
-    chats = conn.execute(
-        "SELECT COUNT(*) FROM private_chats WHERE user1_id=? OR user2_id=?", (tg_id, tg_id)
-    ).fetchone()[0]
-    campaigns = conn.execute(
-        "SELECT COUNT(*) FROM campaigns WHERE owner_id=?", (tg_id,)
-    ).fetchone()[0]
-    conn.close()
-    return ok({
-        "deals": deals,
-        "active_campaigns": active_camps,
-        "chats": chats,
-        "campaigns": campaigns
-    })
-
-@app.route("/api/campaigns/<int:tg_id>")
-def get_campaigns(tg_id):
-    conn = get_conn()
-    _init_analytics(conn)
-    rows = conn.execute(
-        "SELECT * FROM campaigns WHERE owner_id=? ORDER BY created_at DESC", (tg_id,)
-    ).fetchall()
-    conn.close()
-    return ok([dict(r) for r in rows])
-
-@app.route("/api/campaigns/<int:tg_id>", methods=["POST"])
-def create_campaign(tg_id):
-    d = request.json
-    conn = get_conn()
-    _init_analytics(conn)
-    conn.execute(
-        "INSERT INTO campaigns(owner_id,name,platform,start_date,end_date,budget) VALUES(?,?,?,?,?,?)",
-        (tg_id, d.get("name",""), d.get("platform",""),
-         d.get("start_date",""), d.get("end_date",""), d.get("budget",0))
-    )
-    conn.commit()
-    cid = conn.execute("SELECT last_insert_rowid()").fetchone()[0]
-    conn.close()
-    return ok({"campaign_id": cid})
-
-@app.route("/api/campaigns/<int:cid>/results")
-def get_campaign_results(cid):
-    conn = get_conn()
-    _init_analytics(conn)
-    rows = conn.execute(
-        "SELECT * FROM campaign_results WHERE campaign_id=? ORDER BY date DESC", (cid,)
-    ).fetchall()
-    conn.close()
-    return ok([dict(r) for r in rows])
-
-@app.route("/api/campaigns/<int:cid>/results", methods=["POST"])
-def add_campaign_result(cid):
-    d = request.json
-    conn = get_conn()
-    _init_analytics(conn)
-    conn.execute(
-        "INSERT INTO campaign_results(campaign_id,date,reach,impressions,clicks,conversions,spend) VALUES(?,?,?,?,?,?,?)",
-        (cid, d.get("date",""), d.get("reach",0), d.get("impressions",0),
-         d.get("clicks",0), d.get("conversions",0), d.get("spend",0))
-    )
-    conn.commit()
-    conn.close()
-    return ok()
-
-@app.route("/api/campaigns/<int:cid>/summary")
-def get_campaign_summary(cid):
-    conn = get_conn()
-    _init_analytics(conn)
-    r = conn.execute(
-        "SELECT SUM(reach) as total_reach, SUM(impressions) as total_imp, SUM(clicks) as total_clicks, SUM(conversions) as total_conv, SUM(spend) as total_spend FROM campaign_results WHERE campaign_id=?",
-        (cid,)
-    ).fetchone()
-    conn.close()
-    d = dict(r) if r else {}
-    ctr = round((d.get("total_clicks") or 0) / max(d.get("total_imp") or 1, 1) * 100, 2)
-    return ok({**d, "ctr": ctr})
-
-# ---- ADMIN (v5 mos) ----
-@app.route("/api/admin/pending")
-def admin_pending():
-    # Tasdiqlash kutayotgan profillar
-    # Frontend admin_id yubormasligi mumkin — tg_id ham tekshiramiz
-    admin_id = request.args.get("admin_id", type=int) or request.args.get("tg_id", type=int)
-    if admin_id and admin_id not in ADMIN_IDS:
-        return err("Ruxsat yo'q", 403)
-    conn = get_conn()
-    rows = conn.execute("""SELECT rp.*, u.full_name, u.rating FROM reklamachi_profiles rp
-        JOIN users u ON u.telegram_id=rp.user_id
-        WHERE rp.verified=0 AND rp.is_offline=0
-        ORDER BY rp.created_at ASC""").fetchall()
-    conn.close()
-    res = []
-    for row in rows:
-        d = dict(row)
-        d["audience_ages"] = jl(d["audience_ages"])
-        d["interests"] = jl(d["interests"])
-        res.append(d)
-    return ok(res)
-
-@app.route("/api/admin/users/<int:tid>/action", methods=["POST"])
-def admin_user_action(tid):
-    d = request.json
-    action = d.get("action", "")
-    admin_id = d.get("admin_id")
-    if admin_id not in ADMIN_IDS: return err("Ruxsat yo'q", 403)
-    conn = get_conn()
-    if action == "block":
-        conn.execute("UPDATE users SET is_blocked=1 WHERE telegram_id=?", (tid,))
-        add_notif(conn, tid, "🚫 Hisob bloklandi", "Hisobingiz bloklandi.", "warning")
-    elif action == "unblock":
-        conn.execute("UPDATE users SET is_blocked=0, block_reason='' WHERE telegram_id=?", (tid,))
-        add_notif(conn, tid, "✅ Blokdan chiqarildi", "Hisobingiz blokdan chiqarildi.", "info")
-    elif action == "premium":
-        conn.execute("UPDATE users SET is_premium=1 WHERE telegram_id=?", (tid,))
-        add_notif(conn, tid, "⭐ Premium!", "Sizga premium status berildi.", "success")
-    elif action == "unpremium":
-        conn.execute("UPDATE users SET is_premium=0 WHERE telegram_id=?", (tid,))
-    elif action == "verify":
-        conn.execute("UPDATE reklamachi_profiles SET verified=1 WHERE user_id=?", (tid,))
-        add_notif(conn, tid, "✅ Tasdiqlandi!", "Profilingiz tasdiqlandi.", "success")
-    conn.commit()
-    conn.close()
-    return ok()
-
-# Admin broadcast (v5 format: message kaliti bilan)
-@app.route("/api/admin/broadcast", methods=["POST"])
-def admin_broadcast_v5():
-    d = request.json
-    admin_id = d.get("sender_id") or d.get("admin_id")
-    if admin_id not in ADMIN_IDS: return err("Ruxsat yo'q", 403)
-    msg_text = d.get("message_text") or d.get("message", "")
-    target = d.get("target", "all")
-    conn = get_conn()
-    conn.execute(
-        "INSERT INTO broadcasts(sender_id,target,message_text,message_type) VALUES(?,?,?,?)",
-        (admin_id, target, msg_text, "text")
-    )
-    conn.commit()
-    if target == "all":
-        users = conn.execute("SELECT telegram_id FROM users WHERE is_blocked=0").fetchall()
-    else:
-        users = conn.execute("SELECT telegram_id FROM users WHERE role=? AND is_blocked=0", (target,)).fetchall()
-    for u in users:
-        add_notif(conn, u[0], "📢 MIDAS xabari", msg_text[:100], "broadcast")
-    conn.close()
-    return ok()
-
-
-# ─────────────────────────────────────────────────────────
-# REFERRAL TIZIMI
-# ─────────────────────────────────────────────────────────
 def generate_referral_code(tg_id):
-    import hashlib
-    h = hashlib.md5(str(tg_id).encode()).hexdigest()[:6].upper()
-    return f"MIDAS-{h}"
+    import random, string
+    chars = string.ascii_uppercase + string.digits
+    suffix = "".join(random.choices(chars, k=6))
+    return f"MIDAS-{suffix}"
 
-@app.route("/api/referral/<int:tg_id>", methods=["GET"])
-def get_referral(tg_id):
-    db = get_db()
-    user = db.execute("SELECT * FROM users WHERE telegram_id=?", (tg_id,)).fetchone()
-    if not user:
-        return jsonify({"error": "User not found"}), 404
+# ── FOYDALANUVCHILAR ──────────────────────────────────
+@app.route("/api/users/<int:tg_id>", methods=["GET"])
+@rate_limit(120, 60)
+def get_user(tg_id):
+    with get_db() as db:
+        u = row2dict(db.execute("SELECT * FROM users WHERE telegram_id=?", (tg_id,)).fetchone())
+        if not u: return jsonify({"error": "not found"}), 404
+        # Profile views +1
+        db.execute("UPDATE users SET profile_views=COALESCE(profile_views,0)+1 WHERE telegram_id=?", (tg_id,))
+        db.commit()
+        # JSON parse
+        for f in ["platforms","regions","audience_ages","audience_regions","content_types"]:
+            try: u[f] = json.loads(u.get(f) or "[]")
+            except: u[f] = []
+        try: u["notif_settings"] = json.loads(u.get("notif_settings") or "{}")
+        except: u["notif_settings"] = {}
+        return jsonify(u)
 
-    code = user["referral_code"] if user["referral_code"] else generate_referral_code(tg_id)
-    if not user["referral_code"]:
-        db.execute("UPDATE users SET referral_code=? WHERE telegram_id=?", (code, tg_id))
+@app.route("/api/users", methods=["POST"])
+@rate_limit(10, 60)
+def create_user():
+    d = request.json or {}
+    tg_id = d.get("telegram_id")
+    if not tg_id: return jsonify({"error": "telegram_id required"}), 400
+
+    # XSS himoya
+    def sanitize(v):
+        if isinstance(v, str):
+            return v.replace("<","&lt;").replace(">","&gt;").replace("&","&amp;")[:500]
+        return v
+
+    ref_code = generate_referral_code(tg_id)
+
+    with get_db() as db:
+        existing = db.execute("SELECT id FROM users WHERE telegram_id=?", (tg_id,)).fetchone()
+        if existing:
+            return jsonify({"error": "already exists"}), 409
+
+        db.execute("""INSERT INTO users
+            (telegram_id, username, full_name, phone, role, lang, bio, address,
+             sector, region, regions, company_name, website, profile_link,
+             platforms, followers, engagement, price_post, price_story, price_video,
+             monthly_budget, min_budget, managed_budget, roi_avg, team_size,
+             portfolio_url, design_tools, content_types,
+             audience_gender, audience_ages, audience_regions,
+             instagram, telegram_channel, tiktok, youtube,
+             referral_code, referred_by,
+             notif_settings)
+            VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)""",
+            (tg_id,
+             sanitize(d.get("username","")),
+             sanitize(d.get("full_name","Foydalanuvchi")),
+             sanitize(d.get("phone","")),
+             d.get("role","reklamachi"),
+             d.get("lang","uz"),
+             sanitize(d.get("bio","")),
+             sanitize(d.get("address","")),
+             d.get("sector",""),
+             d.get("region",""),
+             json.dumps(d.get("regions",[])),
+             sanitize(d.get("company_name","")),
+             sanitize(d.get("website","")),
+             sanitize(d.get("profile_link","")),
+             json.dumps(d.get("platforms",[])),
+             int(d.get("followers",0)),
+             float(d.get("engagement",0)),
+             int(d.get("price_post",0)),
+             int(d.get("price_story",0)),
+             int(d.get("price_video",0)),
+             int(d.get("monthly_budget",0)),
+             int(d.get("min_budget",0)),
+             int(d.get("managed_budget",0)),
+             float(d.get("roi_avg",0)),
+             int(d.get("team_size",0)),
+             sanitize(d.get("portfolio_url","")),
+             sanitize(d.get("design_tools","")),
+             json.dumps(d.get("content_types",[])),
+             d.get("audience_gender","all"),
+             json.dumps(d.get("audience_ages",[])),
+             json.dumps(d.get("audience_regions",[])),
+             sanitize(d.get("instagram","")),
+             sanitize(d.get("telegram_channel","")),
+             sanitize(d.get("tiktok","")),
+             sanitize(d.get("youtube","")),
+             ref_code,
+             d.get("referred_by",""),
+             json.dumps({"offers":True,"match":True,"messages":True,"deals":True}),
+             ))
         db.commit()
 
-    count = db.execute("SELECT COUNT(*) as c FROM users WHERE referred_by=?", (tg_id,)).fetchone()["c"]
-    bonus = db.execute("SELECT COALESCE(SUM(bonus_days),0) as b FROM referral_bonuses WHERE user_id=?", (tg_id,)).fetchone()["b"]
-    return jsonify({"referral_code": code, "referral_count": count, "bonus_days": bonus})
+        # Referral bonus
+        if d.get("referred_by"):
+            referrer = db.execute("SELECT telegram_id FROM users WHERE referral_code=?", (d["referred_by"],)).fetchone()
+            if referrer:
+                ref_count = db.execute("SELECT COUNT(*) FROM referral_bonuses WHERE referrer_id=?", (referrer[0],)).fetchone()[0] + 1
+                bonus = 10
+                if ref_count >= 15: bonus = 365
+                elif ref_count >= 7: bonus = 120
+                elif ref_count >= 5: bonus = 90
+                elif ref_count >= 3: bonus = 50
+                db.execute("INSERT INTO referral_bonuses (referrer_id, referred_id, bonus_days) VALUES (?,?,?)", (referrer[0], tg_id, bonus))
+                until = (datetime.utcnow() + timedelta(days=bonus)).isoformat()
+                db.execute("UPDATE users SET is_premium=1, premium_until=? WHERE telegram_id=?", (until, referrer[0]))
+                db.commit()
+
+    return jsonify({"ok": True, "referral_code": ref_code}), 201
+
+@app.route("/api/users/<int:tg_id>", methods=["PUT"])
+@rate_limit(30, 60)
+def update_user(tg_id):
+    d = request.json or {}
+
+    def sanitize(v):
+        if isinstance(v, str):
+            return v.replace("<","&lt;").replace(">","&gt;")[:500]
+        return v
+
+    with get_db() as db:
+        db.execute("""UPDATE users SET
+            full_name=?, phone=?, bio=?, address=?,
+            company_name=?, website=?, profile_link=?,
+            platforms=?, followers=?, engagement=?,
+            price_post=?, price_story=?, price_video=?,
+            monthly_budget=?, min_budget=?, managed_budget=?,
+            roi_avg=?, team_size=?, portfolio_url=?,
+            design_tools=?, content_types=?,
+            audience_gender=?, audience_ages=?, audience_regions=?,
+            instagram=?, telegram_channel=?, tiktok=?, youtube=?,
+            sector=?, region=?, regions=?,
+            updated_at=datetime('now')
+            WHERE telegram_id=?""",
+            (sanitize(d.get("full_name","")),
+             sanitize(d.get("phone","")),
+             sanitize(d.get("bio","")),
+             sanitize(d.get("address","")),
+             sanitize(d.get("company_name","")),
+             sanitize(d.get("website","")),
+             sanitize(d.get("profile_link","")),
+             json.dumps(d.get("platforms",[])),
+             int(d.get("followers",0)),
+             float(d.get("engagement",0)),
+             int(d.get("price_post",0)),
+             int(d.get("price_story",0)),
+             int(d.get("price_video",0)),
+             int(d.get("monthly_budget",0)),
+             int(d.get("min_budget",0)),
+             int(d.get("managed_budget",0)),
+             float(d.get("roi_avg",0)),
+             int(d.get("team_size",0)),
+             sanitize(d.get("portfolio_url","")),
+             sanitize(d.get("design_tools","")),
+             json.dumps(d.get("content_types",[])),
+             d.get("audience_gender","all"),
+             json.dumps(d.get("audience_ages",[])),
+             json.dumps(d.get("audience_regions",[])),
+             sanitize(d.get("instagram","")),
+             sanitize(d.get("telegram_channel","")),
+             sanitize(d.get("tiktok","")),
+             sanitize(d.get("youtube","")),
+             d.get("sector",""),
+             d.get("region",""),
+             json.dumps(d.get("regions",[])),
+             tg_id,
+             ))
+        recalc_trust(db, tg_id)
+        db.commit()
+    return jsonify({"ok": True})
+
+@app.route("/api/users/<int:tg_id>/stats", methods=["GET"])
+def user_stats(tg_id):
+    with get_db() as db:
+        deals     = db.execute("SELECT COUNT(*) FROM deals WHERE (user1_id=? OR user2_id=?) AND status='completed'", (tg_id, tg_id)).fetchone()[0]
+        portfolio = db.execute("SELECT COUNT(*) FROM portfolio WHERE user_id=?", (tg_id,)).fetchone()[0]
+        campaigns = db.execute("SELECT COUNT(*) FROM campaigns WHERE user_id=?", (tg_id,)).fetchone()[0]
+        offers    = db.execute("SELECT COUNT(*) FROM offers WHERE from_id=? OR to_id=?", (tg_id, tg_id)).fetchone()[0]
+        tenders   = db.execute("SELECT COUNT(*) FROM tenders WHERE owner_id=?", (tg_id,)).fetchone()[0]
+    return jsonify({"deals": deals, "portfolio": portfolio, "campaigns": campaigns, "offers": offers, "tenders": tenders})
+
+@app.route("/api/users/<int:tg_id>/notif-settings", methods=["GET", "PUT"])
+def notif_settings(tg_id):
+    with get_db() as db:
+        if request.method == "GET":
+            u = db.execute("SELECT notif_settings FROM users WHERE telegram_id=?", (tg_id,)).fetchone()
+            if not u: return jsonify({}), 404
+            try: return jsonify(json.loads(u[0] or "{}"))
+            except: return jsonify({})
+        else:
+            data = request.json or {}
+            db.execute("UPDATE users SET notif_settings=? WHERE telegram_id=?", (json.dumps(data), tg_id))
+            db.commit()
+            return jsonify({"ok": True})
+
+# ── MATCH ─────────────────────────────────────────────
+@app.route("/api/match/<int:tg_id>", methods=["GET"])
+@rate_limit(60, 60)
+def get_matches(tg_id):
+    platform_filter = request.args.get("platform_filter", "")
+    ages   = request.args.get("ages", "").split(",") if request.args.get("ages") else []
+    gender = request.args.get("gender", "")
+    budget = int(request.args.get("budget", 0) or 0)
+    goal   = request.args.get("goal","")
+
+    with get_db() as db:
+        user = row2dict(db.execute("SELECT * FROM users WHERE telegram_id=?", (tg_id,)).fetchone())
+        if not user: return jsonify([]), 404
+
+        # Opponent role
+        if user["role"] == "tadbirkor":
+            opponent_roles = ("reklamachi","agentlik","dizayner","media_buyer")
+        else:
+            opponent_roles = ("tadbirkor",)
+
+        placeholders = ",".join("?" * len(opponent_roles))
+        candidates = rows2list(db.execute(
+            f"SELECT * FROM users WHERE role IN ({placeholders}) AND is_blocked=0 AND telegram_id!=?",
+            (*opponent_roles, tg_id)
+        ).fetchall())
+
+        results = []
+        for c in candidates:
+            # JSON parse
+            for f in ["platforms","regions","audience_ages","audience_regions"]:
+                try: c[f] = json.loads(c.get(f) or "[]")
+                except: c[f] = []
+
+            # Platform filter
+            if platform_filter and platform_filter not in c.get("platforms",[]) and c.get("platform") != platform_filter:
+                continue
+
+            # Byudjet filter
+            if budget > 0 and c.get("price_post",0) > budget:
+                continue
+
+            score = calculate_match_score(user, c)
+            if score < 30: continue
+
+            # Portfolio soni
+            pf_count = db.execute("SELECT COUNT(*) FROM portfolio WHERE user_id=?", (c["telegram_id"],)).fetchone()[0]
+            c["portfolio_count"] = pf_count
+            c["match_score"] = score
+            results.append(c)
+
+        results.sort(key=lambda x: (-(x.get("is_premium",0)), -x["match_score"]))
+        return jsonify(results[:50])
+
+# ── TAKLIFLAR ─────────────────────────────────────────
+@app.route("/api/offers/<int:tg_id>", methods=["GET"])
+def get_offers(tg_id):
+    with get_db() as db:
+        rows = db.execute("""
+            SELECT o.*, u.full_name as from_name, u.role as from_role
+            FROM offers o LEFT JOIN users u ON o.from_id=u.telegram_id
+            WHERE o.to_id=? ORDER BY o.created_at DESC LIMIT 50
+        """, (tg_id,)).fetchall()
+        return jsonify(rows2list(rows))
+
+@app.route("/api/offers", methods=["POST"])
+@rate_limit(20, 60)
+def create_offer():
+    d = request.json or {}
+    from_id = d.get("from_id"); to_id = d.get("to_id"); msg = d.get("message","")
+    if not from_id or not to_id or not msg.strip():
+        return jsonify({"error": "from_id, to_id, message required"}), 400
+
+    # Sanitize
+    msg = msg[:1000].replace("<","&lt;").replace(">","&gt;")
+
+    with get_db() as db:
+        db.execute("INSERT INTO offers (from_id, to_id, message, is_free) VALUES (?,?,?,?)",
+                   (from_id, to_id, msg, int(d.get("is_free",0))))
+
+        sender = row2dict(db.execute("SELECT full_name FROM users WHERE telegram_id=?", (from_id,)).fetchone())
+        send_notification(db, to_id, "offer",
+                          f"📩 Yangi taklif",
+                          f"{sender.get('full_name','Kimdir')} taklif yubordi")
+        db.commit()
+    return jsonify({"ok": True}), 201
+
+@app.route("/api/offers/<int:offer_id>/accept", methods=["POST"])
+def accept_offer(offer_id):
+    d = request.json or {}
+    user_id = d.get("user_id")
+    with get_db() as db:
+        offer = row2dict(db.execute("SELECT * FROM offers WHERE id=?", (offer_id,)).fetchone())
+        if not offer: return jsonify({"error": "not found"}), 404
+
+        db.execute("UPDATE offers SET status='accepted' WHERE id=?", (offer_id,))
+
+        # Chat ochish
+        existing = db.execute("SELECT id FROM chats WHERE (user1_id=? AND user2_id=?) OR (user1_id=? AND user2_id=?)",
+                              (offer["from_id"], offer["to_id"], offer["to_id"], offer["from_id"])).fetchone()
+        if not existing:
+            db.execute("INSERT INTO chats (user1_id, user2_id, offer_id) VALUES (?,?,?)",
+                      (offer["from_id"], offer["to_id"], offer_id))
+            db.execute("INSERT INTO deals (user1_id, user2_id, offer_id) VALUES (?,?,?)",
+                      (offer["from_id"], offer["to_id"], offer_id))
+
+        send_notification(db, offer["from_id"], "deal", "✅ Taklif qabul qilindi!", "Hamkorlik boshlandi")
+        db.commit()
+    return jsonify({"ok": True})
+
+@app.route("/api/offers/<int:offer_id>/reject", methods=["POST"])
+def reject_offer(offer_id):
+    with get_db() as db:
+        db.execute("UPDATE offers SET status='rejected' WHERE id=?", (offer_id,))
+        db.commit()
+    return jsonify({"ok": True})
+
+# ── CHATLAR ───────────────────────────────────────────
+@app.route("/api/chats/<int:tg_id>", methods=["GET"])
+def get_chats(tg_id):
+    with get_db() as db:
+        rows = rows2list(db.execute("""
+            SELECT c.*,
+                CASE WHEN c.user1_id=? THEN c.user2_id ELSE c.user1_id END as partner_id,
+                u.full_name as partner_name, u.role as partner_role,
+                (SELECT message_text FROM messages WHERE chat_id=c.id ORDER BY created_at DESC LIMIT 1) as last_message,
+                (SELECT COUNT(*) FROM messages WHERE chat_id=c.id AND receiver_id=? AND is_read=0) as unread
+            FROM chats c
+            JOIN users u ON u.telegram_id = CASE WHEN c.user1_id=? THEN c.user2_id ELSE c.user1_id END
+            WHERE (c.user1_id=? OR c.user2_id=?) AND c.status='active'
+            ORDER BY c.updated_at DESC
+        """, (tg_id, tg_id, tg_id, tg_id, tg_id)).fetchall())
+        return jsonify(rows)
+
+@app.route("/api/messages/<int:chat_id>", methods=["GET"])
+def get_messages(chat_id):
+    user_id = request.args.get("user_id", 0, type=int)
+    with get_db() as db:
+        # O'qildi deb belgilash
+        if user_id:
+            db.execute("UPDATE messages SET is_read=1 WHERE chat_id=? AND receiver_id=?", (chat_id, user_id))
+            db.commit()
+        rows = rows2list(db.execute(
+            "SELECT * FROM messages WHERE chat_id=? ORDER BY created_at ASC LIMIT 200", (chat_id,)
+        ).fetchall())
+        return jsonify(rows)
+
+@app.route("/api/messages", methods=["POST"])
+@rate_limit(120, 60)
+def send_message():
+    d = request.json or {}
+    chat_id = d.get("chat_id"); sender_id = d.get("sender_id")
+    receiver_id = d.get("receiver_id"); text = d.get("message_text","")
+    if not chat_id or not sender_id or not text.strip():
+        return jsonify({"error": "required fields missing"}), 400
+
+    text = text[:2000].replace("<","&lt;").replace(">","&gt;")
+
+    with get_db() as db:
+        db.execute("INSERT INTO messages (chat_id, sender_id, receiver_id, message_text) VALUES (?,?,?,?)",
+                  (chat_id, sender_id, receiver_id, text))
+        db.execute("UPDATE chats SET updated_at=datetime('now') WHERE id=?", (chat_id,))
+
+        # Notif sozlamasini tekshirish
+        ns = db.execute("SELECT notif_settings FROM users WHERE telegram_id=?", (receiver_id,)).fetchone()
+        try:
+            settings = json.loads(ns[0] or "{}")
+            if settings.get("messages", True):
+                send_notification(db, receiver_id, "message", "💬 Yangi xabar", text[:50])
+        except Exception:
+            pass
+        db.commit()
+    return jsonify({"ok": True}), 201
+
+# ── BILDIRISHNOMALAR ──────────────────────────────────
+@app.route("/api/notifications/<int:tg_id>", methods=["GET"])
+def get_notifications(tg_id):
+    with get_db() as db:
+        rows = rows2list(db.execute(
+            "SELECT * FROM notifications WHERE user_id=? ORDER BY created_at DESC LIMIT 50", (tg_id,)
+        ).fetchall())
+        return jsonify(rows)
+
+@app.route("/api/notifications/unread-count/<int:tg_id>", methods=["GET"])
+def unread_count(tg_id):
+    with get_db() as db:
+        c = db.execute("SELECT COUNT(*) FROM notifications WHERE user_id=? AND is_read=0", (tg_id,)).fetchone()[0]
+        return jsonify({"count": c})
+
+@app.route("/api/notifications/<int:notif_id>/read", methods=["PUT"])
+def mark_read(notif_id):
+    with get_db() as db:
+        db.execute("UPDATE notifications SET is_read=1 WHERE id=?", (notif_id,))
+        db.commit()
+    return jsonify({"ok": True})
+
+# ── TENDERLAR ─────────────────────────────────────────
+@app.route("/api/tenders", methods=["GET"])
+def get_tenders():
+    user_id = request.args.get("user_id", 0, type=int)
+    role    = request.args.get("role","")
+    with get_db() as db:
+        rows = rows2list(db.execute(
+            "SELECT * FROM tenders ORDER BY created_at DESC LIMIT 100"
+        ).fetchall())
+        for r in rows:
+            for f in ["platforms","regions"]:
+                try: r[f] = json.loads(r.get(f) or "[]")
+                except: r[f] = []
+        return jsonify(rows)
+
+@app.route("/api/tenders", methods=["POST"])
+@rate_limit(10, 60)
+def create_tender():
+    d = request.json or {}
+    if not d.get("owner_id") or not d.get("title"):
+        return jsonify({"error": "required fields missing"}), 400
+    with get_db() as db:
+        db.execute("""INSERT INTO tenders
+            (owner_id, title, sector, description, budget_min, budget_max,
+             deadline, goal, platforms, regions, is_open)
+            VALUES (?,?,?,?,?,?,?,?,?,?,?)""",
+            (d["owner_id"],
+             d.get("title","")[:200],
+             d.get("sector",""),
+             d.get("description","")[:2000],
+             int(d.get("budget_min",0)),
+             int(d.get("budget_max",0)),
+             d.get("deadline",""),
+             d.get("goal",""),
+             json.dumps(d.get("platforms",[])),
+             json.dumps(d.get("regions",[])),
+             int(d.get("is_open",1)),
+             ))
+        db.commit()
+    return jsonify({"ok": True}), 201
+
+@app.route("/api/tenders/<int:tid>/proposals", methods=["GET"])
+def get_proposals(tid):
+    with get_db() as db:
+        rows = rows2list(db.execute("""
+            SELECT tp.*, u.full_name FROM tender_proposals tp
+            LEFT JOIN users u ON tp.user_id=u.telegram_id
+            WHERE tp.tender_id=? ORDER BY tp.created_at DESC
+        """, (tid,)).fetchall())
+        return jsonify(rows)
+
+@app.route("/api/tenders/<int:tid>/proposals", methods=["POST"])
+@rate_limit(10, 60)
+def create_proposal(tid):
+    d = request.json or {}
+    with get_db() as db:
+        db.execute("INSERT INTO tender_proposals (tender_id, user_id, price, timeline, message) VALUES (?,?,?,?,?)",
+                  (tid, d.get("user_id"), int(d.get("price",0)), d.get("timeline",""), d.get("message","")[:1000]))
+        db.execute("UPDATE tenders SET proposal_count=proposal_count+1 WHERE id=?", (tid,))
+        tender = row2dict(db.execute("SELECT owner_id FROM tenders WHERE id=?", (tid,)).fetchone())
+        if tender:
+            send_notification(db, tender["owner_id"], "tender", "📩 Yangi taklif", "Tenderingizga taklif keldi")
+        db.commit()
+    return jsonify({"ok": True}), 201
+
+@app.route("/api/tenders/<int:tid>/proposals/<int:pid>/accept", methods=["POST"])
+def accept_proposal(tid, pid):
+    with get_db() as db:
+        db.execute("UPDATE tender_proposals SET status='accepted' WHERE id=?", (pid,))
+        db.execute("UPDATE tenders SET status='closed' WHERE id=?", (tid,))
+        db.commit()
+    return jsonify({"ok": True})
+
+@app.route("/api/tenders/<int:tid>/close", methods=["POST"])
+def close_tender(tid):
+    with get_db() as db:
+        db.execute("UPDATE tenders SET status='closed', updated_at=datetime('now') WHERE id=?", (tid,))
+        db.commit()
+    return jsonify({"ok": True})
+
+# ── REYTINGLAR ────────────────────────────────────────
+@app.route("/api/ratings", methods=["POST"])
+@rate_limit(20, 60)
+def create_rating():
+    d = request.json or {}
+    with get_db() as db:
+        db.execute("INSERT INTO ratings (from_id, to_id, rating, review_text, tags) VALUES (?,?,?,?,?)",
+                  (d.get("from_id"), d.get("to_id"), int(d.get("rating",5)),
+                   d.get("review_text","")[:500], json.dumps(d.get("tags",[]))))
+        avg = db.execute("SELECT AVG(rating), COUNT(*) FROM ratings WHERE to_id=?", (d.get("to_id"),)).fetchone()
+        db.execute("UPDATE users SET rating=?, rating_count=? WHERE telegram_id=?",
+                  (round(avg[0],2), avg[1], d.get("to_id")))
+        recalc_trust(db, d.get("to_id"))
+        db.commit()
+    return jsonify({"ok": True}), 201
+
+# ── PORTFOLIO ─────────────────────────────────────────
+@app.route("/api/portfolio/<int:user_id>", methods=["GET"])
+def get_portfolio(user_id):
+    with get_db() as db:
+        rows = rows2list(db.execute(
+            "SELECT * FROM portfolio WHERE user_id=? ORDER BY created_at DESC", (user_id,)
+        ).fetchall())
+        return jsonify(rows)
+
+@app.route("/api/portfolio", methods=["POST"])
+@rate_limit(20, 60)
+def create_portfolio():
+    d = request.json or {}
+    with get_db() as db:
+        db.execute("""INSERT INTO portfolio
+            (user_id, title, platform, sector, client_name, description, link, reach, clicks, roi, sales)
+            VALUES (?,?,?,?,?,?,?,?,?,?,?)""",
+            (d.get("user_id"), d.get("title","")[:200], d.get("platform",""),
+             d.get("sector",""), d.get("client_name","")[:100],
+             d.get("description","")[:2000], d.get("link","")[:500],
+             int(d.get("reach",0)), int(d.get("clicks",0)),
+             int(d.get("roi",0)), int(d.get("sales",0))))
+        recalc_trust(db, d.get("user_id"))
+        db.commit()
+    return jsonify({"ok": True}), 201
+
+@app.route("/api/portfolio/<int:item_id>", methods=["PUT", "DELETE"])
+def update_portfolio(item_id):
+    d = request.json or {}
+    with get_db() as db:
+        if request.method == "DELETE":
+            db.execute("DELETE FROM portfolio WHERE id=?", (item_id,))
+        else:
+            db.execute("""UPDATE portfolio SET
+                title=?, platform=?, sector=?, client_name=?,
+                description=?, link=?, reach=?, clicks=?, roi=?, sales=?,
+                updated_at=datetime('now') WHERE id=?""",
+                (d.get("title",""), d.get("platform",""), d.get("sector",""),
+                 d.get("client_name",""), d.get("description",""), d.get("link",""),
+                 int(d.get("reach",0)), int(d.get("clicks",0)),
+                 int(d.get("roi",0)), int(d.get("sales",0)), item_id))
+        db.commit()
+    return jsonify({"ok": True})
+
+# ── KAMPANIYALAR ──────────────────────────────────────
+@app.route("/api/campaigns/<int:user_id>", methods=["GET"])
+def get_campaigns(user_id):
+    with get_db() as db:
+        rows = rows2list(db.execute(
+            "SELECT * FROM campaigns WHERE user_id=? ORDER BY created_at DESC", (user_id,)
+        ).fetchall())
+        return jsonify(rows)
+
+@app.route("/api/campaigns", methods=["POST"])
+@rate_limit(20, 60)
+def create_campaign():
+    d = request.json or {}
+    with get_db() as db:
+        db.execute("""INSERT INTO campaigns
+            (user_id, name, platform, goal, status, budget, spent, revenue, reach, clicks, start_date, end_date)
+            VALUES (?,?,?,?,?,?,?,?,?,?,?,?)""",
+            (d.get("user_id"), d.get("name","")[:200], d.get("platform",""),
+             d.get("goal",""), d.get("status","active"),
+             int(d.get("budget",0)), int(d.get("spent",0)), int(d.get("revenue",0)),
+             int(d.get("reach",0)), int(d.get("clicks",0)),
+             d.get("start_date",""), d.get("end_date","")))
+        db.commit()
+    return jsonify({"ok": True}), 201
+
+# ── KAFOLAT ───────────────────────────────────────────
+@app.route("/api/guarantee/deals/<int:user_id>", methods=["GET"])
+def get_guarantee_deals(user_id):
+    with get_db() as db:
+        rows = rows2list(db.execute("""
+            SELECT d.*,
+                CASE WHEN d.user1_id=? THEN d.user2_id ELSE d.user1_id END as partner_id,
+                u.full_name as partner_name,
+                g.status as proof_status, g.proof_link
+            FROM deals d
+            LEFT JOIN users u ON u.telegram_id = CASE WHEN d.user1_id=? THEN d.user2_id ELSE d.user1_id END
+            LEFT JOIN guarantees g ON g.deal_id=d.id AND g.user_id=?
+            WHERE d.user1_id=? OR d.user2_id=?
+            ORDER BY d.created_at DESC
+        """, (user_id, user_id, user_id, user_id, user_id)).fetchall())
+        return jsonify(rows)
+
+@app.route("/api/guarantee/proof", methods=["POST"])
+@rate_limit(20, 60)
+def submit_proof():
+    d = request.json or {}
+    with get_db() as db:
+        db.execute("INSERT INTO guarantees (deal_id, user_id, proof_link, proof_type, notes, status) VALUES (?,?,?,?,?,?)",
+                  (d.get("deal_id"), d.get("user_id"),
+                   d.get("proof_link","")[:500], d.get("proof_type","link"),
+                   d.get("notes","")[:500], "pending"))
+        recalc_trust(db, d.get("user_id"))
+        db.commit()
+    return jsonify({"ok": True}), 201
+
+# ── AI MASLAHAT ───────────────────────────────────────
+@app.route("/api/ai-advisor/<int:tg_id>", methods=["GET"])
+@rate_limit(30, 60)
+def ai_advisor(tg_id):
+    from ai_advisor import get_advice
+    topic = request.args.get("topic", "budget")
+    lang  = request.args.get("lang", "uz")
+    with get_db() as db:
+        user = row2dict(db.execute("SELECT * FROM users WHERE telegram_id=?", (tg_id,)).fetchone())
+        if not user: return jsonify({"error": "not found"}), 404
+    try:
+        advice = get_advice(user, topic, lang)
+        return jsonify(advice)
+    except Exception as e:
+        return jsonify({"error": str(e)}), 500
+
+@app.route("/api/ai-advisor/<int:tg_id>/chat", methods=["POST"])
+@rate_limit(20, 60)
+def ai_chat(tg_id):
+    from ai_advisor import answer_question
+    d = request.json or {}
+    q = d.get("question","")[:500]
+    lang = d.get("lang","uz")
+    sector = d.get("sector","")
+    try:
+        answer = answer_question(q, sector, lang)
+        return jsonify({"answer": answer})
+    except Exception as e:
+        return jsonify({"answer": "Xato yuz berdi, qaytadan urinib ko'ring."}), 200
+
+# ── BOZOR ANALITIKASI ──────────────────────────────────
+@app.route("/api/market/insights", methods=["GET"])
+def market_insights():
+    with get_db() as db:
+        # Soha bo'yicha foydalanuvchilar soni
+        rows = rows2list(db.execute("""
+            SELECT sector, COUNT(*) as count FROM users
+            WHERE sector IS NOT NULL AND sector != ''
+            GROUP BY sector ORDER BY count DESC LIMIT 8
+        """).fetchall())
+
+        total = sum(r["count"] for r in rows) or 1
+        top_sectors = [{"name": r["sector"], "percentage": round(r["count"]/total*100)} for r in rows]
+
+        # O'rtacha narxlar
+        avg_price = db.execute("SELECT AVG(price_post) FROM users WHERE price_post > 0").fetchone()[0]
+        avg_trust = db.execute("SELECT AVG(trust_score) FROM users").fetchone()[0]
+
+        return jsonify({
+            "top_sectors": top_sectors,
+            "avg_price_post": int(avg_price or 0),
+            "avg_trust": int(avg_trust or 50),
+        })
+
+# ── REFERRAL ──────────────────────────────────────────
+@app.route("/api/referral/<int:tg_id>", methods=["GET"])
+def get_referral(tg_id):
+    with get_db() as db:
+        u = row2dict(db.execute("SELECT referral_code, referred_by FROM users WHERE telegram_id=?", (tg_id,)).fetchone())
+        if not u: return jsonify({}), 404
+        count = db.execute("SELECT COUNT(*) FROM referral_bonuses WHERE referrer_id=?", (tg_id,)).fetchone()[0]
+        bonus = db.execute("SELECT SUM(bonus_days) FROM referral_bonuses WHERE referrer_id=?", (tg_id,)).fetchone()[0] or 0
+        refs  = rows2list(db.execute("""
+            SELECT u.full_name, u.role, u.is_verified, u.created_at
+            FROM referral_bonuses rb JOIN users u ON rb.referred_id=u.telegram_id
+            WHERE rb.referrer_id=? ORDER BY rb.created_at DESC LIMIT 20
+        """, (tg_id,)).fetchall())
+        return jsonify({
+            "referral_code": u.get("referral_code") or f"MIDAS-{tg_id}",
+            "referral_count": count,
+            "bonus_days": bonus,
+            "referrals": refs,
+        })
 
 @app.route("/api/referral/use", methods=["POST"])
 def use_referral():
-    data = request.json or {}
-    code = data.get("code", "").strip().upper()
-    new_user_id = data.get("telegram_id")
-    if not code or not new_user_id:
-        return jsonify({"error": "Missing fields"}), 400
-
-    db = get_db()
-    owner = db.execute("SELECT * FROM users WHERE referral_code=?", (code,)).fetchone()
-    if not owner:
-        return jsonify({"error": "Invalid code"}), 404
-    if owner["telegram_id"] == new_user_id:
-        return jsonify({"error": "Cannot use own code"}), 400
-
-    db.execute("UPDATE users SET referred_by=? WHERE telegram_id=?", (owner["telegram_id"], new_user_id))
-    db.commit()
-    return jsonify({"ok": True, "owner_name": owner["full_name"]})
-
-@app.route("/api/referral/deal_complete", methods=["POST"])
-def referral_deal_complete():
-    """Bitim tugaganda referral bonus berish"""
-    data = request.json or {}
-    user_id = data.get("telegram_id")
-    if not user_id:
-        return jsonify({"error": "Missing telegram_id"}), 400
-
-    db = get_db()
-    user = db.execute("SELECT * FROM users WHERE telegram_id=?", (user_id,)).fetchone()
-    if not user or not user["referred_by"]:
-        return jsonify({"ok": True, "bonus": 0})
-
-    referrer_id = user["referred_by"]
-    count = db.execute("SELECT COUNT(*) as c FROM users WHERE referred_by=?", (referrer_id,)).fetchone()["c"]
-
-    # Bonus jadval: odamlar soni -> kunlar
-    bonus_map = {1: 10, 3: 50, 5: 90, 7: 120, 15: 365}
-    bonus = 0
-    for threshold, days in sorted(bonus_map.items()):
-        if count == threshold:
-            bonus = days
-            break
-
-    if bonus > 0:
-        db.execute("INSERT OR IGNORE INTO referral_bonuses (user_id, deal_user_id, bonus_days, created_at) VALUES (?,?,?,datetime('now'))",
-                   (referrer_id, user_id, bonus))
-        db.commit()
-        # Premium kunlarini uzaytirish
-        db.execute("UPDATE users SET premium_until=date(COALESCE(premium_until, date('now')), '+' || ? || ' days') WHERE telegram_id=?",
-                   (bonus, referrer_id))
-        db.commit()
-
-    return jsonify({"ok": True, "bonus": bonus, "referrer_id": referrer_id})
-
-
-# ─────────────────────────────────────────────────────────
-# TRUST SCORE — har bir baholashda yangilanadi
-# ─────────────────────────────────────────────────────────
-def recalc_trust_score(tg_id):
-    """Ishonch skorini qayta hisoblash"""
-    db = get_db()
-    user = db.execute("SELECT * FROM users WHERE telegram_id=?", (tg_id,)).fetchone()
-    if not user:
-        return
-
-    score = 50  # boshlang'ich ball
-
-    # Tasdiqlanganlik +10
-    if user["is_verified"]:
-        score += 10
-
-    # Premium +5
-    if user["is_premium"]:
-        score += 5
-
-    # Profil to'liqligi (taxminan)
-    profile_fields = [user["full_name"], user["phone"], user["bio"]]
-    filled = sum(1 for f in profile_fields if f)
-    score += filled * 3
-
-    # Baholashlar
-    ratings = db.execute(
-        "SELECT rating FROM offers WHERE (from_id=? OR to_id=?) AND rated=1 AND rating IS NOT NULL",
-        (tg_id, tg_id)
-    ).fetchall()
-    if ratings:
-        avg = sum(r["rating"] for r in ratings) / len(ratings)
-        score += int((avg - 3) * 10)  # 5 yulduz = +20, 1 yulduz = -20
-        score += min(len(ratings) * 2, 20)  # Ko'p baholash = ko'p ball (max +20)
-
-    # Bitimlar soni
-    deals = db.execute(
-        "SELECT COUNT(*) as c FROM offers WHERE (from_id=? OR to_id=?) AND status='accepted'",
-        (tg_id, tg_id)
-    ).fetchone()["c"]
-    score += min(deals * 3, 15)  # Max +15
-
-    score = max(0, min(100, score))  # 0-100 oralig'ida
-
-    db.execute("UPDATE users SET trust_score=? WHERE telegram_id=?", (score, tg_id))
-    db.commit()
-    return score
-
-
-# Trust scoreni yangilash endpointi
-@app.route("/api/users/<int:tg_id>/trust", methods=["POST"])
-def update_trust(tg_id):
-    score = recalc_trust_score(tg_id)
-    return jsonify({"trust_score": score})
-
-
-# Baholashda trust score avtomatik yangilanishi uchun offers rate ni override qilamiz
-# (mavjud endpoint ni kengaytirish)
-@app.after_request
-def after_request_hook(response):
-    return response
-
-
-# ─────────────────────────────────────────────────────────
-# MESSAGES — rasm (image_base64) qo'llab-quvvatlash
-# ─────────────────────────────────────────────────────────
-@app.route("/api/messages/with-image", methods=["POST"])
-def send_message_with_image():
-    data = request.json or {}
-    chat_id     = data.get("chat_id")
-    sender_id   = data.get("sender_id")
-    receiver_id = data.get("receiver_id")
-    msg_text    = data.get("message_text", "")
-    img_b64     = data.get("image_base64", "")
-
-    if not all([chat_id, sender_id, receiver_id]):
-        return jsonify({"error": "Missing required fields"}), 400
-
-    db = get_db()
-
-    # Base64 ni saqlash (kichik rasmlar uchun). Katta fayllar uchun external storage kerak
-    image_url = None
-    if img_b64 and len(img_b64) < 500000:  # 500KB limit
-        image_url = img_b64  # To'g'ridan DB ga saqlash (demo uchun)
-
-    db.execute(
-        "INSERT INTO messages (chat_id, sender_id, receiver_id, message_text, image_url, created_at) VALUES (?,?,?,?,?,datetime('now'))",
-        (chat_id, sender_id, receiver_id, msg_text, image_url)
-    )
-    db.commit()
-
-    # Unread counter yangilash
-    db.execute(
-        "UPDATE chats SET last_message=?, last_time=datetime('now'), unread_count=unread_count+1 WHERE id=?",
-        (msg_text or "📷 Rasm", chat_id)
-    )
-    db.commit()
-
+    d = request.json or {}
+    code = d.get("code",""); tg_id = d.get("telegram_id")
+    if not code or not tg_id: return jsonify({"error": "required"}), 400
+    with get_db() as db:
+        referrer = row2dict(db.execute("SELECT telegram_id FROM users WHERE referral_code=?", (code,)).fetchone())
+        if referrer and referrer["telegram_id"] != tg_id:
+            db.execute("UPDATE users SET referred_by=? WHERE telegram_id=?", (code, tg_id))
+            db.commit()
     return jsonify({"ok": True})
 
+# ── TRUST SKORI ───────────────────────────────────────
+@app.route("/api/users/<int:tg_id>/trust", methods=["POST"])
+def recalc_trust_endpoint(tg_id):
+    with get_db() as db:
+        score = recalc_trust(db, tg_id)
+        db.commit()
+    return jsonify({"trust_score": score})
 
-# ─────────────────────────────────────────────────────────
-# DB da yangi ustunlar qo'shish (migration)
-# ─────────────────────────────────────────────────────────
-def run_migrations():
-    db = get_db()
-    # Yangi ustunlar
-    migrations = [
-        "ALTER TABLE users ADD COLUMN referral_code TEXT",
-        "ALTER TABLE users ADD COLUMN referred_by INTEGER",
-        "ALTER TABLE users ADD COLUMN premium_until TEXT",
-        "ALTER TABLE users ADD COLUMN notif_settings TEXT",
-        "ALTER TABLE messages ADD COLUMN image_url TEXT",
-        "ALTER TABLE chats ADD COLUMN last_time TEXT",
-        "CREATE TABLE IF NOT EXISTS referral_bonuses (id INTEGER PRIMARY KEY AUTOINCREMENT, user_id INTEGER, deal_user_id INTEGER, bonus_days INTEGER, created_at TEXT, UNIQUE(user_id, deal_user_id))",
-    ]
-    for sql in migrations:
+# ── ADMIN ─────────────────────────────────────────────
+def require_admin(f):
+    @wraps(f)
+    def wrapper(*args, **kwargs):
+        admin_id = request.args.get("admin_id", 0, type=int)
+        if admin_id not in ADMIN_IDS:
+            return jsonify({"error": "Forbidden"}), 403
+        return f(*args, **kwargs)
+    return wrapper
+
+@app.route("/api/admin/stats", methods=["GET"])
+@require_admin
+def admin_stats():
+    with get_db() as db:
+        return jsonify({
+            "total_users":    db.execute("SELECT COUNT(*) FROM users").fetchone()[0],
+            "tadbirkorlar":   db.execute("SELECT COUNT(*) FROM users WHERE role='tadbirkor'").fetchone()[0],
+            "reklamachilar":  db.execute("SELECT COUNT(*) FROM users WHERE role='reklamachi'").fetchone()[0],
+            "agentliklar":    db.execute("SELECT COUNT(*) FROM users WHERE role='agentlik'").fetchone()[0],
+            "dizaynerlar":    db.execute("SELECT COUNT(*) FROM users WHERE role='dizayner'").fetchone()[0],
+            "premium_users":  db.execute("SELECT COUNT(*) FROM users WHERE is_premium=1").fetchone()[0],
+            "verified_users": db.execute("SELECT COUNT(*) FROM users WHERE is_verified=1").fetchone()[0],
+            "total_offers":   db.execute("SELECT COUNT(*) FROM offers").fetchone()[0],
+            "total_tenders":  db.execute("SELECT COUNT(*) FROM tenders").fetchone()[0],
+            "total_deals":    db.execute("SELECT COUNT(*) FROM deals").fetchone()[0],
+            "total_chats":    db.execute("SELECT COUNT(*) FROM chats").fetchone()[0],
+        })
+
+@app.route("/api/admin/verify-queue", methods=["GET"])
+@require_admin
+def verify_queue():
+    with get_db() as db:
+        return jsonify(rows2list(db.execute(
+            "SELECT * FROM users WHERE is_verified=0 AND is_blocked=0 ORDER BY created_at LIMIT 30"
+        ).fetchall()))
+
+@app.route("/api/admin/verify/<int:uid>", methods=["PUT"])
+@require_admin
+def admin_verify(uid):
+    action = request.args.get("action","verify")
+    with get_db() as db:
+        if action == "verify":
+            db.execute("UPDATE users SET is_verified=1 WHERE telegram_id=?", (uid,))
+            recalc_trust(db, uid)
+            send_notification(db, uid, "verify", "✅ Profilingiz tasdiqlandi!", "MIDAS jamoasi profilingizni tasdiqladi")
+        else:
+            db.execute("UPDATE users SET is_verified=0 WHERE telegram_id=?", (uid,))
+        db.commit()
+    return jsonify({"ok": True})
+
+@app.route("/api/admin/premium/<int:uid>", methods=["PUT"])
+@require_admin
+def admin_premium(uid):
+    days = request.args.get("days", 30, type=int)
+    until = (datetime.utcnow() + timedelta(days=days)).isoformat()
+    with get_db() as db:
+        db.execute("UPDATE users SET is_premium=1, premium_until=? WHERE telegram_id=?", (until, uid))
+        send_notification(db, uid, "premium", "⭐ Premium aktivlashtirildi!", f"{days} kunlik Premium sizga berildi")
+        db.commit()
+    return jsonify({"ok": True})
+
+@app.route("/api/admin/block/<int:uid>", methods=["PUT"])
+@require_admin
+def admin_block(uid):
+    with get_db() as db:
+        u = row2dict(db.execute("SELECT is_blocked FROM users WHERE telegram_id=?", (uid,)).fetchone())
+        new_status = 0 if (u and u["is_blocked"]) else 1
+        db.execute("UPDATE users SET is_blocked=? WHERE telegram_id=?", (new_status, uid))
+        db.commit()
+    return jsonify({"ok": True, "blocked": bool(new_status)})
+
+@app.route("/api/admin/all-users", methods=["GET"])
+@require_admin
+def all_users():
+    with get_db() as db:
+        return jsonify(rows2list(db.execute(
+            "SELECT telegram_id, full_name, role, lang FROM users WHERE is_blocked=0 LIMIT 1000"
+        ).fetchall()))
+
+@app.route("/api/admin/broadcast", methods=["POST"])
+@require_admin
+def broadcast():
+    d = request.json or {}
+    msg = d.get("message","")[:1000]
+    if not msg.strip(): return jsonify({"error": "message required"}), 400
+    import requests as req
+    with get_db() as db:
+        users = rows2list(db.execute("SELECT telegram_id FROM users WHERE is_blocked=0").fetchall())
+    sent = 0
+    for u in users:
         try:
-            db.execute(sql)
+            req.post(f"https://api.telegram.org/bot{BOT_TOKEN}/sendMessage",
+                    json={"chat_id": u["telegram_id"], "text": f"📢 MIDAS xabari:\n\n{msg}", "parse_mode": "HTML"},
+                    timeout=5)
+            sent += 1
+            time.sleep(0.05)
         except Exception:
-            pass  # Ustun allaqachon mavjud
-    db.commit()
+            pass
+    return jsonify({"ok": True, "sent": sent})
 
-# App ishga tushganda migratsiya
-with app.app_context():
-    try:
-        run_migrations()
-    except Exception:
-        pass
+# ── SOG'LIQNI TEKSHIRISH ──────────────────────────────
+@app.route("/health", methods=["GET"])
+def health():
+    return jsonify({"status": "ok", "version": "v8", "time": now_str()})
 
+@app.route("/", methods=["GET"])
+def root():
+    return jsonify({"name": "MIDAS API v8", "status": "running"})
+
+# ── XATO HANDLER ──────────────────────────────────────
+@app.errorhandler(404)
+def not_found(e): return jsonify({"error": "Not found"}), 404
+
+@app.errorhandler(500)
+def server_error(e):
+    logger.error(f"500: {e}")
+    return jsonify({"error": "Internal server error"}), 500
+
+if __name__ == "__main__":
+    run_migrations()
+    app.run(host="0.0.0.0", port=int(os.getenv("PORT", 5000)), debug=False)

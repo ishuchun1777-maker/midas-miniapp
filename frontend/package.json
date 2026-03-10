@@ -1,6 +1,6 @@
 {
   "name": "midas-miniapp",
-  "version": "2.0.0",
+  "version": "8.0.0",
   "private": true,
   "dependencies": {
     "react": "^18.2.0",
@@ -9,11 +9,21 @@
   },
   "scripts": {
     "start": "react-scripts start",
-    "build": "react-scripts build",
+    "build": "GENERATE_SOURCEMAP=false react-scripts build",
     "test": "react-scripts test"
+  },
+  "eslintConfig": {
+    "extends": ["react-app"],
+    "rules": {
+      "no-unused-vars": "warn",
+      "react-hooks/exhaustive-deps": "warn"
+    }
   },
   "browserslist": {
     "production": [">0.2%", "not dead", "not op_mini all"],
     "development": ["last 1 chrome version"]
+  },
+  "engines": {
+    "node": ">=18.0.0"
   }
 }

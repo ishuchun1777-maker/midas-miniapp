@@ -1,629 +1,448 @@
 // ═══════════════════════════════════════════════════════
-// MIDAS v6 — App.jsx (Tuzatilgan + Boyitilgan)
-// Asosiy xatolar tuzatildi:
-//   1. window.React.useState → to'g'ri import
-//   2. require() → import sintaksisi
-//   3. Loading ekrani qotib qolishi — animatsiya CSS ga ko'chirildi
-//   4. Backend cold start uchun retry mexanizmi
-//   5. Telegram WebApp ready() to'g'ri chaqirildi
+// MIDAS V8 — APP.JSX (Asosiy)
+// 5 rol, gold/emerald tema, barcha sahifalar
 // ═══════════════════════════════════════════════════════
-import { useState, useEffect, useRef, useCallback } from "react";
+import { useState, useEffect, useRef } from "react";
+import { buildTheme } from "./theme";
+import { MidasLogo, MidasWordmark } from "./logo";
+import { http, Badge, Spinner } from "./core";
+import { ROLES } from "./constants";
 
-import { buildTheme, http, MidasLogo, Badge, tg } from "./App_v5_part1";
-import { OnboardingSlides, LegalScreen, Registration } from "./App_v5_part2";
-import { MatchPage, NotifOffersPage, ChatsPage } from "./App_v5_part3";
-import { AIAdvisorPage, TenderPage, AnalyticsPage, ProfilePage } from "./App_v5_part4";
-import { AdminPanel } from "./App_v5_part5";
+import { OnboardingPage, LegalPage, RegistrationPage } from "./pages/auth";
+import { MatchPage, PortfolioPage } from "./pages/match";
+import { TenderPage } from "./pages/tender";
+import { NotifOffersPage, ChatsPage } from "./pages/chat";
+import { AIAdvisorPage, AnalyticsPage, GuaranteePage, PremiumPage } from "./pages/features";
+import { ProfilePage } from "./pages/profile";
 
-const ADMIN_IDS = (process.env.REACT_APP_ADMIN_IDS || "").split(",").map(Number).filter(Boolean);
+const tg = window.Telegram?.WebApp;
+const ADMIN_IDS_ENV = (process.env.REACT_APP_ADMIN_IDS || "").split(",").map(Number).filter(Boolean);
 
 // ── BOTTOM NAV ─────────────────────────────────────────
-// ── HAR BIR BO'LIM UCHUN FON ──────────────────────────
-function PageBackground({ tab, theme }) {
-  const dk = theme.dk;
+function BottomNav({ tab, setTab, role, unread, lang, isAdmin }) {
+  const uz = lang !== "ru";
 
-  const configs = {
-    match: {
-      blobs: [
-        { x: "80%", y: "-5%",  r: 200, c: dk ? "rgba(45,106,79,0.18)"  : "rgba(45,106,79,0.08)"  },
-        { x: "-5%", y: "40%",  r: 160, c: dk ? "rgba(82,183,136,0.12)" : "rgba(82,183,136,0.07)" },
-        { x: "60%", y: "70%",  r: 140, c: dk ? "rgba(201,168,76,0.10)" : "rgba(201,168,76,0.06)" },
-      ],
-      dots: true,
-    },
-    tender: {
-      blobs: [
-        { x: "90%", y: "5%",   r: 180, c: dk ? "rgba(201,168,76,0.16)" : "rgba(201,168,76,0.08)" },
-        { x: "0%",  y: "55%",  r: 150, c: dk ? "rgba(45,106,79,0.14)"  : "rgba(45,106,79,0.07)"  },
-        { x: "50%", y: "85%",  r: 120, c: dk ? "rgba(82,183,136,0.10)" : "rgba(82,183,136,0.05)" },
-      ],
-      hexGrid: true,
-    },
-    notifs: {
-      blobs: [
-        { x: "75%", y: "-8%",  r: 160, c: dk ? "rgba(59,130,246,0.14)" : "rgba(59,130,246,0.07)" },
-        { x: "-8%", y: "30%",  r: 130, c: dk ? "rgba(45,106,79,0.12)"  : "rgba(45,106,79,0.06)"  },
-      ],
-      rings: true,
-    },
-    chats: {
-      blobs: [
-        { x: "85%", y: "10%",  r: 170, c: dk ? "rgba(82,183,136,0.15)" : "rgba(82,183,136,0.07)" },
-        { x: "5%",  y: "60%",  r: 140, c: dk ? "rgba(45,106,79,0.12)"  : "rgba(45,106,79,0.06)"  },
-      ],
-      bubbles: true,
-    },
-    analytics: {
-      blobs: [
-        { x: "80%", y: "0%",   r: 190, c: dk ? "rgba(124,92,191,0.16)" : "rgba(124,92,191,0.08)" },
-        { x: "-5%", y: "45%",  r: 160, c: dk ? "rgba(45,106,79,0.12)"  : "rgba(45,106,79,0.06)"  },
-        { x: "45%", y: "80%",  r: 130, c: dk ? "rgba(201,168,76,0.10)" : "rgba(201,168,76,0.05)" },
-      ],
-      bars: true,
-    },
-    profile: {
-      blobs: [
-        { x: "70%", y: "-10%", r: 200, c: dk ? "rgba(201,168,76,0.16)" : "rgba(201,168,76,0.08)" },
-        { x: "-8%", y: "50%",  r: 150, c: dk ? "rgba(45,106,79,0.12)"  : "rgba(45,106,79,0.06)"  },
-      ],
-      stars: true,
-    },
-    admin: {
-      blobs: [
-        { x: "75%", y: "5%",   r: 180, c: dk ? "rgba(224,82,82,0.12)"  : "rgba(224,82,82,0.06)"  },
-        { x: "0%",  y: "40%",  r: 140, c: dk ? "rgba(45,106,79,0.12)"  : "rgba(45,106,79,0.06)"  },
-      ],
-    },
+  // Har bir rol uchun navigatsiya
+  const navs = {
+    tadbirkor: [
+      { v: "match",    icon: "🎯", l_uz: "Match"    },
+      { v: "tender",   icon: "📋", l_uz: "Tender"   },
+      { v: "notifs",   icon: "🔔", l_uz: "Xabarlar", badge: unread },
+      { v: "chats",    icon: "💬", l_uz: "Chat"     },
+      { v: "profile",  icon: "👤", l_uz: "Profil"   },
+    ],
+    reklamachi: [
+      { v: "match",    icon: "🎯", l_uz: "Match"    },
+      { v: "tender",   icon: "📋", l_uz: "Tender"   },
+      { v: "notifs",   icon: "🔔", l_uz: "Xabarlar", badge: unread },
+      { v: "portfolio",icon: "💼", l_uz: "Portfolio" },
+      { v: "profile",  icon: "👤", l_uz: "Profil"   },
+    ],
+    agentlik: [
+      { v: "match",     icon: "🎯", l_uz: "Match"     },
+      { v: "tender",    icon: "📋", l_uz: "Tender"    },
+      { v: "notifs",    icon: "🔔", l_uz: "Xabarlar",  badge: unread },
+      { v: "analytics", icon: "📊", l_uz: "Analytics" },
+      { v: "profile",   icon: "👤", l_uz: "Profil"    },
+    ],
+    dizayner: [
+      { v: "match",     icon: "🎯", l_uz: "Match"     },
+      { v: "portfolio", icon: "💼", l_uz: "Portfolio" },
+      { v: "notifs",    icon: "🔔", l_uz: "Xabarlar",  badge: unread },
+      { v: "chats",     icon: "💬", l_uz: "Chat"      },
+      { v: "profile",   icon: "👤", l_uz: "Profil"    },
+    ],
+    media_buyer: [
+      { v: "match",     icon: "🎯", l_uz: "Match"     },
+      { v: "tender",    icon: "📋", l_uz: "Tender"    },
+      { v: "analytics", icon: "📊", l_uz: "Analytics" },
+      { v: "notifs",    icon: "🔔", l_uz: "Xabarlar",  badge: unread },
+      { v: "profile",   icon: "👤", l_uz: "Profil"    },
+    ],
   };
 
-  const cfg = configs[tab] || configs.match;
-
-  return (
-    <div style={{ position:"absolute", inset:0, overflow:"hidden", pointerEvents:"none", zIndex:0 }}>
-      <svg width="100%" height="100%" style={{ position:"absolute", inset:0 }}>
-        <defs>
-          {cfg.blobs.map((b, i) => (
-            <radialGradient key={i} id={`bg_g${tab}${i}`} cx="50%" cy="50%" r="50%">
-              <stop offset="0%" stopColor={b.c} />
-              <stop offset="100%" stopColor="transparent" />
-            </radialGradient>
-          ))}
-        </defs>
-
-        {/* Blob circles */}
-        {cfg.blobs.map((b, i) => (
-          <circle key={i}
-            cx={b.x} cy={b.y} r={b.r}
-            fill={`url(#bg_g${tab}${i})`}
-          />
-        ))}
-
-        {/* Dot pattern */}
-        {cfg.dots && Array.from({length: 12}).map((_, i) => (
-          Array.from({length: 8}).map((__, j) => (
-            <circle key={`d${i}${j}`}
-              cx={`${8 + i * 8}%`} cy={60 + j * 40}
-              r={1.5}
-              fill={dk ? "rgba(255,255,255,0.04)" : "rgba(0,0,0,0.04)"}
-            />
-          ))
-        ))}
-
-        {/* Hex grid for tender */}
-        {cfg.hexGrid && [0,1,2,3,4].map(i => (
-          [0,1,2,3].map(j => {
-            const cx = 50 + i * 90 + (j % 2) * 45;
-            const cy = 80 + j * 78;
-            const pts = Array.from({length:6}, (_, k) => {
-              const a = (Math.PI / 3) * k - Math.PI / 6;
-              return `${cx + 30 * Math.cos(a)},${cy + 30 * Math.sin(a)}`;
-            }).join(" ");
-            return (
-              <polygon key={`h${i}${j}`} points={pts}
-                fill="none"
-                stroke={dk ? "rgba(201,168,76,0.08)" : "rgba(201,168,76,0.1)"}
-                strokeWidth="1"
-              />
-            );
-          })
-        ))}
-
-        {/* Rings for notifs */}
-        {cfg.rings && [1,2,3].map(i => (
-          <circle key={`r${i}`}
-            cx="85%" cy="15%"
-            r={40 * i}
-            fill="none"
-            stroke={dk ? "rgba(59,130,246,0.07)" : "rgba(59,130,246,0.08)"}
-            strokeWidth="1.5"
-          />
-        ))}
-
-        {/* Chat bubbles bg */}
-        {cfg.bubbles && [
-          {x:"78%", y:80,  w:60, h:30},
-          {x:"5%",  y:180, w:80, h:30},
-          {x:"70%", y:280, w:55, h:28},
-        ].map((b, i) => (
-          <rect key={`bb${i}`}
-            x={b.x} y={b.y} width={b.w} height={b.h}
-            rx={14}
-            fill={dk ? "rgba(82,183,136,0.06)" : "rgba(82,183,136,0.07)"}
-          />
-        ))}
-
-        {/* Analytics bars */}
-        {cfg.bars && [0.4, 0.7, 0.55, 0.9, 0.6].map((h, i) => (
-          <rect key={`bar${i}`}
-            x={`${72 + i * 5}%`} y={`${100 - h * 80}px`}
-            width="14" height={`${h * 80}px`}
-            rx="4"
-            fill={dk ? "rgba(124,92,191,0.08)" : "rgba(124,92,191,0.07)"}
-          />
-        ))}
-
-        {/* Stars for profile */}
-        {cfg.stars && [
-          {x:"88%", y:50,  s:14},
-          {x:"12%", y:120, s:10},
-          {x:"92%", y:220, s:8 },
-          {x:"6%",  y:300, s:12},
-        ].map((st, i) => (
-          <text key={`st${i}`} x={st.x} y={st.y}
-            fontSize={st.s}
-            fill={dk ? "rgba(201,168,76,0.18)" : "rgba(201,168,76,0.2)"}
-            textAnchor="middle">★</text>
-        ))}
-      </svg>
-    </div>
-  );
-}
-
-function BottomNav({ tab, setTab, role, unread, lang, theme, isAdmin }) {
-  const items = role === "tadbirkor" ? [
-    { v:"match",     icon:"🎯", uz:"Match",     ru:"Матч"      },
-    { v:"tender",    icon:"📋", uz:"Tender",    ru:"Тендер"    },
-    { v:"notifs",    icon:"🔔", uz:"Xabarlar",  ru:"Уведомл."  },
-    { v:"chats",     icon:"💬", uz:"Chatlar",   ru:"Чаты"      },
-    { v:"profile",   icon:"👤", uz:"Profil",    ru:"Профиль"   },
-  ] : [
-    { v:"match",    icon:"🎯", uz:"Match",    ru:"Матч"    },
-    { v:"tender",   icon:"📋", uz:"Tender",   ru:"Тендер"  },
-    { v:"chats",    icon:"💬", uz:"Chatlar",  ru:"Чаты"    },
-    { v:"ai",       icon:"🤖", uz:"AI",       ru:"AI"      },
-    { v:"profile",  icon:"👤", uz:"Profil",   ru:"Профиль" },
-  ];
+  const items = navs[role] || navs.reklamachi;
 
   return (
     <div style={{
-      position:"fixed", bottom:0, left:0, right:0, zIndex:100,
-      background:theme.card, borderTop:`1px solid ${theme.border}`,
-      display:"flex", paddingBottom:"env(safe-area-inset-bottom,0px)",
-      backdropFilter:"blur(12px)",
+      position: "fixed", bottom: 0, left: 0, right: 0, zIndex: 100,
+      background: "rgba(13,17,23,0.95)",
+      backdropFilter: "blur(20px)",
+      borderTop: "1px solid rgba(212,175,55,0.15)",
+      display: "flex",
+      paddingBottom: "env(safe-area-inset-bottom, 8px)",
     }}>
-      {items.map(it => (
-        <button key={it.v} onClick={() => setTab(it.v)} style={{
-          flex:1, padding:"10px 4px 8px", background:"none", border:"none",
-          cursor:"pointer", display:"flex", flexDirection:"column",
-          alignItems:"center", gap:3, position:"relative",
-          transition:"transform 0.1s",
-        }}>
-          <span style={{
-            fontSize:22, lineHeight:1,
-            transform: tab===it.v ? "scale(1.15)" : "scale(1)",
-            transition:"transform 0.2s cubic-bezier(.34,1.56,.64,1)",
-            display:"block"
-          }}>{it.icon}</span>
-          <span style={{
-            fontSize:10, fontWeight:tab===it.v?700:500,
-            color:tab===it.v?theme.accent:theme.hint,
-            transition:"color 0.15s"
-          }}>{lang==="uz"?it.uz:it.ru}</span>
-          {tab===it.v && (
-            <div style={{
-              position:"absolute", top:4, width:4, height:4,
-              borderRadius:2, background:theme.accent,
-              animation:"none"
-            }}/>
-          )}
-          {it.v==="notifs" && unread.notifs>0 && (
-            <div style={{
-              position:"absolute", top:4, right:"18%",
-              background:theme.danger, color:"#fff", fontSize:9,
-              borderRadius:8, minWidth:16, height:16,
-              display:"flex", alignItems:"center", justifyContent:"center",
-              fontWeight:700, padding:"0 4px"
-            }}>{unread.notifs}</div>
-          )}
-          {it.v==="chats" && unread.chats>0 && (
-            <div style={{
-              position:"absolute", top:4, right:"18%",
-              background:theme.danger, color:"#fff", fontSize:9,
-              borderRadius:8, minWidth:16, height:16,
-              display:"flex", alignItems:"center", justifyContent:"center",
-              fontWeight:700, padding:"0 4px"
-            }}>{unread.chats}</div>
-          )}
-        </button>
-      ))}
+      {items.map(item => {
+        const active = tab === item.v;
+        return (
+          <button key={item.v} onClick={() => setTab(item.v)} style={{
+            flex: 1, display: "flex", flexDirection: "column", alignItems: "center",
+            justifyContent: "center", padding: "10px 4px", background: "transparent",
+            border: "none", cursor: "pointer", position: "relative", gap: 3,
+            transition: "all 0.15s",
+          }}>
+            {/* Active indicator */}
+            {active && (
+              <div style={{
+                position: "absolute", top: 0, left: "25%", right: "25%",
+                height: 2, background: "linear-gradient(90deg,#8B6914,#D4AF37,#F5E6A3)",
+                borderRadius: "0 0 2px 2px",
+                boxShadow: "0 0 8px rgba(212,175,55,0.5)",
+              }} />
+            )}
+
+            {/* Badge */}
+            {item.badge > 0 && (
+              <div style={{
+                position: "absolute", top: 6, right: "20%",
+                width: 16, height: 16, borderRadius: "50%",
+                background: "#EF4444", color: "#fff",
+                fontSize: 9, fontWeight: 900,
+                display: "flex", alignItems: "center", justifyContent: "center",
+                boxShadow: "0 0 6px rgba(239,68,68,0.4)",
+              }}>{item.badge > 9 ? "9+" : item.badge}</div>
+            )}
+
+            <span style={{ fontSize: 20, lineHeight: 1, filter: active ? "none" : "grayscale(0.5) opacity(0.5)" }}>
+              {item.icon}
+            </span>
+            <span style={{
+              fontSize: 9, fontWeight: active ? 700 : 500, lineHeight: 1,
+              color: active ? "#D4AF37" : "#616161",
+              letterSpacing: "0.02em",
+            }}>
+              {item.l_uz}
+            </span>
+          </button>
+        );
+      })}
+
       {isAdmin && (
         <button onClick={() => setTab("admin")} style={{
-          flex:1, padding:"10px 4px 8px", background:"none", border:"none",
-          cursor:"pointer", display:"flex", flexDirection:"column",
-          alignItems:"center", gap:3
+          display: "flex", flexDirection: "column", alignItems: "center", justifyContent: "center",
+          padding: "10px 10px", background: "transparent", border: "none", cursor: "pointer",
         }}>
-          <span style={{ fontSize:22, transform: tab==="admin"?"scale(1.15)":"scale(1)", display:"block", transition:"transform 0.2s" }}>⚙️</span>
-          <span style={{ fontSize:10, fontWeight:tab==="admin"?700:500, color:tab==="admin"?theme.accent:theme.hint }}>Admin</span>
+          <span style={{ fontSize: 20, filter: tab === "admin" ? "none" : "grayscale(0.6) opacity(0.5)" }}>👑</span>
+          <span style={{ fontSize: 9, color: tab === "admin" ? "#D4AF37" : "#616161" }}>Admin</span>
         </button>
       )}
     </div>
   );
 }
 
-// ── FOMO BAR ───────────────────────────────────────────
-function FOMOBar({ lang, theme, user }) {
-  const [info, setInfo] = useState(null);
-  useEffect(() => {
-    http(`/api/fomo?tg_id=${user.telegram_id}`).then(setInfo).catch(() => {});
-  }, [user]);
-  if (!info || (!info.streak && !info.new_tenders && !info.new_partners)) return null;
+// ── SPLASH ─────────────────────────────────────────────
+function SplashScreen({ retry }) {
   return (
     <div style={{
-      background:theme.accentLight,
-      borderBottom:`1px solid ${theme.accentB}`,
-      padding:"8px 16px", display:"flex", gap:16, overflowX:"auto"
+      minHeight: "100vh", display: "flex", flexDirection: "column",
+      alignItems: "center", justifyContent: "center",
+      background: "radial-gradient(ellipse at center, #0F1A10 0%, #0D1117 40%, #0A0D14 100%)",
     }}>
-      {info.streak > 1 && (
-        <div style={{ fontSize:12, color:theme.accent, fontWeight:600, whiteSpace:"nowrap" }}>
-          🔥 {info.streak} {lang==="uz"?"kun ketma-ket":"дней подряд"}
-        </div>
-      )}
-      {info.new_tenders > 0 && (
-        <div style={{ fontSize:12, color:theme.accent, fontWeight:600, whiteSpace:"nowrap" }}>
-          📋 {lang==="uz"?`Bugun ${info.new_tenders} yangi tender`:`${info.new_tenders} новых тендеров`}
-        </div>
-      )}
-      {info.new_partners > 0 && (
-        <div style={{ fontSize:12, color:theme.accent, fontWeight:600, whiteSpace:"nowrap" }}>
-          🤝 {lang==="uz"?`${info.new_partners} yangi hamkor`:`${info.new_partners} новых партнёров`}
-        </div>
+      <MidasLogo size={100} animated />
+      <div style={{ marginTop: 20, marginBottom: 30 }}>
+        <MidasWordmark size="lg" />
+      </div>
+      <div style={{ display: "flex", gap: 8, marginBottom: 20 }}>
+        {[0,1,2].map(i => (
+          <div key={i} style={{
+            width: 8, height: 8, borderRadius: "50%",
+            background: "#D4AF37", opacity: 0.3 + i * 0.3,
+            animation: `pulse ${0.8 + i * 0.2}s ease-in-out infinite alternate`,
+          }} />
+        ))}
+      </div>
+      <style>{`@keyframes pulse { to { opacity: 1; transform: scale(1.2); } }`}</style>
+      {retry && (
+        <button onClick={retry} style={{ color: "#D4AF37", background: "rgba(212,175,55,0.1)", border: "1px solid rgba(212,175,55,0.2)", borderRadius: 12, padding: "10px 20px", fontSize: 13, fontWeight: 700, cursor: "pointer" }}>
+          🔄 Qayta ulanish
+        </button>
       )}
     </div>
   );
 }
 
-// ── PROFILE PROGRESS BAR ───────────────────────────────
-function ProfileProgress({ user, lang, theme, onGoProfile }) {
-  const [pct, setPct] = useState(null);
-  useEffect(() => {
-    http(`/api/users/${user.telegram_id}/progress`)
-      .then(r => setPct(r.percent))
-      .catch(() => {});
-  }, [user]);
-  if (!pct || pct >= 100) return null;
+// ── TOPBAR ─────────────────────────────────────────────
+function TopBar({ user, tab, lang, setTab, isAdmin }) {
+  const uz = lang !== "ru";
+  const role = ROLES.find(r => r.v === user.role);
+
   return (
-    <button onClick={onGoProfile} style={{
-      width:"100%", background:theme.card,
-      borderBottom:`1px solid ${theme.border}`,
-      padding:"10px 16px", display:"flex",
-      alignItems:"center", gap:12, border:"none",
-      cursor:"pointer", boxSizing:"border-box"
+    <div style={{
+      position: "sticky", top: 0, zIndex: 50,
+      background: "rgba(13,17,23,0.95)",
+      backdropFilter: "blur(20px)",
+      borderBottom: "1px solid rgba(212,175,55,0.1)",
+      padding: "10px 16px",
+      display: "flex", justifyContent: "space-between", alignItems: "center",
     }}>
-      <div style={{ flex:1 }}>
-        <div style={{ display:"flex", justifyContent:"space-between", fontSize:12, color:theme.sub, marginBottom:5 }}>
-          <span>👤 {lang==="uz"?"Profil to'ldirilishi":"Профиль заполнен"}</span>
-          <span style={{ fontWeight:700, color:theme.accent }}>{pct}%</span>
-        </div>
-        <div style={{ height:6, borderRadius:3, background:theme.border, overflow:"hidden" }}>
+      <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
+        <MidasLogo size={32} />
+        <div>
           <div style={{
-            height:"100%", width:`${pct}%`,
-            background:`linear-gradient(90deg, ${theme.accent}, ${theme.accentB})`,
-            borderRadius:3, transition:"width 0.8s cubic-bezier(.23,1,.32,1)"
-          }}/>
+            fontFamily: "Georgia, serif", fontWeight: 900, fontSize: 16,
+            letterSpacing: "0.3em", color: "#D4AF37",
+            textShadow: "0 0 15px rgba(212,175,55,0.3)",
+          }}>MIDAS</div>
+          <div style={{ fontSize: 9, color: "#616161", letterSpacing: "0.08em" }}>
+            {role?.icon} {uz ? (role?.l_uz || "") : (role?.l_ru || "")}
+          </div>
         </div>
       </div>
-      <span style={{ color:theme.accent, fontSize:18 }}>›</span>
-    </button>
-  );
-}
 
-// ── SPLASH SCREEN (Loading) ─────────────────────────────
-function SplashScreen({ theme, retry, retrying }) {
-  return (
-    <div style={{
-      minHeight:"100vh",
-      background: "linear-gradient(160deg,#0d1f14 0%,#1a3d2e 40%,#0d1f14 100%)",
-      display:"flex", flexDirection:"column",
-      alignItems:"center", justifyContent:"center",
-      position:"relative", overflow:"hidden"
-    }}>
-      {/* Fon dekorativ doiralar */}
-      <div style={{
-        position:"absolute", width:300, height:300, borderRadius:"50%",
-        background:"rgba(82,183,136,0.06)", top:-50, left:-100,
-        pointerEvents:"none"
-      }}/>
-      <div style={{
-        position:"absolute", width:200, height:200, borderRadius:"50%",
-        background:"rgba(201,168,76,0.08)", bottom:80, right:-60,
-        pointerEvents:"none"
-      }}/>
-
-      {/* Logo + nomi */}
-      <div style={{ animation:"floatUp 0.6s ease both", textAlign:"center" }}>
-        <div style={{
-          width:96, height:96, borderRadius:28,
-          background:"linear-gradient(135deg,rgba(82,183,136,0.15),rgba(45,106,79,0.25))",
-          border:"1.5px solid rgba(82,183,136,0.35)",
-          display:"flex", alignItems:"center", justifyContent:"center",
-          margin:"0 auto 20px",
-          boxShadow:"0 0 32px rgba(82,183,136,0.2), inset 0 1px 0 rgba(255,255,255,0.08)",
-          animation:"glow 3s ease-in-out infinite"
+      <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
+        {user.is_premium === 1 && (
+          <div style={{ fontSize: 10, fontWeight: 700, padding: "3px 8px", borderRadius: 8, background: "linear-gradient(135deg,rgba(139,105,20,0.4),rgba(212,175,55,0.2))", color: "#F5E6A3", border: "1px solid rgba(212,175,55,0.4)" }}>⭐ Premium</div>
+        )}
+        <button onClick={() => setTab("profile")} style={{
+          fontSize: 12, fontWeight: 700, padding: "5px 10px", borderRadius: 10,
+          background: "rgba(255,255,255,0.04)", border: "1px solid rgba(212,175,55,0.12)",
+          color: "#9E9E9E", cursor: "pointer", fontFamily: "inherit",
         }}>
-          <MidasLogo size={60} theme={theme} white/>
-        </div>
-        <div style={{
-          fontFamily:"Georgia,serif", fontSize:36, fontWeight:800,
-          color:"#fff", letterSpacing:8, marginBottom:6
-        }}>MIDAS</div>
-        <div style={{
-          fontSize:11, color:"rgba(255,255,255,0.45)",
-          letterSpacing:4, textTransform:"uppercase"
-        }}>Businessman & Advertiser</div>
+          {user.full_name?.split(" ")[0] || "👤"}
+        </button>
       </div>
-
-      {/* Loading dots */}
-      {!retrying && (
-        <div style={{ marginTop:52, display:"flex", gap:8 }}>
-          {[0,1,2].map(i => (
-            <div key={i} style={{
-              width:8, height:8, borderRadius:4,
-              background:"rgba(255,255,255,0.5)",
-              animation:`pulse${i} 1.4s ${i*0.2}s infinite ease-in-out`
-            }}/>
-          ))}
-        </div>
-      )}
-
-      {/* Retry holati */}
-      {retrying && (
-        <div style={{ marginTop:40, textAlign:"center" }}>
-          <div style={{ color:"rgba(255,255,255,0.6)", fontSize:13, marginBottom:16 }}>
-            🔄 {retrying === "connecting"
-              ? "Server bilan bog'lanmoqda..."
-              : "Aloqa o'rnatilmoqda..."}
-          </div>
-          <div style={{ display:"flex", gap:8, justifyContent:"center" }}>
-            {[0,1,2].map(i => (
-              <div key={i} style={{
-                width:6, height:6, borderRadius:3,
-                background:"rgba(82,183,136,0.7)",
-                animation:`pulse${i} 0.9s ${i*0.15}s infinite ease-in-out`
-              }}/>
-            ))}
-          </div>
-        </div>
-      )}
     </div>
   );
 }
 
-// ── MAIN APP ───────────────────────────────────────────
+// ── ASOSIY APP ─────────────────────────────────────────
 export default function App() {
-  const theme   = buildTheme();
+  const [screen,  setScreen]  = useState("splash"); // splash | onboard | legal | register | main
+  const [user,    setUser]    = useState(null);
+  const [tab,     setTab]     = useState("match");
+  const [lang,    setLang]    = useState("uz");
+  const [unread,  setUnread]  = useState(0);
+  const [page,    setPage]    = useState(null); // premium | guarantee | ai_chat
+  const [retry,   setRetry]   = useState(0);
+  const pollRef = useRef(null);
 
-  // Telegram user — development uchun fallback
-  const tgUser = tg?.initDataUnsafe?.user || null;
+  // Telegram WebApp init
+  const tgUser = tg?.initDataUnsafe?.user || { id: 0, first_name: "Test", username: "test" };
+  const isAdmin = ADMIN_IDS_ENV.includes(tgUser.id);
 
-  const [screen,   setScreen]   = useState("loading");
-  const [user,     setUser]     = useState(null);
-  const [lang,     setLang]     = useState("uz");
-  const [tab,      setTab]      = useState("match");
-  const [unread,   setUnread]   = useState({ notifs:0, chats:0 });
-  const [retrying, setRetrying] = useState(null);
-  const retryCount = useRef(0);
-
-  const isAdmin = ADMIN_IDS.includes(tgUser?.id || 0);
-
-  // ── Init: Telegram ready + foydalanuvchini yuklash ──
   useEffect(() => {
-    // Telegram WebApp ni to'g'ri ishga tushirish
-    if (tg) {
-      tg.ready();
-      tg.expand();
-      try { tg.setHeaderColor?.(theme.dk ? "#0d0f1a" : "#f0f2f8"); } catch {}
-      try { tg.setBackgroundColor?.(theme.dk ? "#0d0f1a" : "#f0f2f8"); } catch {}
-      try { tg.enableClosingConfirmation?.(); } catch {}
-    }
-
-    // Telegram WebApp olmagan holatda (browser) — test modeini ko'rsatish
-    if (!tg && process.env.NODE_ENV !== "production") {
-      // Development: test foydalanuvchi
-      setScreen("onboard");
-      return;
-    }
-
-    if (!tgUser?.id) {
-      // tgUser yuklanmagan — Telegram'dan tashqarida ochilgan
-      setScreen("onboard");
-      return;
-    }
-
-    loadUser(tgUser.id);
+    tg?.ready?.();
+    tg?.expand?.();
+    tg?.setHeaderColor?.("#0D1117");
+    tg?.setBackgroundColor?.("#0D1117");
   }, []);
 
-  const loadUser = async (tgId, attempt = 0) => {
-    try {
-      if (attempt > 0) {
-        setRetrying("connecting");
-        await new Promise(r => setTimeout(r, Math.min(attempt * 1500, 5000)));
-      }
-
-      const u = await http(`/api/users/${tgId}`);
-      if (u && u.role) {
-        setUser(u);
-        setLang(u.lang || "uz");
-        setScreen("main");
-        setRetrying(null);
-      } else {
+  useEffect(() => {
+    const init = async () => {
+      try {
+        const u = await http(`/api/users/${tgUser.id}`);
+        if (u?.telegram_id) {
+          setUser(u);
+          setLang(u.lang || "uz");
+          setScreen("main");
+        } else {
+          setScreen("onboard");
+        }
+      } catch {
         setScreen("onboard");
       }
-    } catch (err) {
-      retryCount.current++;
-      if (retryCount.current < 4) {
-        // Backend cold start bo'lishi mumkin (Render free) — retry
-        setRetrying("connecting");
-        loadUser(tgId, retryCount.current);
-      } else {
-        // 4 urinishdan keyin ham ishlamasa — onboarding
-        setRetrying(null);
-        setScreen("onboard");
-      }
-    }
-  };
+    };
+    init();
+  }, [retry]);
 
-  // ── Unread polling ──
+  // Unread polling
   useEffect(() => {
     if (screen !== "main" || !user) return;
     const poll = async () => {
       try {
-        const r = await http(`/api/unread/${user.telegram_id}`);
-        setUnread({ notifs: r.notifs || 0, chats: r.chats || 0 });
+        const r = await http(`/api/notifications/unread-count/${user.telegram_id}`);
+        setUnread(r?.count || 0);
       } catch {}
     };
     poll();
-    const iv = setInterval(poll, 20000);
-    return () => clearInterval(iv);
+    pollRef.current = setInterval(poll, 15000);
+    return () => clearInterval(pollRef.current);
   }, [screen, user]);
 
-  const onRegDone = (l) => {
-    setLang(l);
-    if (tgUser?.id) {
-      http(`/api/users/${tgUser.id}`)
-        .then(u => { setUser(u); setScreen("main"); })
-        .catch(() => setScreen("main"));
-    } else {
-      setScreen("main");
-    }
+  const onRegDone = async () => {
+    try {
+      const u = await http(`/api/users/${tgUser.id}`);
+      if (u?.telegram_id) { setUser(u); setLang(u.lang || "uz"); setScreen("main"); }
+    } catch {}
   };
 
-  // ── SCREENS ────────────────────────────────────────
-
-  if (screen === "loading") {
-    return <SplashScreen theme={theme} retrying={retrying}/>;
-  }
-
-  if (screen === "onboard") return (
-    <OnboardingSlides lang={lang} theme={theme} onFinish={() => setScreen("legal")}/>
-  );
-
-  if (screen === "legal") return (
-    <LegalScreen lang={lang} theme={theme} onAgree={() => setScreen("register")}/>
-  );
-
+  // ── Sahifalar ──────────────────────────────────────
+  if (screen === "splash") return <SplashScreen retry={retry > 0 ? () => setRetry(r => r + 1) : null} />;
+  if (screen === "onboard") return <OnboardingPage lang={lang} onDone={() => setScreen("legal")} />;
+  if (screen === "legal")   return <LegalPage lang={lang} onAgree={() => setScreen("register")} />;
   if (screen === "register") return (
-    <Registration
-      tgUser={tgUser || { id: 0, first_name: "Foydalanuvchi", username: "" }}
-      onDone={onRegDone}
-      theme={theme}
-    />
+    <RegistrationPage tgUser={tgUser} lang={lang} onDone={onRegDone} />
+  );
+  if (screen !== "main" || !user) return <SplashScreen retry={() => setRetry(r => r + 1)} />;
+
+  // Premium sahifa
+  if (page === "premium") return (
+    <PremiumPage user={user} lang={lang} onBack={() => setPage(null)} />
   );
 
-  if (screen !== "main" || !user) return <SplashScreen theme={theme} retrying="connecting"/>;
+  // Guarantee sahifasi
+  if (page === "guarantee") return (
+    <GuaranteePage user={user} lang={lang} />
+  );
 
-  // ── MAIN APP ──────────────────────────────────────
+  // ── Sahifa renderi ─────────────────────────────────
   const renderPage = () => {
     switch (tab) {
-      case "match":     return <MatchPage user={user} lang={lang} theme={theme}/>;
-      case "tender":    return <TenderPage user={user} lang={lang} theme={theme}/>;
-      case "notifs":    return <NotifOffersPage user={user} lang={lang} theme={theme}/>;
-      case "chats":     return <ChatsPage user={user} lang={lang} theme={theme}/>;
-      case "analytics": return user.role === "reklamachi" ? <AnalyticsPage user={user} lang={lang} theme={theme}/> : <AIAdvisorPage user={user} lang={lang} theme={theme}/>;
-      case "ai":        return <AIAdvisorPage user={user} lang={lang} theme={theme}/>;
+      case "match":
+        return <MatchPage user={user} lang={lang} />;
+      case "tender":
+        return <TenderPage user={user} lang={lang} />;
+      case "notifs":
+        return <NotifOffersPage user={user} lang={lang} />;
+      case "chats":
+        return <ChatsPage user={user} lang={lang} />;
+      case "portfolio":
+        return <PortfolioPage user={user} lang={lang} />;
+      case "analytics":
+        return user.role === "tadbirkor"
+          ? <AIAdvisorPage user={user} lang={lang} />
+          : <AnalyticsPage user={user} lang={lang} />;
       case "profile":
-        return <ProfilePage
-          user={user} lang={lang} theme={theme}
-          onLangChange={l => {
-            setLang(l);
-            setUser(u => u ? ({ ...u, lang: l }) : u);
-          }}
-        />;
+        return (
+          <ProfilePage
+            user={user} lang={lang}
+            onLangChange={l => { setLang(l); setUser(u => u ? {...u, lang: l} : u); }}
+            onUserUpdate={u => setUser(u)}
+            setPage={setPage}
+          />
+        );
       case "admin":
-        return isAdmin ? <AdminPanel user={user} lang={lang} theme={theme}/> : null;
+        return isAdmin ? <AdminPanel user={user} lang={lang} /> : null;
       default:
-        return <MatchPage user={user} lang={lang} theme={theme}/>;
+        return <MatchPage user={user} lang={lang} />;
     }
   };
 
   return (
     <div style={{
-      background:theme.bg, minHeight:"100vh",
-      fontFamily:"-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,sans-serif"
+      minHeight: "100vh",
+      background: "radial-gradient(ellipse at top, #0F1A10 0%, #0D1117 40%, #0A0D14 100%)",
+      fontFamily: "-apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif",
     }}>
-      {/* Top bar */}
-      <div style={{
-        position:"sticky", top:0, zIndex:50,
-        background:theme.card, borderBottom:`1px solid ${theme.border}`,
-        padding:"10px 16px", display:"flex",
-        justifyContent:"space-between", alignItems:"center",
-        backdropFilter:"blur(12px)"
-      }}>
-        <div style={{ display:"flex", alignItems:"center", gap:10 }}>
-          <MidasLogo size={32} theme={theme}/>
-          <div>
-            <div style={{
-              fontFamily:"Georgia,serif", fontWeight:800,
-              fontSize:16, color:theme.text, letterSpacing:2
-            }}>MIDAS</div>
-            <div style={{ fontSize:10, color:theme.hint, letterSpacing:1 }}>
-              {user.role==="tadbirkor"
-                ? (lang==="uz"?"Tadbirkor":"Предприниматель")
-                : (lang==="uz"?"Reklamachi":"Рекламодатель")}
-            </div>
-          </div>
-        </div>
+      <TopBar user={user} tab={tab} lang={lang} setTab={setTab} isAdmin={isAdmin} />
 
-        <div style={{ display:"flex", alignItems:"center", gap:6 }}>
-          {user.is_premium===1 && (
-            <div style={{
-              fontSize:11, fontWeight:700, padding:"3px 9px",
-              borderRadius:10, background:theme.goldL, color:theme.gold
-            }}>⭐ Premium</div>
-          )}
-          <div style={{
-            fontSize:11, fontWeight:600, padding:"3px 8px",
-            borderRadius:10, background:theme.card2, color:theme.hint,
-            cursor:"pointer"
-          }} onClick={() => setTab("profile")}>
-            {user.full_name?.split(" ")[0] || "👤"}
-          </div>
-        </div>
+      <div style={{ paddingBottom: 80 }}>
+        {renderPage()}
       </div>
 
-      {/* FOMO bar */}
-      <FOMOBar lang={lang} theme={theme} user={user}/>
-
-      {/* Profile progress */}
-      <ProfileProgress
-        user={user} lang={lang} theme={theme}
-        onGoProfile={() => setTab("profile")}
-      />
-
-      {/* Page content with tab-specific background */}
-      <div style={{ paddingBottom:72, position:"relative" }}>
-        <PageBackground tab={tab} theme={theme} />
-        <div style={{ position:"relative", zIndex:1 }}>
-          {renderPage()}
-        </div>
-      </div>
-
-      {/* Bottom nav */}
       <BottomNav
         tab={tab} setTab={setTab}
         role={user.role} unread={unread}
-        lang={lang} theme={theme}
-        isAdmin={isAdmin}
+        lang={lang} isAdmin={isAdmin}
       />
+
+      <style>{`
+        * { box-sizing: border-box; }
+        body { margin: 0; padding: 0; -webkit-tap-highlight-color: transparent; }
+        button { -webkit-tap-highlight-color: transparent; }
+        ::-webkit-scrollbar { width: 4px; }
+        ::-webkit-scrollbar-track { background: transparent; }
+        ::-webkit-scrollbar-thumb { background: rgba(212,175,55,0.2); border-radius: 2px; }
+        input, textarea { -webkit-appearance: none; }
+        input::placeholder, textarea::placeholder { color: #616161; }
+        @keyframes pulse { 0%,100% { opacity: 0.4; } 50% { opacity: 1; } }
+      `}</style>
+    </div>
+  );
+}
+
+// ── ADMIN PANEL ────────────────────────────────────────
+function AdminPanel({ user, lang }) {
+  const uz = lang !== "ru";
+  const [stats, setStats] = useState({});
+  const [queue, setQueue] = useState([]);
+  const [loading, setLoad] = useState(true);
+  const [tab, setTab]     = useState("stats");
+  const [bcastText, setBcast] = useState("");
+  const [sending, setSend]   = useState(false);
+
+  useEffect(() => {
+    Promise.all([
+      http(`/api/admin/stats?admin_id=${user.telegram_id}`).catch(() => ({})),
+      http(`/api/admin/verify-queue?admin_id=${user.telegram_id}`).catch(() => []),
+    ]).then(([s, q]) => {
+      setStats(s || {}); setQueue(Array.isArray(q) ? q : []);
+    }).finally(() => setLoad(false));
+  }, [user]);
+
+  const verify = async (uid, action) => {
+    await http(`/api/admin/verify/${uid}?admin_id=${user.telegram_id}&action=${action}`, "PUT").catch(() => {});
+    setQueue(q => q.filter(u => u.telegram_id !== uid));
+  };
+
+  const broadcast = async () => {
+    if (!bcastText.trim()) return;
+    setSend(true);
+    try {
+      await http(`/api/admin/broadcast`, "POST", { admin_id: user.telegram_id, message: bcastText });
+      setBcast("");
+      window.Telegram?.WebApp?.showPopup?.({ title: "✅", message: "Yuborildi!" });
+    } catch (e) { alert(e.message); }
+    setSend(false);
+  };
+
+  if (loading) return <Spinner />;
+
+  return (
+    <div style={{ padding: "16px 16px 80px" }}>
+      <div style={{ display: "flex", gap: 6, marginBottom: 16, background: "rgba(255,255,255,0.03)", borderRadius: 14, padding: 4 }}>
+        {[["stats","📊 Stat"],["verify","✅ Tasdiq"],["broadcast","📢 Xabar"]].map(([v, l]) => (
+          <button key={v} onClick={() => setTab(v)} style={{ flex: 1, padding: "9px 4px", borderRadius: 10, fontSize: 11, fontWeight: 700, border: "none", background: tab === v ? "linear-gradient(135deg,#8B6914,#D4AF37)" : "transparent", color: tab === v ? "#0A0D14" : "#616161", cursor: "pointer", fontFamily: "inherit" }}>{l}</button>
+        ))}
+      </div>
+
+      {tab === "stats" && (
+        <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 10 }}>
+          {[
+            ["👥", "Foydalanuvchilar", stats.total_users || 0, "#D4AF37"],
+            ["🏢", "Tadbirkorlar",     stats.tadbirkorlar || 0, "#4CAF50"],
+            ["📢", "Reklamachilar",    stats.reklamachilar || 0, "#3B82F6"],
+            ["⭐", "Premium",          stats.premium_users || 0, "#F5E6A3"],
+            ["✅", "Tasdiqlangan",     stats.verified_users || 0, "#22C55E"],
+            ["📩", "Takliflar",        stats.total_offers || 0, "#8B5CF6"],
+            ["📋", "Tenderlar",        stats.total_tenders || 0, "#D4AF37"],
+            ["🤝", "Bitimlar",         stats.total_deals || 0, "#4CAF50"],
+          ].map(([icon, label, val, color]) => (
+            <div key={label} style={{ background: "rgba(255,255,255,0.03)", border: "1px solid rgba(212,175,55,0.1)", borderRadius: 16, padding: "14px 12px", textAlign: "center" }}>
+              <div style={{ fontSize: 22, marginBottom: 4 }}>{icon}</div>
+              <div style={{ fontWeight: 900, fontSize: 20, color }}>{val}</div>
+              <div style={{ fontSize: 10, color: "#616161" }}>{label}</div>
+            </div>
+          ))}
+        </div>
+      )}
+
+      {tab === "verify" && (
+        <>
+          {queue.length === 0 && <div style={{ textAlign: "center", padding: 32, color: "#616161" }}>✅ Navbat bo'sh</div>}
+          {queue.map(u => (
+            <div key={u.telegram_id} style={{ background: "rgba(255,255,255,0.03)", border: "1px solid rgba(212,175,55,0.1)", borderRadius: 16, padding: "14px 16px", marginBottom: 10 }}>
+              <div style={{ fontWeight: 700, color: "#E8E8E8", marginBottom: 4 }}>{u.full_name}</div>
+              <div style={{ fontSize: 12, color: "#9E9E9E", marginBottom: 10 }}>ID: {u.telegram_id} · {u.role} · {u.phone}</div>
+              <div style={{ display: "flex", gap: 8 }}>
+                <button onClick={() => verify(u.telegram_id, "verify")} style={{ flex: 1, padding: "10px", borderRadius: 12, background: "rgba(34,197,94,0.2)", border: "1px solid rgba(34,197,94,0.3)", color: "#22C55E", fontWeight: 700, fontSize: 12, cursor: "pointer", fontFamily: "inherit" }}>✅ Tasdiqlash</button>
+                <button onClick={() => verify(u.telegram_id, "reject")} style={{ flex: 1, padding: "10px", borderRadius: 12, background: "rgba(239,68,68,0.12)", border: "1px solid rgba(239,68,68,0.2)", color: "#EF4444", fontWeight: 700, fontSize: 12, cursor: "pointer", fontFamily: "inherit" }}>❌ Rad</button>
+              </div>
+            </div>
+          ))}
+        </>
+      )}
+
+      {tab === "broadcast" && (
+        <>
+          <textarea value={bcastText} onChange={e => setBcast(e.target.value)} placeholder="Barcha foydalanuvchilarga xabar..." rows={6}
+            style={{ width: "100%", padding: "14px 16px", boxSizing: "border-box", borderRadius: 16, border: "1.5px solid rgba(212,175,55,0.2)", background: "rgba(255,255,255,0.04)", color: "#E8E8E8", fontSize: 13, outline: "none", fontFamily: "inherit", resize: "none", marginBottom: 12 }} />
+          <button onClick={broadcast} disabled={sending || !bcastText.trim()}
+            style={{ width: "100%", padding: "14px", borderRadius: 16, background: "linear-gradient(135deg,#8B6914,#D4AF37)", border: "none", color: "#0A0D14", fontWeight: 900, fontSize: 15, cursor: "pointer", fontFamily: "inherit", opacity: (!sending && bcastText.trim()) ? 1 : 0.5 }}>
+            {sending ? "⏳ Yuborilmoqda..." : "📢 Yuborish"}
+          </button>
+        </>
+      )}
     </div>
   );
 }

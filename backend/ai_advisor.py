@@ -578,3 +578,87 @@ def _followers_analysis(followers: int, platform: str, lang: str) -> str:
 
 
 """
+
+# ── V8 WRAPPER FUNCTIONS ──────────────────────────────────────────────────────
+def get_advice(user: dict, topic: str, lang: str = "uz") -> dict:
+    """V8 wrapper — topic bo'yicha shablon maslahat"""
+    advice = generate_advice(user, lang)
+
+    TOPIC_MAP = {
+        "budget":   "budget_analysis",
+        "platform": "platform_recommendation",
+        "audience": "audience_analysis",
+        "content":  "content_strategy",
+        "timing":   "timing_analysis",
+        "competitor":"competitive_analysis",
+        "roi":      "roi_tips",
+        "crisis":   "crisis_management",
+    }
+
+    section_key = TOPIC_MAP.get(topic, "platform_recommendation")
+    main_section = advice.get(section_key, advice.get("platform_recommendation", {}))
+
+    result = {
+        "summary": main_section.get("text") or main_section.get("summary",""),
+        "sections": [],
+        "action": main_section.get("action") or advice.get("action",""),
+    }
+
+    # Kichik bo'limlar
+    if isinstance(main_section.get("items"), list):
+        result["sections"] = [{
+            "icon": "💡",
+            "title": main_section.get("title","Maslahat"),
+            "items": main_section["items"]
+        }]
+    elif advice.get("sections"):
+        result["sections"] = advice["sections"]
+
+    return result
+
+
+def answer_question(question: str, sector: str = "", lang: str = "uz") -> str:
+    """V8 — savolga shablon javob (keyinchalik real AI bilan almashtiriladi)"""
+    q = question.lower()
+    uz = lang != "ru"
+
+    responses_uz = {
+        "byudjet":  "Reklama byudjetini quyidagicha taqsimlash tavsiya etiladi: 40% asosiy kanal, 30% test kampaniyalar, 20% retargeting, 10% eksperimentlar.",
+        "platforma": "O'zbekiston bozorida Instagram (5.2 mln), Telegram (7.8 mln) va YouTube (8.1 mln) eng katta auditoriyaga ega.",
+        "narx":     "O'rtacha post narxi: Instagram 100–500K so'm, Telegram 50–300K so'm, TikTok 80–400K so'm.",
+        "auditoriya": "Maqsadli auditoriyani aniq belgilang: yosh, jins, hudud, qiziqishlar. Shu asosida platforma tanlang.",
+        "roi":      "ROI = (Daromad - Xarajat) / Xarajat × 100%. Yaxshi ROI: 150%+ hisoblanadi.",
+        "sifat":    "Sifatli kontent = qisqa, tushunarli, vizual jihatdan jozibali. Birinchi 3 soniya eng muhim.",
+        "vaqt":     "Eng yaxshi vaqt: kechki 20:00–22:00. Hafta kuni: seshanba–payshanba.",
+    }
+    responses_ru = {
+        "бюджет":  "Рекомендуется распределить бюджет: 40% основной канал, 30% тестовые кампании, 20% ретаргетинг, 10% эксперименты.",
+        "платформ": "В Узбекистане Instagram (5.2 млн), Telegram (7.8 млн) и YouTube (8.1 млн) имеют наибольшую аудиторию.",
+        "цена":    "Средняя стоимость поста: Instagram 100–500K сум, Telegram 50–300K сум, TikTok 80–400K сум.",
+        "roi":     "ROI = (Доход - Расход) / Расход × 100%. Хороший ROI: 150%+.",
+    }
+
+    responses = responses_uz if uz else responses_ru
+    for key, answer in responses.items():
+        if key in q:
+            return answer
+
+    # Default
+    if uz:
+        return (
+            "Bu mavzu bo'yicha quyidagi maslahatlar beramiz:\n\n"
+            "• Aniq maqsad belgilang (brend tanishtiruv, savdo, leads)\n"
+            "• Auditoriyangizni yaxshi biling\n"
+            "• Bir nechta platformada sinab ko'ring\n"
+            "• Natijalarni kuzatib boring va optimallashtiring\n\n"
+            "Batafsil maslahat uchun MIDAS AI Maslahat bo'limiga o'ting."
+        )
+    else:
+        return (
+            "По этой теме рекомендуем следующее:\n\n"
+            "• Чётко определите цель (узнаваемость, продажи, лиды)\n"
+            "• Хорошо изучите свою аудиторию\n"
+            "• Тестируйте несколько платформ\n"
+            "• Отслеживайте результаты и оптимизируйте\n\n"
+            "Для подробной консультации используйте MIDAS AI Maslahat."
+        )
