@@ -753,3 +753,350 @@ def validate_phone_api():
 if __name__ == "__main__":
     port = int(os.getenv("PORT", 8000))
     app.run(host="0.0.0.0", port=port, debug=False)
+
+
+# ==================== YANGI ENDPOINTLAR (v5 frontend uchun) ====================
+
+# ---- FOMO BAR ----
+@app.route("/api/fomo")
+def fomo():
+    tg_id = request.args.get("tg_id", type=int)
+    conn = get_conn()
+    streak = 1  # Oddiy hisoblash
+    new_tenders = conn.execute(
+        "SELECT COUNT(*) FROM tenders WHERE DATE(created_at)=DATE('now') AND status='open'"
+    ).fetchone()[0] if _table_exists(conn, "tenders") else 0
+    new_partners = conn.execute(
+        "SELECT COUNT(*) FROM users WHERE DATE(created_at)=DATE('now') AND is_active=1"
+    ).fetchone()[0]
+    conn.close()
+    return ok({"streak": streak, "new_tenders": new_tenders, "new_partners": new_partners})
+
+def _table_exists(conn, name):
+    r = conn.execute("SELECT name FROM sqlite_master WHERE type='table' AND name=?", (name,)).fetchone()
+    return bool(r)
+
+# ---- PROFIL PROGRESSI ----
+@app.route("/api/users/<int:tg_id>/progress")
+def user_progress(tg_id):
+    conn = get_conn()
+    u = conn.execute("SELECT * FROM users WHERE telegram_id=?", (tg_id,)).fetchone()
+    if not u: conn.close(); return ok({"percent": 0})
+    pct = 20  # Asosiy ro'yxat
+    if u["phone"]: pct += 20
+    if u["role"] == "tadbirkor":
+        bt = conn.execute("SELECT * FROM business_targets WHERE user_id=?", (tg_id,)).fetchone()
+        if bt: pct += 40
+        if bt and bt["sector"]: pct += 20
+    elif u["role"] == "reklamachi":
+        rp = conn.execute("SELECT * FROM reklamachi_profiles WHERE user_id=?", (tg_id,)).fetchone()
+        if rp: pct += 40
+        if rp and rp["platform"]: pct += 20
+    conn.close()
+    return ok({"percent": min(pct, 100)})
+
+# ---- O'QILMAGAN XABARLAR ----
+@app.route("/api/unread/<int:tg_id>")
+def get_unread(tg_id):
+    conn = get_conn()
+    notifs = conn.execute(
+        "SELECT COUNT(*) FROM notifications WHERE user_id=? AND is_read=0", (tg_id,)
+    ).fetchone()[0]
+    chats = conn.execute(
+        "SELECT COUNT(*) FROM messages WHERE receiver_id=? AND is_read=0", (tg_id,)
+    ).fetchone()[0]
+    conn.close()
+    return ok({"notifs": notifs, "chats": chats})
+
+# ---- TENDER ----
+def _init_tenders(conn):
+    conn.execute("""CREATE TABLE IF NOT EXISTS tenders (
+        id INTEGER PRIMARY KEY AUTOINCREMENT,
+        owner_id INTEGER NOT NULL,
+        title TEXT, description TEXT,
+        budget INTEGER DEFAULT 0,
+        category TEXT DEFAULT '',
+        deadline TEXT DEFAULT '',
+        status TEXT DEFAULT 'open',
+        created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+    )""")
+    conn.execute("""CREATE TABLE IF NOT EXISTS tender_proposals (
+        id INTEGER PRIMARY KEY AUTOINCREMENT,
+        tender_id INTEGER NOT NULL,
+        bidder_id INTEGER NOT NULL,
+        message TEXT, price INTEGER DEFAULT 0,
+        delivery_days INTEGER DEFAULT 0,
+        portfolio TEXT DEFAULT '',
+        status TEXT DEFAULT 'pending',
+        created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+    )""")
+    conn.commit()
+
+@app.route("/api/tenders")
+def get_tenders():
+    conn = get_conn()
+    _init_tenders(conn)
+    tg_id = request.args.get("tg_id", type=int)
+    my = request.args.get("my", "0")
+    if my == "1" and tg_id:
+        rows = conn.execute(
+            "SELECT t.*, u.full_name as owner_name FROM tenders t JOIN users u ON u.telegram_id=t.owner_id WHERE t.owner_id=? ORDER BY t.created_at DESC",
+            (tg_id,)
+        ).fetchall()
+    else:
+        rows = conn.execute(
+            "SELECT t.*, u.full_name as owner_name FROM tenders t JOIN users u ON u.telegram_id=t.owner_id WHERE t.status='open' ORDER BY t.created_at DESC LIMIT 50"
+        ).fetchall()
+    conn.close()
+    return ok([dict(r) for r in rows])
+
+@app.route("/api/tenders", methods=["POST"])
+def create_tender():
+    d = request.json
+    conn = get_conn()
+    _init_tenders(conn)
+    conn.execute(
+        "INSERT INTO tenders(owner_id,title,description,budget,category,deadline) VALUES(?,?,?,?,?,?)",
+        (d["owner_id"], d.get("title",""), d.get("description",""),
+         d.get("budget",0), d.get("category",""), d.get("deadline",""))
+    )
+    conn.commit()
+    tid = conn.execute("SELECT last_insert_rowid()").fetchone()[0]
+    conn.close()
+    return ok({"tender_id": tid})
+
+@app.route("/api/tenders/<int:tid>")
+def get_tender(tid):
+    conn = get_conn()
+    _init_tenders(conn)
+    row = conn.execute(
+        "SELECT t.*, u.full_name as owner_name FROM tenders t JOIN users u ON u.telegram_id=t.owner_id WHERE t.id=?",
+        (tid,)
+    ).fetchone()
+    conn.close()
+    if not row: return err("Topilmadi", 404)
+    return ok(dict(row))
+
+@app.route("/api/tenders/<int:tid>/proposals")
+def get_proposals(tid):
+    conn = get_conn()
+    _init_tenders(conn)
+    rows = conn.execute(
+        "SELECT tp.*, u.full_name as bidder_name, u.rating FROM tender_proposals tp JOIN users u ON u.telegram_id=tp.bidder_id WHERE tp.tender_id=? ORDER BY tp.created_at DESC",
+        (tid,)
+    ).fetchall()
+    conn.close()
+    return ok([dict(r) for r in rows])
+
+@app.route("/api/tenders/<int:tid>/proposals", methods=["POST"])
+def submit_proposal(tid):
+    d = request.json
+    conn = get_conn()
+    _init_tenders(conn)
+    existing = conn.execute(
+        "SELECT id FROM tender_proposals WHERE tender_id=? AND bidder_id=?",
+        (tid, d["bidder_id"])
+    ).fetchone()
+    if existing: conn.close(); return err("Allaqachon taklif yuborilgan")
+    conn.execute(
+        "INSERT INTO tender_proposals(tender_id,bidder_id,message,price,delivery_days,portfolio) VALUES(?,?,?,?,?,?)",
+        (tid, d["bidder_id"], d.get("message",""), d.get("price",0),
+         d.get("delivery_days",0), d.get("portfolio",""))
+    )
+    conn.commit()
+    # Tender egasiga bildirishnoma
+    t = conn.execute("SELECT owner_id, title FROM tenders WHERE id=?", (tid,)).fetchone()
+    if t:
+        bidder = conn.execute("SELECT full_name FROM users WHERE telegram_id=?", (d["bidder_id"],)).fetchone()
+        name = bidder[0] if bidder else "Kimdir"
+        add_notif(conn, t[0], "📋 Yangi taklif!", f"{name} '{t[1]}' tenderiga taklif yubordi", "tender", tid)
+    conn.close()
+    return ok()
+
+@app.route("/api/proposals/<int:pid>/accept", methods=["PUT"])
+def accept_proposal(pid):
+    conn = get_conn()
+    _init_tenders(conn)
+    p = conn.execute("SELECT tender_id, bidder_id FROM tender_proposals WHERE id=?", (pid,)).fetchone()
+    if not p: conn.close(); return err("Topilmadi", 404)
+    conn.execute("UPDATE tender_proposals SET status='accepted' WHERE id=?", (pid,))
+    conn.execute("UPDATE tenders SET status='closed' WHERE id=?", (p[0],))
+    conn.commit()
+    add_notif(conn, p[1], "✅ Taklifingiz qabul qilindi!", "Tender bo'yicha taklifingiz qabul qilindi.", "tender", p[0])
+    conn.close()
+    return ok()
+
+# ---- ANALYTICS ----
+def _init_analytics(conn):
+    conn.execute("""CREATE TABLE IF NOT EXISTS campaigns (
+        id INTEGER PRIMARY KEY AUTOINCREMENT,
+        owner_id INTEGER NOT NULL,
+        name TEXT, platform TEXT DEFAULT '',
+        start_date TEXT DEFAULT '', end_date TEXT DEFAULT '',
+        budget INTEGER DEFAULT 0,
+        status TEXT DEFAULT 'active',
+        created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+    )""")
+    conn.execute("""CREATE TABLE IF NOT EXISTS campaign_results (
+        id INTEGER PRIMARY KEY AUTOINCREMENT,
+        campaign_id INTEGER NOT NULL,
+        date TEXT,
+        reach INTEGER DEFAULT 0, impressions INTEGER DEFAULT 0,
+        clicks INTEGER DEFAULT 0, conversions INTEGER DEFAULT 0,
+        spend INTEGER DEFAULT 0,
+        created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+    )""")
+    conn.commit()
+
+@app.route("/api/analytics/<int:tg_id>")
+def get_analytics(tg_id):
+    conn = get_conn()
+    _init_analytics(conn)
+    deals = conn.execute(
+        "SELECT COUNT(*) FROM offers WHERE status='accepted' AND (from_id=? OR to_id=?)", (tg_id, tg_id)
+    ).fetchone()[0]
+    active_camps = conn.execute(
+        "SELECT COUNT(*) FROM campaigns WHERE owner_id=? AND status='active'", (tg_id,)
+    ).fetchone()[0]
+    chats = conn.execute(
+        "SELECT COUNT(*) FROM private_chats WHERE user1_id=? OR user2_id=?", (tg_id, tg_id)
+    ).fetchone()[0]
+    campaigns = conn.execute(
+        "SELECT COUNT(*) FROM campaigns WHERE owner_id=?", (tg_id,)
+    ).fetchone()[0]
+    conn.close()
+    return ok({
+        "deals": deals,
+        "active_campaigns": active_camps,
+        "chats": chats,
+        "campaigns": campaigns
+    })
+
+@app.route("/api/campaigns/<int:tg_id>")
+def get_campaigns(tg_id):
+    conn = get_conn()
+    _init_analytics(conn)
+    rows = conn.execute(
+        "SELECT * FROM campaigns WHERE owner_id=? ORDER BY created_at DESC", (tg_id,)
+    ).fetchall()
+    conn.close()
+    return ok([dict(r) for r in rows])
+
+@app.route("/api/campaigns/<int:tg_id>", methods=["POST"])
+def create_campaign(tg_id):
+    d = request.json
+    conn = get_conn()
+    _init_analytics(conn)
+    conn.execute(
+        "INSERT INTO campaigns(owner_id,name,platform,start_date,end_date,budget) VALUES(?,?,?,?,?,?)",
+        (tg_id, d.get("name",""), d.get("platform",""),
+         d.get("start_date",""), d.get("end_date",""), d.get("budget",0))
+    )
+    conn.commit()
+    cid = conn.execute("SELECT last_insert_rowid()").fetchone()[0]
+    conn.close()
+    return ok({"campaign_id": cid})
+
+@app.route("/api/campaigns/<int:cid>/results")
+def get_campaign_results(cid):
+    conn = get_conn()
+    _init_analytics(conn)
+    rows = conn.execute(
+        "SELECT * FROM campaign_results WHERE campaign_id=? ORDER BY date DESC", (cid,)
+    ).fetchall()
+    conn.close()
+    return ok([dict(r) for r in rows])
+
+@app.route("/api/campaigns/<int:cid>/results", methods=["POST"])
+def add_campaign_result(cid):
+    d = request.json
+    conn = get_conn()
+    _init_analytics(conn)
+    conn.execute(
+        "INSERT INTO campaign_results(campaign_id,date,reach,impressions,clicks,conversions,spend) VALUES(?,?,?,?,?,?,?)",
+        (cid, d.get("date",""), d.get("reach",0), d.get("impressions",0),
+         d.get("clicks",0), d.get("conversions",0), d.get("spend",0))
+    )
+    conn.commit()
+    conn.close()
+    return ok()
+
+@app.route("/api/campaigns/<int:cid>/summary")
+def get_campaign_summary(cid):
+    conn = get_conn()
+    _init_analytics(conn)
+    r = conn.execute(
+        "SELECT SUM(reach) as total_reach, SUM(impressions) as total_imp, SUM(clicks) as total_clicks, SUM(conversions) as total_conv, SUM(spend) as total_spend FROM campaign_results WHERE campaign_id=?",
+        (cid,)
+    ).fetchone()
+    conn.close()
+    d = dict(r) if r else {}
+    ctr = round((d.get("total_clicks") or 0) / max(d.get("total_imp") or 1, 1) * 100, 2)
+    return ok({**d, "ctr": ctr})
+
+# ---- ADMIN (v5 mos) ----
+@app.route("/api/admin/pending")
+def admin_pending():
+    # Tasdiqlash kutayotgan profillar
+    admin_id = request.args.get("admin_id", type=int)
+    conn = get_conn()
+    rows = conn.execute("""SELECT rp.*, u.full_name, u.rating FROM reklamachi_profiles rp
+        JOIN users u ON u.telegram_id=rp.user_id
+        WHERE rp.verified=0 AND rp.is_offline=0
+        ORDER BY rp.created_at ASC""").fetchall()
+    conn.close()
+    res = []
+    for row in rows:
+        d = dict(row)
+        d["audience_ages"] = jl(d["audience_ages"])
+        d["interests"] = jl(d["interests"])
+        res.append(d)
+    return ok(res)
+
+@app.route("/api/admin/users/<int:tid>/action", methods=["POST"])
+def admin_user_action(tid):
+    d = request.json
+    action = d.get("action", "")
+    admin_id = d.get("admin_id")
+    if admin_id not in ADMIN_IDS: return err("Ruxsat yo'q", 403)
+    conn = get_conn()
+    if action == "block":
+        conn.execute("UPDATE users SET is_blocked=1 WHERE telegram_id=?", (tid,))
+        add_notif(conn, tid, "🚫 Hisob bloklandi", "Hisobingiz bloklandi.", "warning")
+    elif action == "unblock":
+        conn.execute("UPDATE users SET is_blocked=0, block_reason='' WHERE telegram_id=?", (tid,))
+        add_notif(conn, tid, "✅ Blokdan chiqarildi", "Hisobingiz blokdan chiqarildi.", "info")
+    elif action == "premium":
+        conn.execute("UPDATE users SET is_premium=1 WHERE telegram_id=?", (tid,))
+        add_notif(conn, tid, "⭐ Premium!", "Sizga premium status berildi.", "success")
+    elif action == "unpremium":
+        conn.execute("UPDATE users SET is_premium=0 WHERE telegram_id=?", (tid,))
+    elif action == "verify":
+        conn.execute("UPDATE reklamachi_profiles SET verified=1 WHERE user_id=?", (tid,))
+        add_notif(conn, tid, "✅ Tasdiqlandi!", "Profilingiz tasdiqlandi.", "success")
+    conn.commit()
+    conn.close()
+    return ok()
+
+# Admin broadcast (v5 format: message kaliti bilan)
+@app.route("/api/admin/broadcast", methods=["POST"])
+def admin_broadcast_v5():
+    d = request.json
+    admin_id = d.get("sender_id") or d.get("admin_id")
+    if admin_id not in ADMIN_IDS: return err("Ruxsat yo'q", 403)
+    msg_text = d.get("message_text") or d.get("message", "")
+    target = d.get("target", "all")
+    conn = get_conn()
+    conn.execute(
+        "INSERT INTO broadcasts(sender_id,target,message_text,message_type) VALUES(?,?,?,?)",
+        (admin_id, target, msg_text, "text")
+    )
+    conn.commit()
+    if target == "all":
+        users = conn.execute("SELECT telegram_id FROM users WHERE is_blocked=0").fetchall()
+    else:
+        users = conn.execute("SELECT telegram_id FROM users WHERE role=? AND is_blocked=0", (target,)).fetchall()
+    for u in users:
+        add_notif(conn, u[0], "📢 MIDAS xabari", msg_text[:100], "broadcast")
+    conn.close()
+    return ok()
