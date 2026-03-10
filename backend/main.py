@@ -1038,7 +1038,10 @@ def get_campaign_summary(cid):
 @app.route("/api/admin/pending")
 def admin_pending():
     # Tasdiqlash kutayotgan profillar
-    admin_id = request.args.get("admin_id", type=int)
+    # Frontend admin_id yubormasligi mumkin — tg_id ham tekshiramiz
+    admin_id = request.args.get("admin_id", type=int) or request.args.get("tg_id", type=int)
+    if admin_id and admin_id not in ADMIN_IDS:
+        return err("Ruxsat yo'q", 403)
     conn = get_conn()
     rows = conn.execute("""SELECT rp.*, u.full_name, u.rating FROM reklamachi_profiles rp
         JOIN users u ON u.telegram_id=rp.user_id

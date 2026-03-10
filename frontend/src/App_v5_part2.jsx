@@ -1,9 +1,10 @@
+import { useState, useEffect } from "react";
 // ═══════════════════════════════════════════════════════
 // MIDAS v5 — Part 2: Onboarding · Legal · Registration
 // ═══════════════════════════════════════════════════════
 
 import {
-  MidasLogo, Btn, Inp, TagCloud, Modal, StepDots, Badge
+  MidasLogo, Btn, Inp, TagCloud, Modal, StepDots, Badge, http
 } from "./App_v5_part1";
 import {
   SECTORS, PLATFORMS_ONLINE, PLATFORMS_OFFLINE, PLATFORMS_ALL,
@@ -13,7 +14,7 @@ import { LEGAL } from "./legal";
 
 // ── ONBOARDING SLIDES ──────────────────────────────────
 export function OnboardingSlides({ lang, theme, onFinish }) {
-  const [slide, setSlide] = window.React.useState(0);
+  const [slide, setSlide] = useState(0);
 
   const slides = {
     uz:[
@@ -70,8 +71,8 @@ export function OnboardingSlides({ lang, theme, onFinish }) {
 
 // ── LEGAL SCREEN ───────────────────────────────────────
 export function LegalScreen({ lang, theme, onAgree }) {
-  const [agreed,  setAgreed]  = window.React.useState(false);
-  const [modal,   setModal]   = window.React.useState(null);
+  const [agreed,  setAgreed]  = useState(false);
+  const [modal,   setModal]   = useState(null);
   const lg = LEGAL[lang];
 
   return (
@@ -117,31 +118,31 @@ export function LegalScreen({ lang, theme, onAgree }) {
 
 // ── REGISTRATION ───────────────────────────────────────
 export function Registration({ tgUser, onDone, theme }) {
-  const [step,     setStep]     = window.React.useState(0);
-  const [lang,     setLang]     = window.React.useState("uz");
-  const [role,     setRole]     = window.React.useState("");
-  const [name,     setName]     = window.React.useState(tgUser?.first_name||"");
-  const [phone,    setPhone]    = window.React.useState("");
-  const [errs,     setErrs]     = window.React.useState({});
+  const [step,     setStep]     = useState(0);
+  const [lang,     setLang]     = useState("uz");
+  const [role,     setRole]     = useState("");
+  const [name,     setName]     = useState(tgUser?.first_name||"");
+  const [phone,    setPhone]    = useState("");
+  const [errs,     setErrs]     = useState({});
   // Tadbirkor
-  const [sector,   setSector]   = window.React.useState("");
-  const [subSecs,  setSubSecs]  = window.React.useState([]);
-  const [expSec,   setExpSec]   = window.React.useState(null);
-  const [locs,     setLocs]     = window.React.useState([]);
+  const [sector,   setSector]   = useState("");
+  const [subSecs,  setSubSecs]  = useState([]);
+  const [expSec,   setExpSec]   = useState(null);
+  const [locs,     setLocs]     = useState([]);
   // Reklamachi
-  const [platform, setPlatform] = window.React.useState("");
-  const [link,     setLink]     = window.React.useState("");
-  const [followers,setFollowers]= window.React.useState("");
-  const [er,       setEr]       = window.React.useState("");
-  const [pPost,    setPPost]    = window.React.useState("");
-  const [pStory,   setPStory]   = window.React.useState("");
-  const [pVideo,   setPVideo]   = window.React.useState("");
-  const [pDesc,    setPDesc]    = window.React.useState("");
-  const [address,  setAddress]  = window.React.useState("");
-  const [coords,   setCoords]   = window.React.useState("");
-  const [saving,   setSaving]   = window.React.useState(false);
+  const [platform, setPlatform] = useState("");
+  const [link,     setLink]     = useState("");
+  const [followers,setFollowers]= useState("");
+  const [er,       setEr]       = useState("");
+  const [pPost,    setPPost]    = useState("");
+  const [pStory,   setPStory]   = useState("");
+  const [pVideo,   setPVideo]   = useState("");
+  const [pDesc,    setPDesc]    = useState("");
+  const [address,  setAddress]  = useState("");
+  const [coords,   setCoords]   = useState("");
+  const [saving,   setSaving]   = useState(false);
 
-  const { http } = require("./App_v5_part1");
+  
   const isOnline  = PLATFORMS_ONLINE.map(p=>p.v).includes(platform);
   const isOffline = PLATFORMS_OFFLINE.map(p=>p.v).includes(platform);
 
@@ -186,19 +187,19 @@ export function Registration({ tgUser, onDone, theme }) {
   const submit = async () => {
     setSaving(true);
     try {
-      const { http: h } = await import("./App_v5_part1");
-      await h("/api/users/register","POST",{
+      
+      await http("/api/users/register","POST",{
         telegram_id:tgUser.id, username:tgUser.username,
         full_name:name, role, phone:phone.replace(/[\s-]/g,""), lang
       });
       if(role==="tadbirkor") {
-        await h(`/api/business-targets/${tgUser.id}`,"POST",{
+        await http(`/api/business-targets/${tgUser.id}`,"POST",{
           sector, sub_sectors:subSecs, location:locs,
           preferred_platforms:[], ages:[], target_gender:"all",
           interests:[], min_followers:0, max_budget:0, campaign_goal:""
         });
       } else {
-        await h(`/api/reklamachi-profiles/${tgUser.id}`,"POST",{
+        await http(`/api/reklamachi-profiles/${tgUser.id}`,"POST",{
           platform, profile_link:link,
           followers:Number(followers)||0, engagement:Number(er)||0,
           price_post:Number(pPost)||0, price_story:Number(pStory)||0,

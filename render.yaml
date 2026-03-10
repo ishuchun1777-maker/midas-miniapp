@@ -1,27 +1,49 @@
-# render.yaml — Render.com deploy konfiguratsiyasi
-# Bu faylni loyiha root papkasiga qo'ying
+# render.yaml — Render.com deploy konfiguratsiyasi (v6 tuzatilgan)
 
 services:
-  # ===== BACKEND (FastAPI) =====
+  # ===== BACKEND (Flask + Gunicorn) =====
   - type: web
     name: midas-backend
     runtime: python
     rootDir: backend
     buildCommand: pip install -r requirements.txt
-    startCommand: uvicorn main:app --host 0.0.0.0 --port $PORT
+    startCommand: gunicorn main:app --bind 0.0.0.0:$PORT --workers 2 --timeout 120
     envVars:
       - key: BOT_TOKEN
-        sync: false          # Render dashboard da qo'lda kiritasiz
+        sync: false
       - key: ADMIN_IDS
-        sync: false          # Telegram admin ID lari
+        sync: false
       - key: DB_PATH
         value: /opt/render/project/src/midas.db
     disk:
       name: midas-db
       mountPath: /opt/render/project/src
-      sizeGB: 1              # Tekin plan: 1GB
+      sizeGB: 1
 
-  # ===== FRONTEND (React → Static Site) =====
+  # ===== BOT (python-telegram-bot) =====
+  - type: worker
+    name: midas-bot
+    runtime: python
+    rootDir: bot
+    buildCommand: pip install -r requirements.txt
+    startCommand: python bot.py
+    envVars:
+      - key: BOT_TOKEN
+        sync: false
+      - key: MINI_APP_URL
+        fromService:
+          name: midas-frontend
+          type: web
+          property: host
+      - key: API_URL
+        fromService:
+          name: midas-backend
+          type: web
+          property: host
+      - key: ADMIN_IDS
+        sync: false
+
+  # ===== FRONTEND (React Static Site) =====
   - type: web
     name: midas-frontend
     runtime: static
@@ -34,9 +56,8 @@ services:
           name: midas-backend
           type: web
           property: host
-          # Bu avtomatik backend URL ni oladi
       - key: REACT_APP_ADMIN_IDS
-        sync: false          # Admin ID lari
+        sync: false
     headers:
       - path: /*
         name: Cache-Control
