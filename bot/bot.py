@@ -1,110 +1,153 @@
 """
-MIDAS Bot - Backend API orqali ishlaydi
+MIDAS Bot v7 — Barcha xatolar tuzatildi
+- /start har doim ishlaydi (API fail bo'lsa ham)
+- Referral kodi qabul qilish
+- Media (audio/video/fayl) yo'naltirish
+- render.yaml: worker type, health server olib tashlandi
 """
 import os
 import logging
 import asyncio
-import shelve
 import aiohttp
 
 from telegram import (
     Update, InlineKeyboardMarkup, InlineKeyboardButton,
-    ReplyKeyboardMarkup, KeyboardButton, WebAppInfo, MenuButtonWebApp
+    WebAppInfo, MenuButtonWebApp
 )
 from telegram.ext import (
     Application, CommandHandler, CallbackQueryHandler,
     MessageHandler, filters, ContextTypes
 )
 
-# ==================== CONFIG ====================
-BOT_TOKEN = os.getenv("BOT_TOKEN", "YOUR_BOT_TOKEN")
+BOT_TOKEN    = os.getenv("BOT_TOKEN", "")
 MINI_APP_URL = os.getenv("MINI_APP_URL", "https://midas-frontend.onrender.com")
-API_URL = os.getenv("API_URL", "https://midas-backend.onrender.com")
-ADMIN_IDS_STR = os.getenv("ADMIN_IDS", "123456789")
-ADMIN_IDS = [int(x.strip()) for x in ADMIN_IDS_STR.split(",") if x.strip()]
+API_URL      = os.getenv("API_URL",      "https://midas-backend.onrender.com")
+ADMIN_IDS    = [int(x.strip()) for x in os.getenv("ADMIN_IDS", "").split(",") if x.strip().isdigit()]
 
 logging.basicConfig(level=logging.INFO, format="%(asctime)s - %(levelname)s - %(message)s")
 logger = logging.getLogger(__name__)
 
-# ==================== API HELPERS ====================
+# ── API ────────────────────────────────────────────────
 async def api_get(path):
     try:
         async with aiohttp.ClientSession() as s:
-            async with s.get(f"{API_URL}{path}", timeout=aiohttp.ClientTimeout(total=10)) as r:
+            async with s.get(f"{API_URL}{path}", timeout=aiohttp.ClientTimeout(total=15)) as r:
                 if r.status == 200:
                     return await r.json()
+                logger.warning(f"API GET {path} → {r.status}")
     except Exception as e:
         logger.error(f"API GET {path}: {e}")
+    return None
+
+async def api_post(path, data=None):
+    try:
+        async with aiohttp.ClientSession() as s:
+            async with s.post(f"{API_URL}{path}", json=data or {}, timeout=aiohttp.ClientTimeout(total=15)) as r:
+                if r.status in (200, 201):
+                    return await r.json()
+    except Exception as e:
+        logger.error(f"API POST {path}: {e}")
     return None
 
 async def api_put(path, params=None):
     try:
         async with aiohttp.ClientSession() as s:
-            async with s.put(f"{API_URL}{path}", params=params or {}, timeout=aiohttp.ClientTimeout(total=10)) as r:
-                return r.status == 200
+            async with s.put(f"{API_URL}{path}", params=params or {}, timeout=aiohttp.ClientTimeout(total=15)) as r:
+                return r.status in (200, 201)
     except Exception as e:
         logger.error(f"API PUT {path}: {e}")
     return False
 
-# ==================== STATE ====================
-def get_state(user_id):
-    try:
-        with shelve.open("/tmp/midas_state") as db:
-            return db.get(str(user_id))
-    except: return None
+# ── STATE ──────────────────────────────────────────────
+_state = {}
+def get_state(uid):    return _state.get(str(uid))
+def set_state(uid, s): _state[str(uid)] = s
+def clear_state(uid):  _state.pop(str(uid), None)
 
-def set_state(user_id, state):
-    try:
-        with shelve.open("/tmp/midas_state") as db:
-            db[str(user_id)] = state
-    except: pass
-
-def clear_state(user_id):
-    try:
-        with shelve.open("/tmp/midas_state") as db:
-            if str(user_id) in db:
-                del db[str(user_id)]
-    except: pass
-
-# ==================== KEYBOARDS ====================
-def mini_app_btn():
+# ── KEYBOARDS ──────────────────────────────────────────
+def main_kb():
     return InlineKeyboardMarkup([
-        [InlineKeyboardButton(text="🚀 MIDAS Mini App", web_app=WebAppInfo(url=MINI_APP_URL))],
+        [InlineKeyboardButton("🚀 MIDAS Mini App ni ochish", web_app=WebAppInfo(url=MINI_APP_URL))],
+        [InlineKeyboardButton("👤 Profilim",  callback_data="profile"),
+         InlineKeyboardButton("📊 Statistika", callback_data="stats")],
+        [InlineKeyboardButton("🎁 Referral",  callback_data="referral"),
+         InlineKeyboardButton("ℹ️ Yordam",    callback_data="help")],
     ])
 
 def admin_kb():
     return InlineKeyboardMarkup([
-        [InlineKeyboardButton(text="📊 Statistika", callback_data="admin_stats")],
-        [InlineKeyboardButton(text="✅ Profil tasdiqlash", callback_data="admin_verify")],
-        [InlineKeyboardButton(text="⭐ Premium berish/olish", callback_data="admin_premium")],
-        [InlineKeyboardButton(text="🚫 Bloklash", callback_data="admin_block")],
-        [InlineKeyboardButton(text="📢 Xabar yuborish", callback_data="admin_broadcast")],
-        [InlineKeyboardButton(text="🌐 Mini App", web_app=WebAppInfo(url=MINI_APP_URL))],
+        [InlineKeyboardButton("📊 Statistika",           callback_data="admin_stats")],
+        [InlineKeyboardButton("✅ Profil tasdiqlash",    callback_data="admin_verify")],
+        [InlineKeyboardButton("⭐ Premium berish/olish", callback_data="admin_premium")],
+        [InlineKeyboardButton("🚫 Bloklash",             callback_data="admin_block")],
+        [InlineKeyboardButton("📢 Xabar yuborish",       callback_data="admin_broadcast")],
+        [InlineKeyboardButton("🌐 Mini App", web_app=WebAppInfo(url=MINI_APP_URL))],
     ])
 
-def back_admin_kb():
-    return InlineKeyboardMarkup([[InlineKeyboardButton(text="◀️ Orqaga", callback_data="back_admin")]])
+def back_kb(): return InlineKeyboardMarkup([[InlineKeyboardButton("◀️ Orqaga", callback_data="back_admin")]])
 
-# ==================== HANDLERS ====================
-
+# ── HANDLERS ───────────────────────────────────────────
 async def cmd_start(update: Update, ctx: ContextTypes.DEFAULT_TYPE):
     tg_id = update.effective_user.id
-    name = update.effective_user.first_name or "Do'stim"
+    name  = update.effective_user.first_name or "Do'stim"
+    args  = ctx.args or []
 
-    user = await api_get(f"/api/users/{tg_id}")
-
-    if user and user.get("is_blocked"):
-        await update.message.reply_text("🚫 Siz bloklangansiz. Admin bilan bog'laning.")
+    # /start chat_12345 — chat yo'naltirish
+    if args and args[0].startswith("chat_"):
+        partner_id = args[0].replace("chat_", "")
+        await update.message.reply_text(
+            "💬 <b>Chat</b>\n\nMini App da hamkoringiz bilan muloqot qiling:",
+            parse_mode="HTML",
+            reply_markup=InlineKeyboardMarkup([[
+                InlineKeyboardButton("💬 Chatni ochish", web_app=WebAppInfo(url=f"{MINI_APP_URL}?chat={partner_id}"))
+            ]])
+        )
         return
 
+    # /start MIDAS-XXXXXX — referral
+    ref_code = args[0] if args and args[0].startswith("MIDAS-") else None
+
+    if tg_id in ADMIN_IDS:
+        await update.message.reply_text(
+            f"👑 <b>Admin panel</b>, {name}!\nPlatformani boshqarish:",
+            parse_mode="HTML", reply_markup=admin_kb()
+        )
+        return
+
+    # API dan foydalanuvchi ma'lumoti (xato bo'lsa ham davom et)
+    user = None
+    try:
+        user = await api_get(f"/api/users/{tg_id}")
+    except Exception:
+        pass
+
+    if user and user.get("is_blocked"):
+        await update.message.reply_text("🚫 Siz bloklangansiz. @midas_support")
+        return
+
+    # Referral kodni ulash
+    if ref_code and not user:
+        try:
+            await api_post("/api/referral/use", {"code": ref_code, "telegram_id": tg_id})
+        except Exception:
+            pass
+
     if user:
-        role_icon = "🏢" if user.get("role") == "tadbirkor" else "📢"
-        role_name = "Tadbirkor" if user.get("role") == "tadbirkor" else "Reklamachi"
+        role      = user.get("role", "")
+        icon      = "🏢" if role == "tadbirkor" else "📢"
+        role_name = "Tadbirkor" if role == "tadbirkor" else "Reklamachi"
+        trust     = int(user.get("trust_score") or 50)
+        try:
+            rating = f"{float(user.get('rating', 5.0)):.1f}"
+        except Exception:
+            rating = "5.0"
+        trust_bar = "█" * (trust // 10) + "░" * (10 - trust // 10)
         text = (
             f"👋 Xush kelibsiz, <b>{name}</b>!\n\n"
-            f"{role_icon} Rolingiz: <b>{role_name}</b>\n"
-            f"⭐ Reyting: <b>{user.get('rating', 5.0):.1f}</b>\n\n"
-            f"🌐 Mini App orqali barcha imkoniyatlardan foydalaning:"
+            f"{icon} <b>{role_name}</b>\n"
+            f"⭐ Reyting: <b>{rating}</b>  🛡 Ishonch: <b>{trust}/100</b>\n"
+            f"<code>{trust_bar}</code>\n\n"
+            f"🌐 Mini App orqali ishlang:"
         )
     else:
         text = (
@@ -113,278 +156,291 @@ async def cmd_start(update: Update, ctx: ContextTypes.DEFAULT_TYPE):
             f"✅ Tadbirkorlar va reklamachilarni AI orqali birlashtiradi\n"
             f"🎯 100 ballik aqlli matching tizimi\n"
             f"💬 Xavfsiz muloqot va hamkorlik\n\n"
-            f"👇 Mini App ni oching va ro'yxatdan o'ting:"
+            f"👇 Ro'yxatdan o'tish uchun Mini App ni oching:"
         )
 
-    await update.message.reply_text(text, parse_mode="HTML")
-    await update.message.reply_text("⬇️ Quyidagi tugmani bosing:", reply_markup=mini_app_btn())
+    await update.message.reply_text(text, parse_mode="HTML", reply_markup=main_kb())
 
     try:
         await ctx.bot.set_chat_menu_button(
             chat_id=tg_id,
-            menu_button=MenuButtonWebApp(text="🌐 Mini App", web_app=WebAppInfo(url=MINI_APP_URL))
+            menu_button=MenuButtonWebApp(text="🌐 MIDAS", web_app=WebAppInfo(url=MINI_APP_URL))
         )
     except Exception as e:
-        logger.error(f"Menu button: {e}")
+        logger.warning(f"Menu button: {e}")
 
 async def cmd_help(update: Update, ctx: ContextTypes.DEFAULT_TYPE):
-    text = (
+    await update.message.reply_text(
         "ℹ️ <b>MIDAS — Yordam</b>\n\n"
-        "🌐 <b>Mini App</b> orqali:\n"
-        "• Ro'yxatdan o'tish\n"
-        "• AI Matching — mos hamkor topish\n"
-        "• Taklif yuborish va qabul qilish\n"
-        "• Chat — bevosita muloqot\n\n"
-        "📌 <b>Buyruqlar:</b>\n"
+        "🌐 <b>Mini App:</b> Matching, taklif, chat, tender\n"
+        "🤖 <b>Bot:</b> Audio, video, katta fayllar almashish\n\n"
         "/start — Bosh menyu\n"
         "/profile — Profilim\n"
-        "/stats — Statistikam\n"
-        "/admin — Admin panel\n"
+        "/help — Yordam\n\n"
+        "📞 Muammo: @midas_support",
+        parse_mode="HTML",
+        reply_markup=InlineKeyboardMarkup([[
+            InlineKeyboardButton("🚀 Mini App", web_app=WebAppInfo(url=MINI_APP_URL))
+        ]])
     )
-    await update.message.reply_text(text, parse_mode="HTML", reply_markup=mini_app_btn())
 
 async def cmd_profile(update: Update, ctx: ContextTypes.DEFAULT_TYPE):
     tg_id = update.effective_user.id
-    user = await api_get(f"/api/users/{tg_id}")
+    user  = await api_get(f"/api/users/{tg_id}")
     if not user:
         await update.message.reply_text(
-            "❌ Siz hali ro'yxatdan o'tmagansiz.\n\nMini App orqali ro'yxatdan o'ting:",
-            reply_markup=mini_app_btn()
+            "❌ Profil topilmadi. Ro'yxatdan o'ting:",
+            reply_markup=InlineKeyboardMarkup([[
+                InlineKeyboardButton("📝 Ro'yxatdan o'tish", web_app=WebAppInfo(url=MINI_APP_URL))
+            ]])
         )
         return
     stats = await api_get(f"/api/users/{tg_id}/stats") or {}
-    role_icon = "🏢" if user.get("role") == "tadbirkor" else "📢"
-    role_name = "Tadbirkor" if user.get("role") == "tadbirkor" else "Reklamachi"
-    premium = "⭐ Ha" if user.get("is_premium") else "❌ Yo'q"
+    role  = user.get("role", "")
+    icon  = "🏢" if role == "tadbirkor" else "📢"
+    trust = int(user.get("trust_score") or 50)
+    try:
+        rating = f"{float(user.get('rating', 5.0)):.1f}"
+    except Exception:
+        rating = "5.0"
+    trust_bar = "█" * (trust // 10) + "░" * (10 - trust // 10)
     text = (
-        f"👤 <b>PROFILIM</b>\n\n"
-        f"📛 Ism: <b>{user.get('full_name', '—')}</b>\n"
-        f"{role_icon} Rol: <b>{role_name}</b>\n"
-        f"⭐ Reyting: <b>{user.get('rating', 5.0):.1f}/5.0</b>\n"
-        f"👑 Premium: <b>{premium}</b>\n"
-        f"🤝 Bitimlar: <b>{stats.get('deals', 0)}</b>\n"
-        f"📨 Takliflar: <b>{stats.get('total_offers', 0)}</b>\n"
-        f"📅 Ro'yxat: <b>{str(user.get('created_at', ''))[:10]}</b>\n\n"
-        f"✏️ Profilni tahrirlash uchun Mini App ni oching:"
+        f"👤 <b>{user.get('full_name', '')}</b>\n"
+        f"{icon} {'Tadbirkor' if role == 'tadbirkor' else 'Reklamachi'}"
+        f" | {'⭐ Premium' if user.get('is_premium') else '🔓 Oddiy'}"
+        f" | {'✅ Tasdiqlangan' if user.get('is_verified') else '⏳ Tasdiqlanmoqda'}\n\n"
+        f"⭐ Reyting: <b>{rating}/5.0</b>\n"
+        f"🛡 Ishonch: <b>{trust}/100</b>\n"
+        f"<code>{trust_bar}</code>\n\n"
+        f"🤝 Bitimlar: <b>{stats.get('deals',0)}</b>  "
+        f"🚀 Kampaniyalar: <b>{stats.get('campaigns',0)}</b>  "
+        f"💼 Portfolio: <b>{stats.get('portfolio',0)}</b>"
     )
-    await update.message.reply_text(text, parse_mode="HTML", reply_markup=mini_app_btn())
-
-async def cmd_stats(update: Update, ctx: ContextTypes.DEFAULT_TYPE):
-    tg_id = update.effective_user.id
-    user = await api_get(f"/api/users/{tg_id}")
-    if not user:
-        await update.message.reply_text("❌ Avval ro'yxatdan o'ting:", reply_markup=mini_app_btn())
-        return
-    stats = await api_get(f"/api/users/{tg_id}/stats") or {}
-    text = (
-        f"📊 <b>STATISTIKAM</b>\n\n"
-        f"🤝 Bitimlar: <b>{stats.get('deals', 0)}</b>\n"
-        f"📨 Takliflar: <b>{stats.get('total_offers', 0)}</b>\n"
-        f"💬 Chatlar: <b>{stats.get('chats', 0)}</b>\n"
-        f"⭐ Reyting: <b>{stats.get('rating', 5.0):.1f}/5.0</b>\n"
+    await update.message.reply_text(
+        text, parse_mode="HTML",
+        reply_markup=InlineKeyboardMarkup([[
+            InlineKeyboardButton("👤 To'liq profil", web_app=WebAppInfo(url=MINI_APP_URL))
+        ]])
     )
-    await update.message.reply_text(text, parse_mode="HTML", reply_markup=mini_app_btn())
 
 async def cmd_admin(update: Update, ctx: ContextTypes.DEFAULT_TYPE):
     if update.effective_user.id not in ADMIN_IDS:
         await update.message.reply_text("❌ Ruxsat yo'q.")
         return
-    await update.message.reply_text("🛡 <b>ADMIN PANEL</b>", parse_mode="HTML", reply_markup=admin_kb())
+    await update.message.reply_text("👑 Admin panel:", reply_markup=admin_kb())
 
-# ==================== CALLBACKS ====================
-
+# ── CALLBACK ───────────────────────────────────────────
 async def callback_handler(update: Update, ctx: ContextTypes.DEFAULT_TYPE):
-    cb = update.callback_query
+    cb    = update.callback_query
+    tg_id = cb.from_user.id
+    data  = cb.data
     await cb.answer()
-    data = cb.data
 
-    if cb.from_user.id not in ADMIN_IDS and data not in ["help"]:
+    if data == "help":
+        await cmd_help(update, ctx); return
+    if data in ("profile", "stats"):
+        await cmd_profile(update, ctx); return
+    if data == "referral":
+        ref = await api_get(f"/api/referral/{tg_id}")
+        code = (ref or {}).get("referral_code") or f"MIDAS-{tg_id}"
+        count = (ref or {}).get("referral_count", 0)
+        bonus = (ref or {}).get("bonus_days", 0)
+        await cb.message.reply_text(
+            f"🎁 <b>Referral dasturi</b>\n\n"
+            f"Kodingiz: <code>{code}</code>\n\n"
+            f"<b>Bonus jadval:</b>\n"
+            f"1 kishi → 10 kun · 3 → 50 kun\n"
+            f"5 → 90 kun · 7 → 120 kun\n"
+            f"15 kishi → 1 yillik Premium 🏆\n\n"
+            f"Taklif qilganlar: <b>{count}</b>\n"
+            f"Yig'ilgan bonus: <b>{bonus} kun</b>\n\n"
+            f"Havola: <code>https://t.me/midas_bot?start={code}</code>",
+            parse_mode="HTML"
+        )
         return
-
     if data == "back_admin":
-        await cb.message.edit_text("🛡 <b>ADMIN PANEL</b>", parse_mode="HTML", reply_markup=admin_kb())
+        await cb.message.edit_reply_markup(reply_markup=admin_kb()); return
 
-    elif data == "admin_stats":
-        s = await api_get(f"/api/admin/stats?admin_id={cb.from_user.id}")
-        if not s:
-            await cb.message.edit_text("❌ Xatolik", reply_markup=back_admin_kb())
-            return
-        text = (
-            f"📊 <b>STATISTIKA</b>\n\n"
-            f"👥 Jami: <b>{s['total_users']}</b>\n"
-            f"🏢 Tadbirkorlar: <b>{s['tadbirkorlar']}</b>\n"
-            f"📢 Reklamachilar: <b>{s['reklamachilar']}</b>\n"
-            f"⭐ Premium: <b>{s['premium']}</b>\n\n"
-            f"📨 Takliflar: <b>{s['total_offers']}</b>\n"
-            f"✅ Qabul qilingan: <b>{s['accepted_offers']}</b>\n"
-            f"💬 Faol chatlar: <b>{s['active_chats']}</b>\n"
-            f"📝 Xabarlar: <b>{s['total_messages']}</b>\n"
+    if tg_id not in ADMIN_IDS: return
+
+    if data == "admin_stats":
+        s = await api_get(f"/api/admin/stats?admin_id={tg_id}") or {}
+        await cb.message.reply_text(
+            f"📊 <b>Statistika</b>\n\n"
+            f"👥 Jami: <b>{s.get('total_users',0)}</b>\n"
+            f"🏢 Tadbirkorlar: <b>{s.get('tadbirkorlar',0)}</b>\n"
+            f"📢 Reklamachilar: <b>{s.get('reklamachilar',0)}</b>\n"
+            f"⭐ Premium: <b>{s.get('premium_users',0)}</b>\n"
+            f"📩 Takliflar: <b>{s.get('total_offers',0)}</b>\n"
+            f"📋 Tenderlar: <b>{s.get('total_tenders',0)}</b>",
+            parse_mode="HTML", reply_markup=back_kb()
         )
-        await cb.message.edit_text(text, parse_mode="HTML", reply_markup=back_admin_kb())
-
     elif data == "admin_verify":
-        queue = await api_get(f"/api/admin/verify-queue?admin_id={cb.from_user.id}") or []
+        queue = await api_get(f"/api/admin/verify-queue?admin_id={tg_id}") or []
         if not queue:
-            await cb.message.edit_text("✅ Barcha profillar tekshirilgan!", reply_markup=back_admin_kb())
-            return
-        text = f"⏳ <b>TEKSHIRISH NAVBATI</b> — {len(queue)} ta\n\n"
-        buttons = []
-        for p in queue[:8]:
-            text += f"👤 {p['full_name']} | {p['platform']} | {p['followers']:,} obs\n"
-            buttons.append([InlineKeyboardButton(text=f"👤 {p['full_name'][:20]}", callback_data=f"vp_{p['user_id']}")])
-        buttons.append([InlineKeyboardButton(text="◀️ Orqaga", callback_data="back_admin")])
-        await cb.message.edit_text(text, parse_mode="HTML", reply_markup=InlineKeyboardMarkup(buttons))
-
-    elif data.startswith("vp_"):
-        user_id = int(data.replace("vp_", ""))
-        p = await api_get(f"/api/reklamachi-profiles/{user_id}")
-        if not p:
-            await cb.message.edit_text("❌ Topilmadi", reply_markup=back_admin_kb())
-            return
-        text = (
-            f"👤 <b>{p['full_name']}</b>\n"
-            f"📱 {p['platform']}\n"
-            f"🔗 {p.get('profile_link','—')}\n"
-            f"👥 {p['followers']:,} obunachi\n"
-            f"📈 ER: {p['engagement']}%\n"
-            f"💰 Post: {p['price_post']:,} so'm\n"
-        )
-        await cb.message.edit_text(text, parse_mode="HTML", reply_markup=InlineKeyboardMarkup([
-            [InlineKeyboardButton(text="✅ Tasdiqlash", callback_data=f"va_{user_id}"),
-             InlineKeyboardButton(text="❌ Rad etish", callback_data=f"vr_{user_id}")],
-            [InlineKeyboardButton(text="◀️ Orqaga", callback_data="admin_verify")]
-        ]))
-
-    elif data.startswith("va_"):
-        user_id = int(data.replace("va_", ""))
-        await api_put(f"/api/admin/verify/{user_id}", {"admin_id": cb.from_user.id, "value": 1})
-        try:
-            await ctx.bot.send_message(user_id, "✅ <b>PROFILINGIZ TASDIQLANDI!</b>", parse_mode="HTML", reply_markup=mini_app_btn())
-        except: pass
-        await cb.message.edit_text("✅ Profil tasdiqlandi!", reply_markup=back_admin_kb())
-
-    elif data.startswith("vr_"):
-        user_id = int(data.replace("vr_", ""))
-        try:
-            await ctx.bot.send_message(user_id, "❌ <b>Profilingiz tasdiqlanmadi.</b>", parse_mode="HTML", reply_markup=mini_app_btn())
-        except: pass
-        await cb.message.edit_text("❌ Rad etildi.", reply_markup=back_admin_kb())
-
-    elif data == "admin_premium":
-        await cb.message.edit_text(
-            "⭐ <b>PREMIUM</b>\n\nTelegram ID yuboring:\n<i>Masalan: 123456789</i>",
-            parse_mode="HTML", reply_markup=back_admin_kb()
-        )
-        set_state(cb.from_user.id, "premium")
-
-    elif data == "admin_block":
-        await cb.message.edit_text(
-            "🚫 <b>BLOKLASH</b>\n\nID va sabab yuboring:\n<i>Masalan: 123456789 spam</i>",
-            parse_mode="HTML", reply_markup=back_admin_kb()
-        )
-        set_state(cb.from_user.id, "block")
-
+            await cb.message.reply_text("✅ Navbat bo'sh.", reply_markup=back_kb()); return
+        for u in queue[:5]:
+            icon = "🏢" if u.get("role") == "tadbirkor" else "📢"
+            await cb.message.reply_text(
+                f"{icon} <b>{u.get('full_name','?')}</b>\nID: <code>{u.get('telegram_id')}</code>\nTel: {u.get('phone','—')}",
+                parse_mode="HTML",
+                reply_markup=InlineKeyboardMarkup([[
+                    InlineKeyboardButton("✅ Tasdiqlash", callback_data=f"verify_{u['telegram_id']}"),
+                    InlineKeyboardButton("❌ Rad", callback_data=f"reject_{u['telegram_id']}")
+                ]])
+            )
     elif data == "admin_broadcast":
-        await cb.message.edit_text(
-            "📢 <b>XABAR YUBORISH</b>\n\nXabar matnini yozing:",
-            parse_mode="HTML", reply_markup=back_admin_kb()
-        )
-        set_state(cb.from_user.id, "broadcast")
+        set_state(tg_id, {"action": "broadcast"})
+        await cb.message.reply_text("📢 Xabarni yozing (barcha foydalanuvchilarga yuboriladi):", reply_markup=back_kb())
+    elif data == "admin_premium":
+        set_state(tg_id, {"action": "premium_input"})
+        await cb.message.reply_text("⭐ Foydalanuvchi ID sini yozing:", reply_markup=back_kb())
+    elif data == "admin_block":
+        set_state(tg_id, {"action": "block_input"})
+        await cb.message.reply_text("🚫 Bloklash uchun ID kiriting:", reply_markup=back_kb())
+    elif data.startswith("verify_"):
+        uid = int(data.split("_")[1])
+        ok  = await api_put(f"/api/admin/verify/{uid}?admin_id={tg_id}&action=verify")
+        await cb.message.reply_text("✅ Tasdiqlandi!" if ok else "❌ Xato.")
+    elif data.startswith("reject_"):
+        uid = int(data.split("_")[1])
+        ok  = await api_put(f"/api/admin/verify/{uid}?admin_id={tg_id}&action=reject")
+        await cb.message.reply_text("❌ Rad etildi." if ok else "❌ Xato.")
 
-# ==================== ADMIN TEXT ====================
-
-async def admin_text_handler(update: Update, ctx: ContextTypes.DEFAULT_TYPE):
-    if update.effective_user.id not in ADMIN_IDS:
+# ── MATN HANDLER ───────────────────────────────────────
+async def text_handler(update: Update, ctx: ContextTypes.DEFAULT_TYPE):
+    tg_id = update.effective_user.id
+    state = get_state(tg_id)
+    if not state or tg_id not in ADMIN_IDS:
+        if tg_id not in ADMIN_IDS:
+            await update.message.reply_text(
+                "Mini App ni ochish uchun 👇",
+                reply_markup=InlineKeyboardMarkup([[
+                    InlineKeyboardButton("🚀 Mini App", web_app=WebAppInfo(url=MINI_APP_URL))
+                ]])
+            )
         return
-    state = get_state(update.effective_user.id)
-    if not state:
-        return
-    text = update.message.text.strip()
-    clear_state(update.effective_user.id)
 
-    if state == "premium":
-        try:
-            user_id = int(text)
-            user = await api_get(f"/api/users/{user_id}")
-            if not user:
-                await update.message.reply_text("❌ Foydalanuvchi topilmadi.")
-                return
-            current = user.get("is_premium", 0)
-            new_val = 0 if current else 1
-            await api_put(f"/api/admin/users/{user_id}/premium", {"admin_id": update.effective_user.id, "value": new_val})
-            action = "olib tashlandi ❌" if current else "berildi ✅"
-            await update.message.reply_text(f"⭐ {user['full_name']} ga premium {action}", reply_markup=admin_kb())
-            try:
-                msg = "⭐ <b>Sizga PREMIUM berildi!</b>" if new_val else "Premium statusingiz olib tashlandi."
-                await ctx.bot.send_message(user_id, msg, parse_mode="HTML", reply_markup=mini_app_btn())
-            except: pass
-        except ValueError:
-            await update.message.reply_text("❌ Faqat son kiriting.")
-
-    elif state == "block":
-        try:
-            parts = text.split(None, 1)
-            user_id = int(parts[0])
-            reason = parts[1] if len(parts) > 1 else "Sabab ko'rsatilmagan"
-            user = await api_get(f"/api/users/{user_id}")
-            if not user:
-                await update.message.reply_text("❌ Foydalanuvchi topilmadi.")
-                return
-            await api_put(f"/api/admin/users/{user_id}/block", {"admin_id": update.effective_user.id, "reason": reason})
-            await update.message.reply_text(f"🚫 {user['full_name']} bloklandi.", reply_markup=admin_kb())
-            try:
-                await ctx.bot.send_message(user_id, f"🚫 <b>Siz bloklangansiz.</b>\nSabab: {reason}", parse_mode="HTML")
-            except: pass
-        except ValueError:
-            await update.message.reply_text("❌ Format: ID sabab")
-
-    elif state == "broadcast":
-        users = await api_get(f"/api/admin/users?admin_id={update.effective_user.id}&page=1") or []
-        sent = 0; failed = 0
-        await update.message.reply_text(f"📢 Yuborilmoqda...")
+    action = state.get("action")
+    if action == "broadcast":
+        msg   = update.message.text
+        users = await api_get(f"/api/admin/all-users?admin_id={tg_id}") or []
+        sent  = 0
         for u in users:
             try:
-                await ctx.bot.send_message(u["telegram_id"], f"📢 <b>MIDAS:</b>\n\n{text}", parse_mode="HTML", reply_markup=mini_app_btn())
+                await ctx.bot.send_message(
+                    chat_id=u["telegram_id"],
+                    text=f"📢 <b>MIDAS xabari:</b>\n\n{msg}",
+                    parse_mode="HTML"
+                )
                 sent += 1
                 await asyncio.sleep(0.05)
-            except:
-                failed += 1
-        await update.message.reply_text(f"✅ Yuborildi: {sent}\n❌ Xato: {failed}", reply_markup=admin_kb())
+            except Exception:
+                pass
+        clear_state(tg_id)
+        await update.message.reply_text(f"✅ {sent} ta foydalanuvchiga yuborildi.", reply_markup=admin_kb())
 
-# ==================== HEALTH SERVER ====================
+    elif action == "premium_input":
+        try:
+            uid = int(update.message.text.strip())
+            ok  = await api_put(f"/api/admin/premium/{uid}?admin_id={tg_id}&days=30")
+            clear_state(tg_id)
+            await update.message.reply_text(f"⭐ {uid}: {'berildi' if ok else 'xato'}", reply_markup=admin_kb())
+        except ValueError:
+            await update.message.reply_text("❌ Raqam kiriting:")
 
-async def health_server():
-    from aiohttp import web
-    async def handle(request):
-        return web.Response(text="MIDAS Bot OK")
-    webapp = web.Application()
-    webapp.router.add_get("/", handle)
-    webapp.router.add_get("/health", handle)
-    runner = web.AppRunner(webapp)
-    await runner.setup()
-    port = int(os.getenv("PORT", 8080))
-    site = web.TCPSite(runner, "0.0.0.0", port)
-    await site.start()
-    logger.info(f"✅ Health server {port} portda ishga tushdi")
+    elif action == "block_input":
+        try:
+            uid = int(update.message.text.strip())
+            ok  = await api_put(f"/api/admin/block/{uid}?admin_id={tg_id}")
+            clear_state(tg_id)
+            await update.message.reply_text(f"🚫 {uid}: {'bloklandi' if ok else 'xato'}", reply_markup=admin_kb())
+        except ValueError:
+            await update.message.reply_text("❌ Raqam kiriting:")
+    else:
+        clear_state(tg_id)
 
-# ==================== MAIN ====================
+# ── MEDIA HANDLER ──────────────────────────────────────
+async def media_handler(update: Update, ctx: ContextTypes.DEFAULT_TYPE):
+    """Bot orqali kelgan media → chat partneriga forward"""
+    tg_id = update.effective_user.id
+    user  = await api_get(f"/api/users/{tg_id}")
+    if not user:
+        return
 
+    chats = await api_get(f"/api/chats/{tg_id}") or []
+    if not chats:
+        await update.message.reply_text(
+            "💬 Ochiq chatlaringiz yo'q. Mini App da taklif qabul qiling.",
+            reply_markup=InlineKeyboardMarkup([[
+                InlineKeyboardButton("🚀 Mini App", web_app=WebAppInfo(url=MINI_APP_URL))
+            ]])
+        )
+        return
+
+    last_chat  = chats[0]
+    partner_id = last_chat.get("partner_id")
+    if not partner_id:
+        return
+
+    # Fayl turini aniqlash
+    if update.message.photo:       ftype = "📷 Rasm"
+    elif update.message.video:     ftype = "🎬 Video"
+    elif update.message.voice:     ftype = "🎤 Ovozli xabar"
+    elif update.message.audio:     ftype = "🎵 Audio"
+    elif update.message.document:  ftype = f"📎 {update.message.document.file_name or 'Fayl'}"
+    else:                          ftype = "📁 Fayl"
+
+    # DB ga yozish
+    await api_post("/api/messages", {
+        "chat_id":     last_chat["id"],
+        "sender_id":   tg_id,
+        "receiver_id": partner_id,
+        "message_text": f"[Bot: {ftype}]",
+    })
+
+    # Telegram orqali forward
+    try:
+        await update.message.copy_to(chat_id=partner_id)
+        await update.message.reply_text(f"✅ {ftype} hamkoringizga yuborildi!")
+    except Exception as e:
+        logger.warning(f"Copy to {partner_id}: {e}")
+        await update.message.reply_text(
+            f"⚠️ Avtomatik yuborib bo'lmadi.\n"
+            f"Hamkoringiz bilan to'g'ridan muloqot qiling.",
+            reply_markup=InlineKeyboardMarkup([[
+                InlineKeyboardButton("💬 Chat", web_app=WebAppInfo(url=MINI_APP_URL))
+            ]])
+        )
+
+# ── MAIN ───────────────────────────────────────────────
 async def main():
-    application = Application.builder().token(BOT_TOKEN).build()
+    if not BOT_TOKEN:
+        logger.error("❌ BOT_TOKEN topilmadi! Environment variable o'rnating.")
+        return
 
-    application.add_handler(CommandHandler("start", cmd_start))
-    application.add_handler(CommandHandler("help", cmd_help))
-    application.add_handler(CommandHandler("profile", cmd_profile))
-    application.add_handler(CommandHandler("stats", cmd_stats))
-    application.add_handler(CommandHandler("admin", cmd_admin))
-    application.add_handler(CallbackQueryHandler(callback_handler))
-    application.add_handler(MessageHandler(filters.TEXT & ~filters.COMMAND, admin_text_handler))
+    app = Application.builder().token(BOT_TOKEN).build()
 
-    await health_server()
-    logger.info("🤖 MIDAS Bot ishga tushdi!")
-    await application.initialize()
-    await application.start()
-    await application.updater.start_polling(drop_pending_updates=True)
+    app.add_handler(CommandHandler("start",   cmd_start))
+    app.add_handler(CommandHandler("help",    cmd_help))
+    app.add_handler(CommandHandler("profile", cmd_profile))
+    app.add_handler(CommandHandler("stats",   cmd_profile))
+    app.add_handler(CommandHandler("admin",   cmd_admin))
+    app.add_handler(CallbackQueryHandler(callback_handler))
+    app.add_handler(MessageHandler(
+        filters.PHOTO | filters.VIDEO | filters.VOICE |
+        filters.AUDIO | filters.Document.ALL,
+        media_handler
+    ))
+    app.add_handler(MessageHandler(filters.TEXT & ~filters.COMMAND, text_handler))
+
+    logger.info("🤖 MIDAS Bot v7 ishga tushdi!")
+    await app.initialize()
+    await app.start()
+    await app.updater.start_polling(
+        drop_pending_updates=True,
+        allowed_updates=["message", "callback_query"]
+    )
     await asyncio.Event().wait()
 
 if __name__ == "__main__":
