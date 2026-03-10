@@ -1,1466 +1,1423 @@
-import { useState, useEffect, useCallback, useRef } from "react";
+import { useState, useEffect, useRef, useCallback } from "react";
+import {
+  SECTORS, PLATFORMS_ONLINE, PLATFORMS_OFFLINE, PLATFORMS_ALL,
+  MATCH_PLATFORMS, AGE_OPTIONS, LOCATIONS, SECTOR_INTERESTS, PHONE_REGEX
+} from "./constants";
 
-// ============================================================
-// CONFIG
-// ============================================================
-const API_BASE = process.env.REACT_APP_API_URL || "https://your-app.onrender.com";
+const API = process.env.REACT_APP_API_URL || "https://midas-backend.onrender.com";
+const ADMIN_IDS = (process.env.REACT_APP_ADMIN_IDS || "").split(",").map(Number).filter(Boolean);
 const tg = window.Telegram?.WebApp;
 
-// ============================================================
-// TRANSLATIONS
-// ============================================================
+// ==================== i18n ====================
 const T = {
   uz: {
-    appName: "MIDAS",
-    loading: "Yuklanmoqda...",
-    onb1Title: "MIDAS ga xush kelibsiz!",
-    onb1Desc: "O'zbekistonning #1 reklama platformasi. Tadbirkorlar va reklamachilarni AI orqali birlashtiradi.",
-    onb2Title: "AI Matching tizimi",
-    onb2Desc: "100 ballik aqlli algoritm sizga eng mos hamkorni topadi.",
-    onb3Title: "Xavfsiz muloqot",
-    onb3Desc: "Platforma ichida bevosita chat, taklif va shartnoma imkoniyati.",
-    next: "Davom →", start: "Boshlash 🚀",
-    chooseRole: "Rolingizni tanlang",
-    roleDesc: "Bu sizning tajribangizni moslashtiradi",
-    tadbirkor: "Tadbirkor", tadbirkorDesc: "Biznesimni reklama qilish uchun reklamachi topaman",
-    reklamachi: "Reklamachi", reklamachiDesc: "Kanalim orqali reklama qabul qilaman",
-    yourInfo: "Ma'lumotlaringiz",
-    fullName: "Ism Familiya", phone: "Telefon (ixtiyoriy)",
-    register: "Ro'yxatdan o'tish ✓", saving: "⏳ Saqlanmoqda...",
-    back: "← Orqaga", next2: "Davom →", save: "✓ Saqlash",
-    step: "Qadam", of: "/",
-    match: "Qidirish", offers: "Takliflar", chats: "Chatlar", profile: "Profil",
-    all: "Hammasi", top: "⭐ Top (70+)", premium: "👑 Premium",
-    searching: "Yuklanmoqda...", noMatch: "Hozircha hech kim topilmadi",
-    noMatchSub: "Profilingizni to'ldiring yoki keyinroq qaytib keling",
-    sendOffer: "📩 Taklif", sent: "✓ Yuborildi",
-    detail: "Batafsil ↓", less: "Yig'ish ↑",
-    incoming: "📥 Kelgan", outgoing: "📤 Yuborilgan", accepted: "✅ Qabul",
-    pending: "Kutilmoqda", acceptedStatus: "Qabul qilindi", rejected: "Rad etildi",
-    accept: "✓ Qabul", reject: "✗ Rad",
-    rate: "Baholang:", noOffers: "Taklif yo'q",
-    noChats: "Chatlar yo'q", noChatsSub: "Taklif qabul qilinganidan so'ng chat ochiladi",
-    typeMessage: "Xabar yozing...", online: "Online",
-    editProfile: "✏️ Profilni tahrirlash",
-    deals: "Bitimlar", totalOffers: "Takliflar", totalChats: "Chatlar",
-    notEntered: "Kiritilmagan", regDate: "Ro'yxat sanasi",
-    sector: "Soha", chooseSector: "Biznesingiz sohasini tanlang",
-    audience: "Maqsadli auditoriya", audienceSub: "Kimga reklama qilmoqchisiz?",
-    ageGroup: "Yosh guruhi", gender: "Jins",
-    male: "👨 Erkak", female: "👩 Ayol", both: "👥 Hammasi",
-    region: "Hudud",
-    interests: "Qiziqishlar", interestsSub: "Mijozlaringiz nimani yaxshi ko'radi?",
-    requirements: "Reklamachi talablari", requirementsSub: "Qanday reklamachi kerak?",
-    followers: "Obunachi",
-    platform: "Platforma", platformSub: "Qaysi platformada faolsiz?",
-    profileInfo: "Profil ma'lumotlari", profileInfoSub: "Sahifangiz haqida",
-    username: "Foydalanuvchi nomi", profileLink: "Profil linki",
-    followersCount: "Obunachi soni", engagement: "Aktivlik % (ER)",
-    prices: "Narxlar", pricesSub: "Reklama narxlaringiz (so'm)",
-    postPrice: "Post narxi", storyPrice: "Story narxi", videoPrice: "Video narxi",
-    audienceInfo: "Auditoriya", audienceInfoSub: "Obunachilari kim?",
-    ageMain: "Asosiy yosh guruhi", genderMain: "Asosiy auditoriya jinsi", mixed: "👥 Aralash",
-    locationMain: "Auditoriya joylashuvi",
-    interestsAud: "Qiziqishlar", interestsAudSub: "Auditoriyangiz nimaga qiziqadi?",
-    notifications: "Bildirishnomalar", noNotif: "Bildirishnoma yo'q",
-    markRead: "Barchasini o'qildi deb belgilash",
-    adminPanel: "Admin panel",
-    totalUsers: "Jami foydalanuvchilar",
-    acceptedOffers: "Qabul qilingan takliflar",
-    activeChats: "Faol chatlar",
-    verifyQueue: "Tekshirish navbati",
-    noQueue: "Navbat bo'sh",
-    verify: "✅ Tasdiqlash", verifyReject: "❌ Rad etish",
-    givePremium: "⭐ Premium berish", removePremium: "Premium olish",
-    blockUser: "🚫 Bloklash", unblockUser: "🔓 Blokdan chiqarish",
-    users: "Foydalanuvchilar",
-    ball: "ball",
-    obs: "obs",
-    aiMatch: "AI matching natijalari",
-    found: "ta topildi",
-    offerMsg: "Sizga hamkorlik taklif qilmoqchiman. Ko'rib chiqishingizni so'rayman.",
-    ago: "oldin", now: "Hozir", min: "daq", hour: "soat", day: "kun",
-    error: "Xatolik", alreadySent: "Allaqachon yuborilgan",
-    langUz: "🇺🇿 O'zbekcha", langRu: "🇷🇺 Русский",
+    welcome:"MIDAS ga xush kelibsiz!",
+    chooseRole:"Rolingizni tanlang",
+    tadbirkor:"🏢 Tadbirkor",
+    reklamachi:"📢 Reklamachi",
+    register:"Ro'yxatdan o'tish",
+    fullName:"To'liq ismingiz",
+    phone:"Telefon raqam (+998XXXXXXXXX)",
+    phoneInvalid:"Noto'g'ri raqam. Format: +998012345678",
+    sector:"Soha tanlang",
+    subSector:"Pastki soha",
+    platforms:"Reklama platformalari",
+    ages:"Maqsadli yosh guruhi",
+    gender:"Jins",
+    genderAll:"Barcha",
+    genderM:"Erkaklar",
+    genderF:"Ayollar",
+    location:"Hudud",
+    interests:"Qiziqishlar (max 3)",
+    maxInterests:"Maksimum 3 ta tanlang",
+    budget:"Maksimal byudjet (so'm)",
+    minFollowers:"Minimal obunachi soni",
+    goal:"Kampaniya maqsadi",
+    platform:"Platforma",
+    profileLink:"Profil havolasi",
+    followers:"Obunachi soni",
+    engagement:"Aktivlik (%)",
+    pricePost:"Post narxi (so'm)",
+    priceStory:"Story narxi (so'm)",
+    priceVideo:"Video narxi (so'm)",
+    priceDesc:"Narx tavsifi (ixtiyoriy)",
+    address:"Aniq manzil",
+    coordinates:"Koordinata (ixtiyoriy)",
+    audienceGender:"Auditoriya jinsi",
+    audienceLocation:"Auditoriya hududi",
+    audienceAges:"Auditoriya yoshi",
+    next:"Davom etish",
+    back:"Orqaga",
+    save:"Saqlash",
+    cancel:"Bekor qilish",
+    edit:"Tahrirlash",
+    match:"Match",
+    chats:"Chatlar",
+    profile:"Profil",
+    notifs:"Bildirishnomalar",
+    admin:"Admin",
+    sendOffer:"Taklif yuborish",
+    freeOffer:"Tekin taklif (1 marta)",
+    offerMsg:"Taklif xabari",
+    accept:"Qabul qilish",
+    reject:"Rad etish",
+    rate:"Baholash",
+    matchScore:"mos",
+    details:"Batafsil",
+    verified:"✅ Tasdiqlangan",
+    notVerified:"⏳ Tasdiqlanmoqda",
+    premium:"⭐ Premium",
+    noMatches:"Hozircha mos hamkorlar topilmadi",
+    loading:"Yuklanmoqda...",
+    send:"Yuborish",
+    midasChat:"📢 MIDAS xabarlari",
+    noChats:"Hali chatlar yo'q",
+    noNotifs:"Hali bildirishnomalar yo'q",
+    offerAccepted:"Taklif qabul qilindi ✅",
+    offerRejected:"Taklif rad etildi ❌",
+    ratePartner:"Hamkorni baholang",
+    whereAdvert:"Qayerda reklama qilmoqchisiz?",
+    allPartners:"Barcha tadbirkorlar",
+    bestMatch:"Sizga mos hamkorlar",
+    freeOfferBtn:"Sinov uchun tekin taklif",
+    verifyNote:"Kiritgan ma'lumotlaringiz tekshiriladi va tasdiqlangach sizga xabar beramiz. Iltimos aniq va to'g'ri ma'lumotlar kiriting.",
+    saving:"Saqlanmoqda...",
+    saved:"Saqlandi ✅",
+    lang:"Til",
   },
   ru: {
-    appName: "MIDAS",
-    loading: "Загрузка...",
-    onb1Title: "Добро пожаловать в MIDAS!",
-    onb1Desc: "Платформа #1 в Узбекистане. Объединяет предпринимателей и рекламщиков через AI.",
-    onb2Title: "Система AI Matching",
-    onb2Desc: "100-балльный алгоритм найдёт вам идеального партнёра.",
-    onb3Title: "Безопасное общение",
-    onb3Desc: "Чат, предложения и договоры прямо внутри платформы.",
-    next: "Далее →", start: "Начать 🚀",
-    chooseRole: "Выберите роль",
-    roleDesc: "Это настроит ваш опыт",
-    tadbirkor: "Предприниматель", tadbirkorDesc: "Ищу рекламщика для своего бизнеса",
-    reklamachi: "Рекламщик", reklamachiDesc: "Принимаю рекламу через свой канал",
-    yourInfo: "Ваши данные",
-    fullName: "Имя Фамилия", phone: "Телефон (необязательно)",
-    register: "Зарегистрироваться ✓", saving: "⏳ Сохранение...",
-    back: "← Назад", next2: "Далее →", save: "✓ Сохранить",
-    step: "Шаг", of: "/",
-    match: "Поиск", offers: "Предложения", chats: "Чаты", profile: "Профиль",
-    all: "Все", top: "⭐ Топ (70+)", premium: "👑 Премиум",
-    searching: "Загрузка...", noMatch: "Никого не найдено",
-    noMatchSub: "Заполните профиль или вернитесь позже",
-    sendOffer: "📩 Предложить", sent: "✓ Отправлено",
-    detail: "Подробнее ↓", less: "Свернуть ↑",
-    incoming: "📥 Входящие", outgoing: "📤 Исходящие", accepted: "✅ Принятые",
-    pending: "Ожидание", acceptedStatus: "Принято", rejected: "Отклонено",
-    accept: "✓ Принять", reject: "✗ Отказать",
-    rate: "Оцените:", noOffers: "Нет предложений",
-    noChats: "Нет чатов", noChatsSub: "Чат открывается после принятия предложения",
-    typeMessage: "Напишите сообщение...", online: "Онлайн",
-    editProfile: "✏️ Редактировать профиль",
-    deals: "Сделки", totalOffers: "Предложения", totalChats: "Чаты",
-    notEntered: "Не указано", regDate: "Дата регистрации",
-    sector: "Сфера", chooseSector: "Выберите сферу бизнеса",
-    audience: "Целевая аудитория", audienceSub: "Кому вы хотите рекламировать?",
-    ageGroup: "Возрастная группа", gender: "Пол",
-    male: "👨 Мужской", female: "👩 Женский", both: "👥 Все",
-    region: "Регион",
-    interests: "Интересы", interestsSub: "Что любят ваши клиенты?",
-    requirements: "Требования к рекламщику", requirementsSub: "Какой рекламщик нужен?",
-    followers: "Подписчики",
-    platform: "Платформа", platformSub: "На какой платформе вы активны?",
-    profileInfo: "Данные профиля", profileInfoSub: "О вашей странице",
-    username: "Имя пользователя", profileLink: "Ссылка на профиль",
-    followersCount: "Количество подписчиков", engagement: "Активность % (ER)",
-    prices: "Цены", pricesSub: "Цены на рекламу (сум)",
-    postPrice: "Цена поста", storyPrice: "Цена сторис", videoPrice: "Цена видео",
-    audienceInfo: "Аудитория", audienceInfoSub: "Кто ваши подписчики?",
-    ageMain: "Основная возрастная группа", genderMain: "Пол аудитории", mixed: "👥 Смешанный",
-    locationMain: "Локация аудитории",
-    interestsAud: "Интересы", interestsAudSub: "Чем интересуется ваша аудитория?",
-    notifications: "Уведомления", noNotif: "Нет уведомлений",
-    markRead: "Отметить всё как прочитанное",
-    adminPanel: "Панель администратора",
-    totalUsers: "Всего пользователей",
-    acceptedOffers: "Принятые предложения",
-    activeChats: "Активные чаты",
-    verifyQueue: "Очередь проверки",
-    noQueue: "Очередь пуста",
-    verify: "✅ Подтвердить", verifyReject: "❌ Отклонить",
-    givePremium: "⭐ Дать Премиум", removePremium: "Убрать Премиум",
-    blockUser: "🚫 Заблокировать", unblockUser: "🔓 Разблокировать",
-    users: "Пользователи",
-    ball: "балл",
-    obs: "подп",
-    aiMatch: "Результаты AI matching",
-    found: "найдено",
-    offerMsg: "Хочу предложить вам сотрудничество. Прошу рассмотреть.",
-    ago: "назад", now: "Сейчас", min: "мин", hour: "ч", day: "д",
-    error: "Ошибка", alreadySent: "Уже отправлено",
-    langUz: "🇺🇿 O'zbekcha", langRu: "🇷🇺 Русский",
+    welcome:"Добро пожаловать в MIDAS!",
+    chooseRole:"Выберите роль",
+    tadbirkor:"🏢 Предприниматель",
+    reklamachi:"📢 Рекламодатель",
+    register:"Регистрация",
+    fullName:"Ваше полное имя",
+    phone:"Номер телефона (+998XXXXXXXXX)",
+    phoneInvalid:"Неверный формат. Пример: +998012345678",
+    sector:"Выберите сферу",
+    subSector:"Подраздел",
+    platforms:"Платформы рекламы",
+    ages:"Целевая возрастная группа",
+    gender:"Пол",
+    genderAll:"Все",
+    genderM:"Мужчины",
+    genderF:"Женщины",
+    location:"Регион",
+    interests:"Интересы (макс 3)",
+    maxInterests:"Максимум 3 выбора",
+    budget:"Максимальный бюджет (сум)",
+    minFollowers:"Мин. кол-во подписчиков",
+    goal:"Цель кампании",
+    platform:"Платформа",
+    profileLink:"Ссылка на профиль",
+    followers:"Подписчиков",
+    engagement:"Активность (%)",
+    pricePost:"Цена поста (сум)",
+    priceStory:"Цена stories (сум)",
+    priceVideo:"Цена видео (сум)",
+    priceDesc:"Описание цены (необязательно)",
+    address:"Точный адрес",
+    coordinates:"Координаты (необязательно)",
+    audienceGender:"Пол аудитории",
+    audienceLocation:"Регион аудитории",
+    audienceAges:"Возраст аудитории",
+    next:"Продолжить",
+    back:"Назад",
+    save:"Сохранить",
+    cancel:"Отмена",
+    edit:"Редактировать",
+    match:"Подбор",
+    chats:"Чаты",
+    profile:"Профиль",
+    notifs:"Уведомления",
+    admin:"Админ",
+    sendOffer:"Отправить предложение",
+    freeOffer:"Бесплатное предложение (1 раз)",
+    offerMsg:"Сообщение",
+    accept:"Принять",
+    reject:"Отклонить",
+    rate:"Оценить",
+    matchScore:"совп.",
+    details:"Подробнее",
+    verified:"✅ Подтверждён",
+    notVerified:"⏳ На проверке",
+    premium:"⭐ Premium",
+    noMatches:"Подходящих партнёров пока нет",
+    loading:"Загрузка...",
+    send:"Отправить",
+    midasChat:"📢 Сообщения MIDAS",
+    noChats:"Чатов пока нет",
+    noNotifs:"Уведомлений пока нет",
+    offerAccepted:"Предложение принято ✅",
+    offerRejected:"Предложение отклонено ❌",
+    ratePartner:"Оцените партнёра",
+    whereAdvert:"Где хотите рекламироваться?",
+    allPartners:"Все предприниматели",
+    bestMatch:"Подходящие партнёры",
+    freeOfferBtn:"Бесплатное тестовое предложение",
+    verifyNote:"Ваши данные будут проверены и вы получите уведомление после подтверждения. Пожалуйста, указывайте точные данные.",
+    saving:"Сохранение...",
+    saved:"Сохранено ✅",
+    lang:"Язык",
   }
 };
 
-// ============================================================
-// CONSTANTS
-// ============================================================
-const SECTORS_UZ = [
-  {l:"🏢 Ko'chmas mulk",v:"real_estate"},{l:"🏗 Qurilish mollari",v:"construction_materials"},
-  {l:"🏭 Ishlab chiqarish",v:"manufacturing"},{l:"💰 Bank va lombard",v:"banking"},
-  {l:"📚 Ta'lim",v:"education"},{l:"🚗 Avtomobil",v:"auto_transport"},
-  {l:"🛒 Chakana savdo",v:"retail"},{l:"🍽 Restoran",v:"restaurant"},
-  {l:"🛋 Uy jihozlari",v:"home_appliances"},{l:"🥤 Ichimliklar",v:"beverages"},
-  {l:"💊 Tibbiyot",v:"medical"},{l:"🌐 Internet",v:"internet_services"},
-];
-const SECTORS_RU = [
-  {l:"🏢 Недвижимость",v:"real_estate"},{l:"🏗 Стройматериалы",v:"construction_materials"},
-  {l:"🏭 Производство",v:"manufacturing"},{l:"💰 Банки",v:"banking"},
-  {l:"📚 Образование",v:"education"},{l:"🚗 Авто",v:"auto_transport"},
-  {l:"🛒 Розничная торговля",v:"retail"},{l:"🍽 Ресторан",v:"restaurant"},
-  {l:"🛋 Мебель",v:"home_appliances"},{l:"🥤 Напитки",v:"beverages"},
-  {l:"💊 Медицина",v:"medical"},{l:"🌐 Интернет",v:"internet_services"},
-];
-
-const AGES = [
-  {l:"18 yoshdan kichik / До 18",v:"under_18"},
-  {l:"18–25",v:"18_25"},{l:"25–35",v:"25_35"},
-  {l:"35–45",v:"35_45"},{l:"45–55",v:"45_55"},
-  {l:"55+",v:"over_55"},
-];
-
-const LOCATIONS_UZ = [
-  {l:"Toshkent shahri",v:"tashkent_city"},{l:"Toshkent viloyati",v:"tashkent_region"},
-  {l:"Samarqand",v:"samarqand"},{l:"Buxoro",v:"buxoro"},
-  {l:"Farg'ona",v:"fergana"},{l:"Andijon",v:"andijan"},
-  {l:"Namangan",v:"namangan"},{l:"Qashqadaryo",v:"kashkadarya"},
-  {l:"Surxondaryo",v:"surkhandarya"},{l:"Xorazm",v:"khorezm"},
-  {l:"Jizzax",v:"jizzakh"},{l:"Navoiy",v:"navoi"},
-  {l:"Sirdaryo",v:"syrdarya"},{l:"Qoraqalpog'iston",v:"karakalpakstan"},
-  {l:"Butun O'zbekiston",v:"all"},
-];
-const LOCATIONS_RU = [
-  {l:"г. Ташкент",v:"tashkent_city"},{l:"Ташкентская обл.",v:"tashkent_region"},
-  {l:"Самарканд",v:"samarqand"},{l:"Бухара",v:"buxoro"},
-  {l:"Фергана",v:"fergana"},{l:"Андижан",v:"andijan"},
-  {l:"Наманган",v:"namangan"},{l:"Кашкадарья",v:"kashkadarya"},
-  {l:"Сурхандарья",v:"surkhandarya"},{l:"Хорезм",v:"khorezm"},
-  {l:"Джизак",v:"jizzakh"},{l:"Навои",v:"navoi"},
-  {l:"Сырдарья",v:"syrdarya"},{l:"Каракалпакстан",v:"karakalpakstan"},
-  {l:"Весь Узбекистан",v:"all"},
-];
-
-const INTERESTS = [
-  "😄 Kulgu","📰 Yangiliklar","💼 Tadbirkorlik","📊 Moliya",
-  "👔 Moda","💄 Go'zallik","📚 Ta'lim","💊 Salomatlik",
-  "💻 IT","🚗 Avto","🍳 Taom","🎵 Musiqa",
-  "✈️ Sayohat","⚽ Sport","🌟 Life style","👨‍👩‍👧 Oila",
-];
-
-const PLATFORMS = [
-  {l:"📸 Instagram",v:"instagram"},{l:"🎥 YouTube",v:"youtube"},
-  {l:"📱 Telegram kanal",v:"telegram_channel"},{l:"🤖 Telegram bot",v:"telegram_bot"},
-  {l:"📲 Mobil ilova",v:"mobile_app"},{l:"📞 Offline",v:"offline"},
-];
-
-const FOLLOWER_PRESETS = [
-  {l:"1K dan kam",v:0},{l:"1K–5K",v:1000},{l:"5K–15K",v:5000},
-  {l:"15K–50K",v:15000},{l:"50K–150K",v:50000},
-  {l:"150K–500K",v:150000},{l:"500K–1M",v:500000},{l:"1M+",v:1000000},
-];
-
-// ============================================================
-// API
-// ============================================================
-const api = {
-  headers(initData) {
-    return { "Content-Type":"application/json", "X-Init-Data": initData||"" };
-  },
-  async get(path) {
-    const r = await fetch(API_BASE+path);
-    if(!r.ok) { const t = await r.text(); throw new Error(t); }
-    return r.json();
-  },
-  async post(path, body) {
-    const r = await fetch(API_BASE+path, {method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify(body)});
-    if(!r.ok) { const t = await r.text(); throw new Error(t); }
-    return r.json();
-  },
-  async put(path, params={}) {
-    const qs = new URLSearchParams(params).toString();
-    const r = await fetch(`${API_BASE}${path}${qs?"?"+qs:""}`,{method:"PUT"});
-    if(!r.ok) { const t = await r.text(); throw new Error(t); }
-    return r.json();
-  },
+const api = async (path, method="GET", body=null) => {
+  const opts = { method, headers: {"Content-Type":"application/json"} };
+  if (body) opts.body = JSON.stringify(body);
+  const r = await fetch(API+path, opts);
+  if (!r.ok) { const e = await r.json().catch(()=>{}); throw new Error(e?.error||r.status); }
+  return r.json();
 };
 
-// ============================================================
-// HELPERS
-// ============================================================
-function fmt(n) {
-  if(n>=1e6) return (n/1e6).toFixed(1)+"M";
-  if(n>=1e3) return (n/1e3).toFixed(0)+"K";
-  return n;
-}
-function fmtPrice(n) {
-  if(!n) return "—";
-  return new Intl.NumberFormat("uz-UZ").format(n)+" so'm";
-}
-function timeAgo(ts, t) {
-  const d=(Date.now()-new Date(ts).getTime())/1000;
-  if(d<60) return t.now;
-  if(d<3600) return Math.floor(d/60)+" "+t.min;
-  if(d<86400) return Math.floor(d/3600)+" "+t.hour;
-  return Math.floor(d/86400)+" "+t.day;
-}
+// ==================== COMPONENTS ====================
 
-// ============================================================
-// UI COMPONENTS
-// ============================================================
-const C = {
-  // Colors
-  bg: "#0A0F1E",
-  card: "#111827",
-  border: "#1F2937",
-  text: "#F9FAFB",
-  sub: "#6B7280",
-  blue: "#3B82F6",
-  indigo: "#6366F1",
-  green: "#10B981",
-  red: "#EF4444",
-  gold: "#F59E0B",
-};
-
-function Btn({children, onClick, v="primary", full=false, disabled=false, sm=false}) {
-  const pad = sm ? "6px 14px" : "12px 20px";
-  const fs = sm ? 12 : 14;
-  const bg = {
-    primary:`linear-gradient(135deg,${C.blue},${C.indigo})`,
-    success:`linear-gradient(135deg,${C.green},#059669)`,
-    danger:`linear-gradient(135deg,${C.red},#DC2626)`,
-    ghost:`transparent`,
-    gold:`linear-gradient(135deg,${C.gold},#D97706)`,
+function Btn({children, onClick, color="blue", full=false, small=false, disabled=false}) {
+  const colors = {
+    blue:"bg-blue-500 hover:bg-blue-600 text-white",
+    green:"bg-green-500 hover:bg-green-600 text-white",
+    red:"bg-red-500 hover:bg-red-600 text-white",
+    gray:"bg-gray-200 hover:bg-gray-300 text-gray-700",
+    yellow:"bg-yellow-400 hover:bg-yellow-500 text-white",
+    purple:"bg-purple-500 hover:bg-purple-600 text-white",
+    ghost:"bg-transparent border border-blue-400 text-blue-500 hover:bg-blue-50",
   };
   return (
-    <button onClick={onClick} disabled={disabled} style={{
-      padding:pad, borderRadius:10, border:v==="ghost"?`1.5px solid ${C.border}`:"none",
-      background:bg[v], color:v==="ghost"?"#9CA3AF":"#fff",
-      fontSize:fs, fontWeight:600, cursor:disabled?"not-allowed":"pointer",
-      width:full?"100%":"auto", opacity:disabled?0.5:1, transition:"all 0.15s",
-      fontFamily:"inherit",
-    }}>{children}</button>
-  );
-}
-
-function Chip({label, selected, onClick}) {
-  return (
-    <button onClick={onClick} style={{
-      padding:"6px 12px", borderRadius:20, fontSize:12, fontWeight:500,
-      border:selected?`1.5px solid ${C.blue}`:`1.5px solid ${C.border}`,
-      background:selected?C.blue+"33":"#111827",
-      color:selected?"#93C5FD":"#9CA3AF",
-      cursor:"pointer", whiteSpace:"nowrap", transition:"all 0.15s",
-      fontFamily:"inherit",
-    }}>{label}</button>
-  );
-}
-
-function Card({children, style={}}) {
-  return (
-    <div style={{background:C.card, borderRadius:14, padding:16,
-      border:`1px solid ${C.border}`, marginBottom:12, ...style}}>
+    <button onClick={onClick} disabled={disabled}
+      className={`${colors[color]} ${full?"w-full":""}  ${small?"px-3 py-1.5 text-sm":"px-4 py-2.5"} rounded-xl font-medium transition-all active:scale-95 disabled:opacity-50 disabled:cursor-not-allowed`}>
       {children}
-    </div>
+    </button>
   );
 }
 
-function Input({label, value, onChange, placeholder, type="text"}) {
+function Input({label, value, onChange, placeholder, type="text", error}) {
   return (
-    <div style={{marginBottom:14}}>
-      {label && <label style={{display:"block",fontSize:11,color:C.sub,marginBottom:5,fontWeight:600,letterSpacing:"0.5px",textTransform:"uppercase"}}>{label}</label>}
+    <div className="mb-3">
+      {label && <label className="block text-sm font-medium text-gray-600 mb-1">{label}</label>}
       <input type={type} value={value} onChange={e=>onChange(e.target.value)} placeholder={placeholder}
-        style={{width:"100%",padding:"11px 14px",borderRadius:10,border:`1.5px solid ${C.border}`,
-          background:"#0F172A",color:C.text,fontSize:14,outline:"none",boxSizing:"border-box",fontFamily:"inherit"}}/>
+        className={`w-full px-3 py-2.5 rounded-xl border ${error?"border-red-400":"border-gray-200"} bg-white focus:outline-none focus:border-blue-400 text-sm`}/>
+      {error && <p className="text-red-500 text-xs mt-1">{error}</p>}
     </div>
   );
 }
 
-function ScoreRing({score}) {
-  const color = score>=80?C.green:score>=60?C.blue:score>=40?C.gold:C.red;
+function Modal({title, children, onClose}) {
   return (
-    <div style={{width:50,height:50,borderRadius:"50%",border:`3px solid ${color}`,
-      display:"flex",alignItems:"center",justifyContent:"center",flexDirection:"column",
-      flexShrink:0,background:color+"15"}}>
-      <span style={{fontSize:14,fontWeight:800,color}}>{score}</span>
-      <span style={{fontSize:8,color:C.sub}}>ball</span>
-    </div>
-  );
-}
-
-function Badge({children, color=C.blue}) {
-  return (
-    <span style={{background:color+"22",color,border:`1px solid ${color}44`,
-      borderRadius:20,padding:"2px 8px",fontSize:11,fontWeight:600}}>
-      {children}
-    </span>
-  );
-}
-
-function StarRating({rating=5, size=13}) {
-  const r = Math.round(rating);
-  return (
-    <span style={{color:C.gold,fontSize:size,letterSpacing:1}}>
-      {"★".repeat(r)}{"☆".repeat(5-r)}
-      <span style={{color:C.sub,fontSize:size-2,marginLeft:4}}>{Number(rating).toFixed(1)}</span>
-    </span>
-  );
-}
-
-function Avatar({role, size=46}) {
-  return (
-    <div style={{width:size,height:size,borderRadius:size/3,flexShrink:0,
-      background:`linear-gradient(135deg,${C.blue},${C.indigo})`,
-      display:"flex",alignItems:"center",justifyContent:"center",fontSize:size*0.45}}>
-      {role==="tadbirkor"?"🏢":"📢"}
-    </div>
-  );
-}
-
-function ProgressBar({current, total}) {
-  const p = Math.round((current/total)*100);
-  return (
-    <div>
-      <div style={{height:3,background:"#1F2937",borderRadius:2}}>
-        <div style={{height:"100%",width:p+"%",
-          background:`linear-gradient(90deg,${C.blue},${C.indigo})`,
-          borderRadius:2,transition:"width 0.3s"}}/>
+    <div className="fixed inset-0 bg-black/50 flex items-end justify-center z-50" onClick={onClose}>
+      <div className="bg-white rounded-t-2xl w-full max-w-lg max-h-[90vh] overflow-y-auto p-4" onClick={e=>e.stopPropagation()}>
+        <div className="flex justify-between items-center mb-4">
+          <h3 className="font-bold text-lg">{title}</h3>
+          <button onClick={onClose} className="text-gray-400 text-2xl leading-none">×</button>
+        </div>
+        {children}
       </div>
     </div>
   );
 }
 
-// ============================================================
-// PAGES
-// ============================================================
-
-// --- ONBOARDING ---
-function OnboardingPage({onFinish, t}) {
-  const [step, setStep] = useState(0);
-  const steps = [
-    {icon:"🌟",title:t.onb1Title,desc:t.onb1Desc},
-    {icon:"🎯",title:t.onb2Title,desc:t.onb2Desc},
-    {icon:"💬",title:t.onb3Title,desc:t.onb3Desc},
-  ];
-  const s = steps[step];
-  return (
-    <div style={{minHeight:"100vh",background:`linear-gradient(160deg,${C.bg},#1E1B4B)`,
-      display:"flex",flexDirection:"column",alignItems:"center",justifyContent:"center",
-      padding:28,textAlign:"center"}}>
-      <div style={{fontSize:72,marginBottom:24}}>{s.icon}</div>
-      <h1 style={{color:C.text,fontSize:24,fontWeight:800,margin:"0 0 12px"}}>{s.title}</h1>
-      <p style={{color:"#9CA3AF",fontSize:15,lineHeight:1.7,maxWidth:300,margin:"0 0 40px"}}>{s.desc}</p>
-      <div style={{display:"flex",gap:8,marginBottom:32}}>
-        {steps.map((_,i)=>(
-          <div key={i} style={{width:i===step?28:8,height:8,borderRadius:4,
-            background:i===step?C.blue:"#1F2937",transition:"all 0.3s"}}/>
-        ))}
-      </div>
-      <Btn full onClick={()=>step<steps.length-1?setStep(step+1):onFinish()}>
-        {step<steps.length-1?t.next:t.start}
-      </Btn>
-    </div>
-  );
-}
-
-// --- LANG SELECTOR ---
-function LangSelector({onSelect}) {
-  return (
-    <div style={{minHeight:"100vh",background:C.bg,display:"flex",flexDirection:"column",
-      alignItems:"center",justifyContent:"center",padding:28,textAlign:"center"}}>
-      <div style={{fontSize:56,marginBottom:20}}>🌐</div>
-      <h2 style={{color:C.text,fontSize:22,fontWeight:800,margin:"0 0 8px"}}>Tilni tanlang / Выберите язык</h2>
-      <p style={{color:C.sub,fontSize:14,margin:"0 0 32px"}}>You can change this later</p>
-      <div style={{display:"flex",flexDirection:"column",gap:14,width:"100%",maxWidth:300}}>
-        <button onClick={()=>onSelect("uz")} style={{padding:"18px 20px",borderRadius:14,border:`2px solid ${C.border}`,
-          background:"#111827",color:C.text,cursor:"pointer",fontSize:17,fontWeight:700,fontFamily:"inherit"}}>
-          🇺🇿 O'zbekcha
-        </button>
-        <button onClick={()=>onSelect("ru")} style={{padding:"18px 20px",borderRadius:14,border:`2px solid ${C.border}`,
-          background:"#111827",color:C.text,cursor:"pointer",fontSize:17,fontWeight:700,fontFamily:"inherit"}}>
-          🇷🇺 Русский
-        </button>
-      </div>
-    </div>
-  );
-}
-
-// --- REGISTER ---
-function RegisterPage({tgUser, onDone, t}) {
-  const [roleStep, setRoleStep] = useState(true);
-  const [role, setRole] = useState("");
-  const [name, setName] = useState(tgUser?.first_name||"");
-  const [phone, setPhone] = useState("");
-  const [loading, setLoading] = useState(false);
-
-  const handleRegister = async () => {
-    if(!name.trim()) return;
-    setLoading(true);
-    try {
-      await api.post("/api/users/register", {
-        telegram_id: tgUser?.id||99999,
-        username: tgUser?.username||"user",
-        full_name: name,
-        role, phone: phone||null,
-        lang: t === T.ru ? "ru" : "uz",
-      });
-      onDone(role);
-    } catch(e) { alert(t.error+": "+e.message); }
-    setLoading(false);
+function TagSelect({options, selected, onChange, max=null, label}) {
+  const toggle = (v) => {
+    if (selected.includes(v)) onChange(selected.filter(x=>x!==v));
+    else if (!max || selected.length < max) onChange([...selected, v]);
   };
-
-  if(roleStep) return (
-    <div style={{padding:"24px 20px",minHeight:"100vh",background:C.bg}}>
-      <div style={{textAlign:"center",marginBottom:32,paddingTop:40}}>
-        <div style={{fontSize:52,marginBottom:12}}>👤</div>
-        <h2 style={{color:C.text,fontSize:22,fontWeight:800,margin:0}}>{t.chooseRole}</h2>
-        <p style={{color:C.sub,fontSize:13,margin:"8px 0 0"}}>{t.roleDesc}</p>
-      </div>
-      <div style={{display:"flex",flexDirection:"column",gap:14}}>
-        {[
-          {v:"tadbirkor",icon:"🏢",title:t.tadbirkor,desc:t.tadbirkorDesc},
-          {v:"reklamachi",icon:"📢",title:t.reklamachi,desc:t.reklamachiDesc},
-        ].map(r=>(
-          <button key={r.v} onClick={()=>{setRole(r.v);setRoleStep(false);}} style={{
-            background:"#111827",border:`2px solid ${C.border}`,borderRadius:16,
-            padding:"20px 18px",textAlign:"left",cursor:"pointer",transition:"all 0.2s",fontFamily:"inherit"}}>
-            <div style={{fontSize:36,marginBottom:8}}>{r.icon}</div>
-            <div style={{color:C.text,fontWeight:700,fontSize:17}}>{r.title}</div>
-            <div style={{color:C.sub,fontSize:13,marginTop:4}}>{r.desc}</div>
+  return (
+    <div className="mb-3">
+      {label && <label className="block text-sm font-medium text-gray-600 mb-2">{label}</label>}
+      <div className="flex flex-wrap gap-2">
+        {options.map(o=>(
+          <button key={o.v} onClick={()=>toggle(o.v)}
+            className={`px-3 py-1.5 rounded-full text-sm border transition-all ${selected.includes(o.v)?"bg-blue-500 text-white border-blue-500":"bg-white text-gray-600 border-gray-200"}`}>
+            {o.l}
           </button>
         ))}
       </div>
     </div>
   );
-
-  return (
-    <div style={{padding:"24px 20px",minHeight:"100vh",background:C.bg}}>
-      <button onClick={()=>setRoleStep(true)} style={{background:"none",border:"none",color:C.sub,cursor:"pointer",fontSize:14,marginBottom:24,padding:0,fontFamily:"inherit"}}>{t.back}</button>
-      <div style={{textAlign:"center",marginBottom:28}}>
-        <div style={{fontSize:48,marginBottom:12}}>{role==="tadbirkor"?"🏢":"📢"}</div>
-        <h2 style={{color:C.text,fontSize:20,fontWeight:800,margin:0}}>{t.yourInfo}</h2>
-      </div>
-      <Input label={t.fullName} value={name} onChange={setName} placeholder="Sardor Aliyev"/>
-      <Input label={t.phone} value={phone} onChange={setPhone} placeholder="+998901234567" type="tel"/>
-      <Btn full onClick={handleRegister} disabled={loading||!name.trim()}>
-        {loading?t.saving:t.register}
-      </Btn>
-    </div>
-  );
 }
 
-// --- WIZARD WRAPPER ---
-function Wizard({steps, onFinish, t}) {
-  const [step, setStep] = useState(0);
-  const [loading, setLoading] = useState(false);
-  const s = steps[step];
-  const progress = step+1;
+// ==================== REGISTRATION ====================
 
-  return (
-    <div style={{padding:"0 0 90px",minHeight:"100vh",background:C.bg}}>
-      <div style={{padding:"20px 20px 0"}}>
-        <div style={{display:"flex",justifyContent:"space-between",marginBottom:6}}>
-          <span style={{color:C.sub,fontSize:11}}>{t.step} {step+1} {t.of} {steps.length}</span>
-          <span style={{color:C.blue,fontSize:11,fontWeight:600}}>{Math.round((progress/steps.length)*100)}%</span>
+function Registration({user, tgUser, onDone}) {
+  const [step, setStep] = useState(0); // 0=lang, 1=role, 2=info, 3=tadbirkor, 4=reklamachi
+  const [lang, setLang] = useState("uz");
+  const [role, setRole] = useState("");
+  const [fullName, setFullName] = useState(tgUser?.first_name||"");
+  const [phone, setPhone] = useState("");
+  const [phoneErr, setPhoneErr] = useState("");
+  const [sector, setSector] = useState("");
+  const [subSector, setSubSector] = useState("");
+  const [expandedSector, setExpandedSector] = useState(null);
+  const [platforms, setPlatforms] = useState([]);
+  const [ages, setAges] = useState([]);
+  const [gender, setGender] = useState("all");
+  const [locs, setLocs] = useState([]);
+  const [interests, setInterests] = useState([]);
+  const [budget, setBudget] = useState("");
+  const [minFollowers, setMinFollowers] = useState("");
+  const [campaignGoal, setCampaignGoal] = useState("");
+  // reklamachi
+  const [platform, setPlatform] = useState("");
+  const [profileLink, setProfileLink] = useState("");
+  const [followers, setFollowers] = useState("");
+  const [engagement, setEngagement] = useState("");
+  const [pricePost, setPricePost] = useState("");
+  const [priceStory, setPriceStory] = useState("");
+  const [priceVideo, setPriceVideo] = useState("");
+  const [priceDesc, setPriceDesc] = useState("");
+  const [address, setAddress] = useState("");
+  const [coordinates, setCoordinates] = useState("");
+  const [audAges, setAudAges] = useState([]);
+  const [audGender, setAudGender] = useState("all");
+  const [audLoc, setAudLoc] = useState("all");
+  const [rekInterests, setRekInterests] = useState([]);
+  const [saving, setSaving] = useState(false);
+
+  const t = T[lang];
+  const isOffline = PLATFORMS_OFFLINE.map(p=>p.v).includes(platform);
+  const isOnline = PLATFORMS_ONLINE.map(p=>p.v).includes(platform);
+  const sectorInterests = SECTOR_INTERESTS[sector] || SECTOR_INTERESTS.default;
+
+  const validatePhone = (p) => {
+    if (!p) { setPhoneErr(t.phone); return false; }
+    if (!PHONE_REGEX.test(p.replace(/[\s-]/g,""))) { setPhoneErr(t.phoneInvalid); return false; }
+    setPhoneErr(""); return true;
+  };
+
+  const handleNext = async () => {
+    if (step === 2) {
+      if (!fullName.trim()) return;
+      if (!validatePhone(phone)) return;
+    }
+    if (step === 3 && !sector) return;
+    if (step === 4 && !platform) return;
+
+    if ((step === 3 && role==="tadbirkor") || (step === 4 && role==="reklamachi")) {
+      await handleSubmit(); return;
+    }
+    setStep(s => s+1);
+  };
+
+  const handleSubmit = async () => {
+    setSaving(true);
+    try {
+      await api("/api/users/register", "POST", {
+        telegram_id: tgUser.id, username: tgUser.username,
+        full_name: fullName, role, phone: phone.replace(/[\s-]/g,""), lang
+      });
+      if (role === "tadbirkor") {
+        await api(`/api/business-targets/${tgUser.id}`, "POST", {
+          sector, sub_sector: subSector,
+          preferred_platforms: platforms,
+          ages, target_gender: gender,
+          location: locs, interests,
+          min_followers: Number(minFollowers)||0,
+          max_budget: Number(budget)||0,
+          campaign_goal: campaignGoal
+        });
+      } else {
+        await api(`/api/reklamachi-profiles/${tgUser.id}`, "POST", {
+          platform, profile_link: profileLink,
+          followers: Number(followers)||0,
+          engagement: Number(engagement)||0,
+          price_post: Number(pricePost)||0,
+          price_story: Number(priceStory)||0,
+          price_video: Number(priceVideo)||0,
+          price_description: priceDesc,
+          address, coordinates,
+          audience_ages: audAges,
+          audience_gender: audGender,
+          audience_location: audLoc,
+          interests: rekInterests
+        });
+      }
+      onDone(lang);
+    } catch(e) {
+      alert(e.message);
+    } finally {
+      setSaving(false);
+    }
+  };
+
+  // Step 0: Til tanlash
+  if (step === 0) return (
+    <div className="min-h-screen bg-gradient-to-br from-blue-600 to-purple-700 flex items-center justify-center p-4">
+      <div className="bg-white rounded-2xl p-6 w-full max-w-sm text-center shadow-xl">
+        <div className="text-5xl mb-4">🌐</div>
+        <h2 className="text-xl font-bold mb-6">Tilni tanlang / Выберите язык</h2>
+        <div className="flex gap-3">
+          <button onClick={()=>{setLang("uz");setStep(1);}} className="flex-1 bg-blue-500 text-white py-3 rounded-xl font-bold text-lg hover:bg-blue-600">🇺🇿 O'zbek</button>
+          <button onClick={()=>{setLang("ru");setStep(1);}} className="flex-1 bg-blue-500 text-white py-3 rounded-xl font-bold text-lg hover:bg-blue-600">🇷🇺 Русский</button>
         </div>
-        <ProgressBar current={progress} total={steps.length}/>
-        <h2 style={{color:C.text,fontSize:20,fontWeight:800,margin:"16px 0 4px"}}>{s.title}</h2>
-        <p style={{color:C.sub,fontSize:13,margin:"0 0 20px"}}>{s.sub}</p>
-      </div>
-      <div style={{padding:"0 20px"}}>{s.content}</div>
-      <div style={{position:"fixed",bottom:0,left:0,right:0,padding:"14px 20px",
-        background:C.bg,borderTop:`1px solid ${C.border}`,display:"flex",gap:10}}>
-        {step>0 && <Btn v="ghost" onClick={()=>setStep(step-1)}>{t.back}</Btn>}
-        <Btn full={step===0} disabled={s.valid&&!s.valid()||loading}
-          v={step===steps.length-1?"success":"primary"}
-          onClick={step===steps.length-1 ? async()=>{setLoading(true);await onFinish();setLoading(false);} : ()=>setStep(step+1)}>
-          {loading?t.saving:step===steps.length-1?t.save:t.next2}
-        </Btn>
       </div>
     </div>
   );
-}
 
-// --- BUSINESS TARGET SETUP ---
-function BusinessTargetSetup({userId, onDone, t, lang}) {
-  const SECTORS = lang==="ru"?SECTORS_RU:SECTORS_UZ;
-  const LOCATIONS = lang==="ru"?LOCATIONS_RU:LOCATIONS_UZ;
-  const [d, setD] = useState({sector:"",ages:[],target_gender:"all",location:[],interests:[],min_followers:1000,max_budget:0,campaign_goal:""});
-  const tog=(k,v)=>setD(p=>({...p,[k]:p[k].includes(v)?p[k].filter(x=>x!==v):[...p[k],v]}));
+  // Step 1: Rol tanlash
+  if (step === 1) return (
+    <div className="min-h-screen bg-gradient-to-br from-blue-600 to-purple-700 flex items-center justify-center p-4">
+      <div className="bg-white rounded-2xl p-6 w-full max-w-sm shadow-xl">
+        <div className="text-center mb-6">
+          <div className="text-5xl mb-3">⭐</div>
+          <h1 className="text-2xl font-bold text-blue-600">MIDAS</h1>
+          <p className="text-gray-500 text-sm mt-1">{t.welcome}</p>
+        </div>
+        <p className="text-center font-semibold text-gray-700 mb-4">{t.chooseRole}</p>
+        <div className="flex flex-col gap-3">
+          <button onClick={()=>{setRole("tadbirkor");setStep(2);}}
+            className="bg-blue-50 border-2 border-blue-200 hover:border-blue-500 rounded-xl p-4 text-left transition-all">
+            <div className="text-2xl mb-1">🏢</div>
+            <div className="font-bold text-blue-700">{lang==="uz"?"Tadbirkor":"Предприниматель"}</div>
+            <div className="text-xs text-gray-500 mt-0.5">{lang==="uz"?"Reklama buyurtma qilaman":"Заказываю рекламу"}</div>
+          </button>
+          <button onClick={()=>{setRole("reklamachi");setStep(2);}}
+            className="bg-purple-50 border-2 border-purple-200 hover:border-purple-500 rounded-xl p-4 text-left transition-all">
+            <div className="text-2xl mb-1">📢</div>
+            <div className="font-bold text-purple-700">{lang==="uz"?"Reklamachi":"Рекламодатель"}</div>
+            <div className="text-xs text-gray-500 mt-0.5">{lang==="uz"?"Reklama joylashtirishni taklif qilaman":"Предлагаю размещение рекламы"}</div>
+          </button>
+        </div>
+        <button onClick={()=>setStep(0)} className="mt-4 text-sm text-gray-400 w-full text-center">{t.back}</button>
+      </div>
+    </div>
+  );
 
-  const steps = [
-    {
-      title:t.sector, sub:t.chooseSector,
-      valid:()=>!!d.sector,
-      content:(
-        <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:8}}>
+  // Step 2: Asosiy ma'lumot
+  if (step === 2) return (
+    <div className="min-h-screen bg-gray-50 p-4">
+      <div className="max-w-sm mx-auto bg-white rounded-2xl p-5 shadow">
+        <h2 className="font-bold text-lg mb-4">👤 {t.register}</h2>
+        <Input label={t.fullName} value={fullName} onChange={setFullName} placeholder={t.fullName}/>
+        <Input label={t.phone} value={phone} onChange={v=>{setPhone(v);setPhoneErr("");}} placeholder="+998901234567" error={phoneErr}/>
+        <p className="text-xs text-gray-400 mb-4">🔒 {lang==="uz"?"Telefon raqam faqat adminga ko'rinadi":"Номер телефона виден только администратору"}</p>
+        <div className="flex gap-3">
+          <Btn onClick={()=>setStep(1)} color="gray" full>{t.back}</Btn>
+          <Btn onClick={handleNext} color="blue" full>{t.next}</Btn>
+        </div>
+      </div>
+    </div>
+  );
+
+  // Step 3: Tadbirkor
+  if (step === 3 && role === "tadbirkor") return (
+    <div className="min-h-screen bg-gray-50 p-4 pb-8">
+      <div className="max-w-sm mx-auto">
+        <h2 className="font-bold text-lg mb-4">🏢 {lang==="uz"?"Biznes ma'lumotlari":"Данные бизнеса"}</h2>
+
+        {/* Sektor tanlash */}
+        <label className="block text-sm font-medium text-gray-600 mb-2">{t.sector}</label>
+        <div className="flex flex-col gap-2 mb-4">
           {SECTORS.map(s=>(
-            <button key={s.v} onClick={()=>setD(p=>({...p,sector:s.v}))} style={{
-              padding:"10px 8px",borderRadius:10,
-              border:`2px solid ${d.sector===s.v?C.blue:C.border}`,
-              background:d.sector===s.v?C.blue+"33":"#111827",
-              color:d.sector===s.v?"#93C5FD":"#9CA3AF",
-              cursor:"pointer",fontSize:12,fontWeight:500,textAlign:"center",fontFamily:"inherit"}}>
-              {s.l}
-            </button>
+            <div key={s.v}>
+              <button onClick={()=>{ setSector(s.v); setSubSector(""); setExpandedSector(expandedSector===s.v?null:s.v); setInterests([]); }}
+                className={`w-full flex justify-between items-center px-4 py-2.5 rounded-xl border text-sm font-medium transition-all ${sector===s.v?"bg-blue-500 text-white border-blue-500":"bg-white text-gray-700 border-gray-200"}`}>
+                <span>{s.l}</span><span>{expandedSector===s.v?"▲":"▼"}</span>
+              </button>
+              {expandedSector===s.v && (
+                <div className="ml-3 mt-1 flex flex-col gap-1.5">
+                  {s.sub.map(sub=>(
+                    <button key={sub.v} onClick={()=>setSubSector(sub.v)}
+                      className={`text-left px-3 py-2 rounded-lg text-sm border ${subSector===sub.v?"bg-blue-100 border-blue-400 text-blue-700":"bg-gray-50 border-gray-100 text-gray-600"}`}>
+                      {sub.l}
+                    </button>
+                  ))}
+                </div>
+              )}
+            </div>
           ))}
         </div>
-      ),
-    },
-    {
-      title:t.audience, sub:t.audienceSub,
-      valid:()=>d.ages.length>0&&d.location.length>0,
-      content:(
-        <>
-          <div style={{color:"#9CA3AF",fontSize:12,fontWeight:600,marginBottom:8,textTransform:"uppercase",letterSpacing:"0.5px"}}>{t.ageGroup}</div>
-          <div style={{display:"flex",flexWrap:"wrap",gap:8,marginBottom:18}}>
-            {AGES.map(a=><Chip key={a.v} label={a.l} selected={d.ages.includes(a.v)} onClick={()=>tog("ages",a.v)}/>)}
-          </div>
-          <div style={{color:"#9CA3AF",fontSize:12,fontWeight:600,marginBottom:8,textTransform:"uppercase",letterSpacing:"0.5px"}}>{t.gender}</div>
-          <div style={{display:"flex",gap:8,marginBottom:18}}>
-            {[{l:t.male,v:"male"},{l:t.female,v:"female"},{l:t.both,v:"all"}].map(g=>(
-              <Chip key={g.v} label={g.l} selected={d.target_gender===g.v} onClick={()=>setD(p=>({...p,target_gender:g.v}))}/>
+
+        <TagSelect options={PLATFORMS_ALL} selected={platforms} onChange={setPlatforms} label={t.platforms}/>
+        <TagSelect options={AGE_OPTIONS} selected={ages} onChange={setAges} label={t.ages}/>
+
+        <div className="mb-3">
+          <label className="block text-sm font-medium text-gray-600 mb-2">{t.gender}</label>
+          <div className="flex gap-2">
+            {[["all",t.genderAll],["male",t.genderM],["female",t.genderF]].map(([v,l])=>(
+              <button key={v} onClick={()=>setGender(v)}
+                className={`flex-1 py-2 rounded-xl text-sm border ${gender===v?"bg-blue-500 text-white border-blue-500":"bg-white text-gray-600 border-gray-200"}`}>
+                {l}
+              </button>
             ))}
           </div>
-          <div style={{color:"#9CA3AF",fontSize:12,fontWeight:600,marginBottom:8,textTransform:"uppercase",letterSpacing:"0.5px"}}>{t.region}</div>
-          <div style={{display:"flex",flexWrap:"wrap",gap:8}}>
-            {LOCATIONS.map(l=><Chip key={l.v} label={l.l} selected={d.location.includes(l.v)} onClick={()=>tog("location",l.v)}/>)}
-          </div>
-        </>
-      ),
-    },
-    {
-      title:t.interests, sub:t.interestsSub,
-      valid:()=>d.interests.length>0,
-      content:(
-        <div style={{display:"flex",flexWrap:"wrap",gap:8}}>
-          {INTERESTS.map(i=><Chip key={i} label={i} selected={d.interests.includes(i)} onClick={()=>tog("interests",i)}/>)}
         </div>
-      ),
-    },
-    {
-      title:t.requirements, sub:t.requirementsSub,
-      valid:()=>true,
-      content:(
-        <>
-          <div style={{color:"#9CA3AF",fontSize:12,fontWeight:600,marginBottom:8,textTransform:"uppercase",letterSpacing:"0.5px"}}>{t.followers}</div>
-          <div style={{display:"flex",flexWrap:"wrap",gap:8}}>
-            {FOLLOWER_PRESETS.map(f=>(
-              <Chip key={f.v} label={f.l} selected={d.min_followers===f.v} onClick={()=>setD(p=>({...p,min_followers:f.v}))}/>
-            ))}
-          </div>
-        </>
-      ),
-    },
-  ];
 
-  return (
-    <Wizard t={t} steps={steps} onFinish={async()=>{
-      await api.post(`/api/business-targets/${userId}`, d);
-      onDone();
-    }}/>
-  );
-}
+        <TagSelect options={LOCATIONS} selected={locs} onChange={setLocs} label={t.location}/>
+        <TagSelect options={(SECTOR_INTERESTS[sector]||SECTOR_INTERESTS.default).map(i=>({v:i,l:i}))}
+          selected={interests} onChange={setInterests} max={3} label={`${t.interests} (max 3)`}/>
+        {interests.length>=3 && <p className="text-orange-500 text-xs mb-2">{t.maxInterests}</p>}
 
-// --- REKLAMACHI PROFILE SETUP ---
-function ReklamachiProfileSetup({userId, onDone, t, lang}) {
-  const LOCATIONS = lang==="ru"?LOCATIONS_RU:LOCATIONS_UZ;
-  const [d, setD] = useState({
-    platform:"", username:"", profile_link:"",
-    followers:0, engagement:0,
-    price_post:0, price_story:0, price_video:0,
-    audience_ages:[], audience_gender:"all",
-    audience_location:"all", interests:[],
-  });
-  const tog=(k,v)=>setD(p=>({...p,[k]:p[k].includes(v)?p[k].filter(x=>x!==v):[...p[k],v]}));
-  const num=(k,v)=>setD(p=>({...p,[k]:+v}));
+        <Input label={t.budget} value={budget} onChange={setBudget} type="number" placeholder="1000000"/>
+        <Input label={t.minFollowers} value={minFollowers} onChange={setMinFollowers} type="number" placeholder="1000"/>
+        <Input label={t.goal} value={campaignGoal} onChange={setCampaignGoal} placeholder={lang==="uz"?"Brend tanishtirish...":"Знакомство с брендом..."}/>
 
-  const NInput = ({label, k, placeholder, required=false})=>(
-    <div style={{marginBottom:14}}>
-      <label style={{display:"block",fontSize:11,color:C.sub,marginBottom:5,fontWeight:600,letterSpacing:"0.5px",textTransform:"uppercase"}}>{label}</label>
-      <input type="number" value={d[k]||""} onChange={e=>num(k,e.target.value)} placeholder={placeholder}
-        style={{width:"100%",padding:"11px 14px",borderRadius:10,border:`1.5px solid ${C.border}`,
-          background:"#0F172A",color:C.text,fontSize:14,outline:"none",boxSizing:"border-box",fontFamily:"inherit"}}/>
+        <div className="flex gap-3 mt-4">
+          <Btn onClick={()=>setStep(2)} color="gray" full>{t.back}</Btn>
+          <Btn onClick={handleNext} color="green" full disabled={saving||!sector}>{saving?t.saving:t.save}</Btn>
+        </div>
+      </div>
     </div>
   );
 
-  const steps = [
-    {
-      title:t.platform, sub:t.platformSub,
-      valid:()=>!!d.platform,
-      content:(
-        <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:8}}>
-          {PLATFORMS.map(p=>(
-            <button key={p.v} onClick={()=>setD(pr=>({...pr,platform:p.v}))} style={{
-              padding:"12px 8px",borderRadius:10,
-              border:`2px solid ${d.platform===p.v?C.blue:C.border}`,
-              background:d.platform===p.v?C.blue+"33":"#111827",
-              color:d.platform===p.v?"#93C5FD":"#9CA3AF",
-              cursor:"pointer",fontSize:13,fontWeight:500,fontFamily:"inherit"}}>
+  // Step 4: Reklamachi
+  if (role === "reklamachi") return (
+    <div className="min-h-screen bg-gray-50 p-4 pb-8">
+      <div className="max-w-sm mx-auto">
+        <h2 className="font-bold text-lg mb-4">📢 {lang==="uz"?"Reklama ma'lumotlari":"Данные рекламы"}</h2>
+
+        <label className="block text-sm font-medium text-gray-600 mb-2">{t.platform}</label>
+        <div className="grid grid-cols-2 gap-2 mb-4">
+          {[...PLATFORMS_ONLINE,...PLATFORMS_OFFLINE].map(p=>(
+            <button key={p.v} onClick={()=>setPlatform(p.v)}
+              className={`py-2.5 px-3 rounded-xl text-sm border font-medium ${platform===p.v?"bg-blue-500 text-white border-blue-500":"bg-white text-gray-600 border-gray-200"}`}>
               {p.l}
             </button>
           ))}
         </div>
-      ),
-    },
-    {
-      title:t.profileInfo, sub:t.profileInfoSub,
-      valid:()=>!!d.username&&d.followers>0,
-      content:(
-        <>
-          <Input label={t.username} value={d.username} onChange={v=>setD(p=>({...p,username:v}))} placeholder="@username"/>
-          <Input label={t.profileLink} value={d.profile_link} onChange={v=>setD(p=>({...p,profile_link:v}))} placeholder="https://instagram.com/..."/>
-          <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:12}}>
-            <NInput label={t.followersCount} k="followers" placeholder="50000"/>
-            <NInput label={t.engagement} k="engagement" placeholder="5.2"/>
-          </div>
-        </>
-      ),
-    },
-    {
-      title:t.prices, sub:t.pricesSub,
-      valid:()=>d.price_post>0,
-      content:(
-        <>
-          <NInput label={t.postPrice} k="price_post" placeholder="500000"/>
-          <NInput label={t.storyPrice} k="price_story" placeholder="300000"/>
-          <NInput label={t.videoPrice} k="price_video" placeholder="1000000"/>
-        </>
-      ),
-    },
-    {
-      title:t.audienceInfo, sub:t.audienceInfoSub,
-      valid:()=>d.audience_ages.length>0,
-      content:(
-        <>
-          <div style={{color:"#9CA3AF",fontSize:12,fontWeight:600,marginBottom:8,textTransform:"uppercase",letterSpacing:"0.5px"}}>{t.ageMain}</div>
-          <div style={{display:"flex",flexWrap:"wrap",gap:8,marginBottom:18}}>
-            {AGES.map(a=><Chip key={a.v} label={a.l} selected={d.audience_ages.includes(a.v)} onClick={()=>tog("audience_ages",a.v)}/>)}
-          </div>
-          <div style={{color:"#9CA3AF",fontSize:12,fontWeight:600,marginBottom:8,textTransform:"uppercase",letterSpacing:"0.5px"}}>{t.genderMain}</div>
-          <div style={{display:"flex",gap:8,marginBottom:18}}>
-            {[{l:t.male,v:"male"},{l:t.female,v:"female"},{l:t.mixed,v:"all"}].map(g=>(
-              <Chip key={g.v} label={g.l} selected={d.audience_gender===g.v} onClick={()=>setD(p=>({...p,audience_gender:g.v}))}/>
-            ))}
-          </div>
-          <div style={{color:"#9CA3AF",fontSize:12,fontWeight:600,marginBottom:8,textTransform:"uppercase",letterSpacing:"0.5px"}}>{t.locationMain}</div>
-          <div style={{display:"flex",flexWrap:"wrap",gap:8}}>
-            {LOCATIONS.map(l=>(
-              <Chip key={l.v} label={l.l} selected={d.audience_location===l.v} onClick={()=>setD(p=>({...p,audience_location:l.v}))}/>
-            ))}
-          </div>
-        </>
-      ),
-    },
-    {
-      title:t.interestsAud, sub:t.interestsAudSub,
-      valid:()=>d.interests.length>0,
-      content:(
-        <div style={{display:"flex",flexWrap:"wrap",gap:8}}>
-          {INTERESTS.map(i=><Chip key={i} label={i} selected={d.interests.includes(i)} onClick={()=>tog("interests",i)}/>)}
-        </div>
-      ),
-    },
-  ];
 
-  return (
-    <Wizard t={t} steps={steps} onFinish={async()=>{
-      await api.post(`/api/reklamachi-profiles/${userId}`, d);
-      onDone();
-    }}/>
-  );
-}
-
-// --- MATCH CARD ---
-function MatchCard({item, role, userId, t}) {
-  const [offered, setOffered] = useState(false);
-  const [loading, setLoading] = useState(false);
-  const [exp, setExp] = useState(false);
-
-  const sendOffer = async () => {
-    setLoading(true);
-    try {
-      await api.post("/api/offers", {from_id:userId, to_id:item.user_id||item.uid, message:t.offerMsg});
-      setOffered(true);
-    } catch(e) {
-      if(e.message.includes("Allaqachon")||e.message.includes("уже")) setOffered(true);
-      else alert(e.message);
-    }
-    setLoading(false);
-  };
-
-  const pLabel = PLATFORMS.find(p=>p.v===item.platform)?.l || item.platform;
-  const SECTORS = SECTORS_UZ;
-  const sLabel = SECTORS.find(s=>s.v===item.sector)?.l || item.sector;
-
-  return (
-    <Card style={{position:"relative",overflow:"hidden"}}>
-      {item.is_premium ? (
-        <div style={{position:"absolute",top:0,right:0,
-          background:`linear-gradient(135deg,${C.gold},#D97706)`,
-          padding:"3px 10px",borderRadius:"0 14px 0 10px",fontSize:10,fontWeight:700,color:"#fff"}}>
-          ⭐ PREMIUM
-        </div>
-      ):null}
-      <div style={{display:"flex",gap:12,alignItems:"flex-start"}}>
-        <Avatar role={role==="tadbirkor"?"reklamachi":"tadbirkor"}/>
-        <div style={{flex:1,minWidth:0}}>
-          <div style={{display:"flex",justifyContent:"space-between",alignItems:"center"}}>
-            <span style={{color:C.text,fontWeight:700,fontSize:15,overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap",maxWidth:160}}>
-              {item.full_name}
-            </span>
-            <ScoreRing score={item.match_score}/>
-          </div>
-          <div style={{marginTop:4,display:"flex",gap:6,flexWrap:"wrap",alignItems:"center"}}>
-            {role==="tadbirkor"?(
-              <><Badge color={C.blue}>{pLabel}</Badge><Badge color="#8B5CF6">{fmt(item.followers)} {t.obs}</Badge></>
-            ):(
-              <Badge color={C.green}>{sLabel}</Badge>
+        {platform && (
+          <>
+            {isOnline && (
+              <div className="bg-blue-50 border border-blue-200 rounded-xl p-3 mb-4">
+                <p className="text-xs text-blue-700 font-medium">ℹ️ {t.verifyNote}</p>
+              </div>
             )}
-            <StarRating rating={item.rating||5}/>
-          </div>
-        </div>
-      </div>
-
-      {role==="tadbirkor" && (
-        <div style={{marginTop:12,display:"grid",gridTemplateColumns:"1fr 1fr 1fr",gap:6}}>
-          {[{l:"Post",v:item.price_post},{l:"Story",v:item.price_story},{l:"Video",v:item.price_video}].map(p=>(
-            <div key={p.l} style={{textAlign:"center",background:"#0F172A",borderRadius:8,padding:"8px 4px"}}>
-              <div style={{color:C.sub,fontSize:10}}>{p.l}</div>
-              <div style={{color:C.text,fontSize:11,fontWeight:600,marginTop:2}}>{fmtPrice(p.v)}</div>
+            {isOnline && (
+              <>
+                <Input label={`${t.profileLink} (${lang==="uz"?"masalan":"например"}: instagram.com/username)`}
+                  value={profileLink} onChange={setProfileLink} placeholder="https://instagram.com/username"/>
+                <Input label={t.followers} value={followers} onChange={setFollowers} type="number" placeholder="10000"/>
+                <Input label={t.engagement} value={engagement} onChange={setEngagement} type="number" placeholder="3.5"/>
+              </>
+            )}
+            {isOffline && (
+              <>
+                <Input label={t.address} value={address} onChange={setAddress} placeholder={lang==="uz"?"Toshkent, Chilonzor...":"Ташкент, Чиланзар..."}/>
+                <Input label={t.coordinates} value={coordinates} onChange={setCoordinates} placeholder="41.2995, 69.2401"/>
+              </>
+            )}
+            <Input label={t.pricePost} value={pricePost} onChange={setPricePost} type="number" placeholder="150000"/>
+            {isOnline && <>
+              <Input label={t.priceStory} value={priceStory} onChange={setPriceStory} type="number" placeholder="80000"/>
+              <Input label={t.priceVideo} value={priceVideo} onChange={setPriceVideo} type="number" placeholder="300000"/>
+            </>}
+            <Input label={t.priceDesc} value={priceDesc} onChange={setPriceDesc} placeholder={lang==="uz"?"Narx haqida qo'shimcha...":"Дополнительно о цене..."}/>
+            <TagSelect options={AGE_OPTIONS} selected={audAges} onChange={setAudAges} label={t.audienceAges}/>
+            <div className="mb-3">
+              <label className="block text-sm font-medium text-gray-600 mb-2">{t.audienceGender}</label>
+              <div className="flex gap-2">
+                {[["all",t.genderAll],["male",t.genderM],["female",t.genderF]].map(([v,l])=>(
+                  <button key={v} onClick={()=>setAudGender(v)}
+                    className={`flex-1 py-2 rounded-xl text-sm border ${audGender===v?"bg-blue-500 text-white border-blue-500":"bg-white text-gray-600 border-gray-200"}`}>{l}</button>
+                ))}
+              </div>
             </div>
-          ))}
-        </div>
-      )}
+            <div className="mb-3">
+              <label className="block text-sm font-medium text-gray-600 mb-2">{t.audienceLocation}</label>
+              <select value={audLoc} onChange={e=>setAudLoc(e.target.value)} className="w-full px-3 py-2.5 rounded-xl border border-gray-200 bg-white text-sm">
+                {LOCATIONS.map(l=><option key={l.v} value={l.v}>{l.l}</option>)}
+              </select>
+            </div>
+            <TagSelect options={(SECTOR_INTERESTS.default).map(i=>({v:i,l:i}))}
+              selected={rekInterests} onChange={setRekInterests} max={3} label={`${t.interests} (max 3)`}/>
+          </>
+        )}
 
-      {exp && (
-        <div style={{marginTop:10,padding:"10px 12px",background:"#0F172A",borderRadius:8}}>
-          {item.engagement>0&&<div style={{color:C.sub,fontSize:12,marginBottom:4}}>ER: <span style={{color:C.green,fontWeight:600}}>{item.engagement}%</span></div>}
-          {item.campaign_goal&&<div style={{color:C.sub,fontSize:12}}>Maqsad: <span style={{color:C.text}}>{item.campaign_goal}</span></div>}
-          {item.profile_link&&<div style={{color:C.sub,fontSize:12,marginTop:4}}>Link: <a href={item.profile_link} style={{color:C.blue}} target="_blank" rel="noreferrer">{item.profile_link}</a></div>}
+        <div className="flex gap-3 mt-4">
+          <Btn onClick={()=>setStep(2)} color="gray" full>{t.back}</Btn>
+          <Btn onClick={handleNext} color="green" full disabled={saving||!platform}>{saving?t.saving:t.save}</Btn>
         </div>
-      )}
-
-      <div style={{display:"flex",gap:8,marginTop:12}}>
-        <Btn sm v="ghost" onClick={()=>setExp(!exp)}>{exp?t.less:t.detail}</Btn>
-        <Btn sm v={offered?"ghost":"primary"} disabled={offered||loading} onClick={sendOffer}>
-          {loading?"⏳":offered?t.sent:t.sendOffer}
-        </Btn>
       </div>
-    </Card>
-  );
-}
-
-// --- MATCH PAGE ---
-function MatchPage({userId, role, t}) {
-  const [matches, setMatches] = useState([]);
-  const [loading, setLoading] = useState(true);
-  const [filter, setFilter] = useState("all");
-
-  useEffect(()=>{
-    api.get(`/api/match/${userId}`).then(setMatches).catch(console.error).finally(()=>setLoading(false));
-  },[userId]);
-
-  const filtered = filter==="top"?matches.filter(m=>m.match_score>=70)
-    :filter==="premium"?matches.filter(m=>m.is_premium):matches;
-
-  return (
-    <div style={{padding:"20px 16px 100px"}}>
-      <div style={{marginBottom:18}}>
-        <h2 style={{color:C.text,fontSize:20,fontWeight:800,margin:0}}>
-          {role==="tadbirkor"?"🎯 Reklamachilar":"🏢 Tadbirkorlar"}
-        </h2>
-        <p style={{color:C.sub,fontSize:12,margin:"4px 0 0"}}>{t.aiMatch} — {matches.length} {t.found}</p>
-      </div>
-      <div style={{display:"flex",gap:8,marginBottom:16,overflowX:"auto",paddingBottom:4}}>
-        {[{v:"all",l:t.all},{v:"top",l:t.top},{v:"premium",l:t.premium}].map(f=>(
-          <Chip key={f.v} label={f.l} selected={filter===f.v} onClick={()=>setFilter(f.v)}/>
-        ))}
-      </div>
-      {loading?(
-        <div style={{textAlign:"center",padding:60,color:C.sub}}>
-          <div style={{fontSize:36,marginBottom:12}}>⏳</div><p>{t.searching}</p>
-        </div>
-      ):filtered.length===0?(
-        <div style={{textAlign:"center",padding:60}}>
-          <div style={{fontSize:48,marginBottom:12}}>🔍</div>
-          <p style={{color:C.sub}}>{t.noMatch}</p>
-          <p style={{color:"#4B5563",fontSize:12}}>{t.noMatchSub}</p>
-        </div>
-      ):filtered.map((item,i)=>(
-        <MatchCard key={i} item={item} role={role} userId={userId} t={t}/>
-      ))}
     </div>
   );
+
+  return null;
 }
 
-// --- OFFERS PAGE ---
-function OffersPage({userId, t}) {
-  const [offers, setOffers] = useState([]);
-  const [loading, setLoading] = useState(true);
-  const [tab, setTab] = useState("incoming");
+// ==================== MATCH ====================
 
-  const load = useCallback(()=>{
+function MatchPage({user, lang}) {
+  const t = T[lang];
+  const [matches, setMatches] = useState([]);
+  const [loading, setLoading] = useState(false);
+  const [platformFilter, setPlatformFilter] = useState("");
+  const [selected, setSelected] = useState(null);
+  const [offerModal, setOfferModal] = useState(null);
+  const [offerMsg, setOfferMsg] = useState("");
+  const [detailModal, setDetailModal] = useState(null);
+  const [freeUsed, setFreeUsed] = useState(false);
+
+  const load = useCallback(async (filter="") => {
     setLoading(true);
-    api.get(`/api/offers/${userId}`).then(setOffers).catch(console.error).finally(()=>setLoading(false));
-  },[userId]);
+    try {
+      const url = filter && filter!=="midas"
+        ? `/api/match/${user.telegram_id}?platform_filter=${filter}`
+        : `/api/match/${user.telegram_id}`;
+      const res = await api(url);
+      setMatches(Array.isArray(res) ? res : []);
+    } catch {}
+    setLoading(false);
+  }, [user]);
 
-  useEffect(()=>{load();},[load]);
+  useEffect(() => {
+    if (user.role === "reklamachi") { load(); }
+    // Check free offer
+    if (user.role === "reklamachi") {
+      api(`/api/reklamachi-profiles/${user.telegram_id}`)
+        .then(r => setFreeUsed(!!r.free_offer_used)).catch(()=>{});
+    }
+  }, [user, load]);
 
-  const updateStatus = async(offerId,status)=>{
-    try { await api.put(`/api/offers/${offerId}/status`,{status}); load(); }
-    catch(e){alert(e.message);}
+  const sendOffer = async (isFree=false) => {
+    try {
+      await api("/api/offers", "POST", {
+        from_id: user.telegram_id,
+        to_id: offerModal.uid || offerModal.user_id,
+        message: offerMsg,
+        is_free: isFree ? 1 : 0
+      });
+      setOfferModal(null); setOfferMsg("");
+      if (isFree) setFreeUsed(true);
+      alert(lang==="uz"?"Taklif yuborildi! ✅":"Предложение отправлено! ✅");
+    } catch(e) { alert(e.message); }
   };
 
-  const incoming = offers.filter(o=>o.to_id===userId&&o.status==="pending");
-  const outgoing = offers.filter(o=>o.from_id===userId);
-  const accepted = offers.filter(o=>(o.from_id===userId||o.to_id===userId)&&o.status==="accepted");
-  const tabs=[{v:"incoming",l:`${t.incoming} (${incoming.length})`},{v:"outgoing",l:`${t.outgoing} (${outgoing.length})`},{v:"accepted",l:`${t.accepted} (${accepted.length})`}];
-  const current = tab==="incoming"?incoming:tab==="outgoing"?outgoing:accepted;
-  const SC={pending:C.gold,accepted:C.green,rejected:C.red};
-  const SL={pending:t.pending,accepted:t.acceptedStatus,rejected:t.rejected};
+  const matchColor = (score) => {
+    if (score >= 80) return "bg-green-100 text-green-700";
+    if (score >= 60) return "bg-blue-100 text-blue-700";
+    if (score >= 40) return "bg-yellow-100 text-yellow-700";
+    return "bg-gray-100 text-gray-600";
+  };
 
-  return (
-    <div style={{padding:"20px 16px 100px"}}>
-      <h2 style={{color:C.text,fontSize:20,fontWeight:800,margin:"0 0 14px"}}>📨 {t.offers}</h2>
-      <div style={{display:"flex",gap:6,marginBottom:16,overflowX:"auto",paddingBottom:4}}>
-        {tabs.map(tb=>(
-          <button key={tb.v} onClick={()=>setTab(tb.v)} style={{
-            padding:"7px 14px",borderRadius:20,border:"none",whiteSpace:"nowrap",
-            background:tab===tb.v?C.blue:"#111827",color:tab===tb.v?"#fff":"#9CA3AF",
-            cursor:"pointer",fontSize:12,fontWeight:600,fontFamily:"inherit"}}>
-            {tb.l}
+  // Tadbirkor uchun platforma tanlash ekrani
+  if (user.role === "tadbirkor" && !platformFilter) return (
+    <div className="p-4">
+      <h2 className="font-bold text-lg mb-4">🎯 {t.whereAdvert}</h2>
+      <div className="grid grid-cols-2 gap-3">
+        {MATCH_PLATFORMS.map(p => (
+          <button key={p.v} onClick={()=>{ setPlatformFilter(p.v); load(p.v); }}
+            className="bg-white border-2 border-gray-200 hover:border-blue-400 rounded-xl p-3 text-center font-medium text-sm transition-all active:scale-95">
+            {p.l}
           </button>
         ))}
       </div>
-      {loading?<div style={{textAlign:"center",padding:40,color:C.sub}}>{t.searching}</div>
-        :current.length===0?(
-          <div style={{textAlign:"center",padding:60}}>
-            <div style={{fontSize:48,marginBottom:12}}>📭</div>
-            <p style={{color:C.sub}}>{t.noOffers}</p>
-          </div>
-        ):current.map(o=>(
-          <Card key={o.id}>
-            <div style={{display:"flex",justifyContent:"space-between",alignItems:"flex-start",marginBottom:8}}>
-              <div>
-                <div style={{color:C.text,fontWeight:700,fontSize:15}}>
-                  {tab==="incoming"?o.from_name:o.to_name}
-                </div>
-                <div style={{color:C.sub,fontSize:11,marginTop:2}}>{timeAgo(o.created_at,t)} {t.ago}</div>
-              </div>
-              <Badge color={SC[o.status]}>{SL[o.status]}</Badge>
-            </div>
-            {o.message&&(
-              <p style={{color:"#9CA3AF",fontSize:13,margin:"0 0 12px",lineHeight:1.5,
-                background:"#0F172A",padding:"10px 12px",borderRadius:8}}>
-                {o.message}
-              </p>
-            )}
-            {tab==="incoming"&&o.status==="pending"&&(
-              <div style={{display:"flex",gap:8}}>
-                <Btn sm v="success" onClick={()=>updateStatus(o.id,"accepted")}>{t.accept}</Btn>
-                <Btn sm v="danger" onClick={()=>updateStatus(o.id,"rejected")}>{t.reject}</Btn>
-              </div>
-            )}
-            {o.status==="accepted"&&!o.rated&&(
-              <div>
-                <p style={{color:C.sub,fontSize:12,margin:"0 0 6px"}}>{t.rate}</p>
-                <div style={{display:"flex",gap:6}}>
-                  {[1,2,3,4,5].map(r=>(
-                    <button key={r} onClick={async()=>{
-                      try{await api.post(`/api/offers/${o.id}/rate`,{offer_id:o.id,rating:r});load();}
-                      catch(e){alert(e.message);}
-                    }} style={{width:34,height:34,borderRadius:8,border:`1.5px solid ${C.border}`,
-                      background:"#111827",color:C.gold,cursor:"pointer",fontSize:16,fontFamily:"inherit"}}>⭐</button>
-                  ))}
-                </div>
-              </div>
-            )}
-          </Card>
-        ))}
     </div>
   );
-}
 
-// --- CHAT PAGE ---
-function ChatPage({userId, t}) {
-  const [chats, setChats] = useState([]);
-  const [active, setActive] = useState(null);
-  const [messages, setMessages] = useState([]);
-  const [text, setText] = useState("");
-  const [loading, setLoading] = useState(true);
-  const msgEnd = useRef(null);
-  const pollRef = useRef(null);
+  // Reklamachi uchun tugmalar
+  const rekButtons = user.role === "reklamachi" && (
+    <div className="flex gap-2 mb-4 flex-wrap">
+      <Btn onClick={()=>load()} color={!platformFilter?"blue":"gray"} small>{t.bestMatch}</Btn>
+      <Btn onClick={()=>{setPlatformFilter("all");load("all");}} color={platformFilter==="all"?"blue":"gray"} small>{t.allPartners}</Btn>
+    </div>
+  );
 
-  const loadChats = useCallback(()=>{
-    api.get(`/api/chats/${userId}`).then(setChats).catch(console.error).finally(()=>setLoading(false));
-  },[userId]);
-
-  useEffect(()=>{loadChats();},[loadChats]);
-
-  const openChat = async(chat)=>{
-    setActive(chat);
-    const msgs = await api.get(`/api/chats/${chat.id}/messages`);
-    setMessages(msgs);
-    await api.put(`/api/chats/${chat.id}/read`,{tg_id:userId});
-    setTimeout(()=>msgEnd.current?.scrollIntoView({behavior:"smooth"}),100);
-    // Polling
-    clearInterval(pollRef.current);
-    pollRef.current = setInterval(async()=>{
-      const m = await api.get(`/api/chats/${chat.id}/messages`);
-      setMessages(m);
-    }, 3000);
-  };
-
-  useEffect(()=>()=>clearInterval(pollRef.current),[]);
-
-  const sendMsg = async()=>{
-    if(!text.trim()||!active) return;
-    const txt=text; setText("");
-    try {
-      await api.post("/api/messages",{chat_id:active.id,sender_id:userId,receiver_id:active.partner_id,message_text:txt});
-      const msgs = await api.get(`/api/chats/${active.id}/messages`);
-      setMessages(msgs);
-      setTimeout(()=>msgEnd.current?.scrollIntoView({behavior:"smooth"}),50);
-    } catch(e){alert(e.message);}
-  };
-
-  if(active) return (
-    <div style={{display:"flex",flexDirection:"column",height:"100vh",background:C.bg}}>
-      <div style={{padding:"12px 16px",background:"#111827",borderBottom:`1px solid ${C.border}`,
-        display:"flex",alignItems:"center",gap:12}}>
-        <button onClick={()=>{setActive(null);clearInterval(pollRef.current);loadChats();}}
-          style={{background:"none",border:"none",color:"#9CA3AF",cursor:"pointer",fontSize:22,padding:0}}>←</button>
-        <div style={{width:36,height:36,borderRadius:10,background:`linear-gradient(135deg,${C.blue},${C.indigo})`,
-          display:"flex",alignItems:"center",justifyContent:"center",fontSize:18}}>💬</div>
-        <div>
-          <div style={{color:C.text,fontWeight:700,fontSize:15}}>{active.partner_name}</div>
-          <div style={{color:C.sub,fontSize:11}}>{t.online}</div>
+  return (
+    <div className="p-4">
+      {user.role === "tadbirkor" && platformFilter && (
+        <div className="flex items-center gap-2 mb-4">
+          <button onClick={()=>setPlatformFilter("")} className="text-blue-500 text-sm">← {t.back}</button>
+          <span className="font-bold">{MATCH_PLATFORMS.find(p=>p.v===platformFilter)?.l}</span>
         </div>
-      </div>
-      <div style={{flex:1,overflowY:"auto",padding:16,display:"flex",flexDirection:"column",gap:8}}>
-        {messages.length===0&&(
-          <div style={{textAlign:"center",color:C.sub,fontSize:13,marginTop:40}}>
-            <div style={{fontSize:36,marginBottom:8}}>💬</div>{t.typeMessage}
-          </div>
-        )}
-        {messages.map(m=>{
-          const mine=m.sender_id===userId;
+      )}
+      {rekButtons}
+      {loading && <div className="text-center py-8 text-gray-400">{t.loading}</div>}
+      {!loading && matches.length===0 && <div className="text-center py-8 text-gray-400">{t.noMatches}</div>}
+      <div className="flex flex-col gap-3">
+        {matches.map((m,i) => {
+          const partnerId = m.uid || m.user_id;
+          const name = m.full_name || "";
+          const score = m.match_score || 0;
           return (
-            <div key={m.id} style={{display:"flex",justifyContent:mine?"flex-end":"flex-start"}}>
-              <div style={{maxWidth:"75%",padding:"10px 14px",
-                borderRadius:mine?"14px 14px 4px 14px":"14px 14px 14px 4px",
-                background:mine?`linear-gradient(135deg,${C.blue},${C.indigo})`:"#111827",
-                color:C.text,fontSize:14,lineHeight:1.5}}>
-                {m.message_text}
-                <div style={{fontSize:10,color:mine?"#BFDBFE":C.sub,marginTop:4,textAlign:"right"}}>
-                  {timeAgo(m.created_at,t)} {t.ago}
+            <div key={i} className="bg-white rounded-2xl shadow-sm border border-gray-100 p-4">
+              <div className="flex justify-between items-start mb-2">
+                <div>
+                  <span className="font-bold text-gray-800">{name}</span>
+                  {m.is_premium===1 && <span className="ml-2 text-xs bg-yellow-100 text-yellow-700 px-2 py-0.5 rounded-full">⭐ Premium</span>}
                 </div>
+                <span className={`text-xs font-bold px-2 py-1 rounded-full ${matchColor(score)}`}>{score}% {t.matchScore}</span>
+              </div>
+              {user.role==="tadbirkor" && (
+                <div className="text-sm text-gray-500 mb-3">
+                  <div>{PLATFORMS_ALL.find(p=>p.v===m.platform)?.l}</div>
+                  {m.followers>0 && <div>{m.followers?.toLocaleString()} {lang==="uz"?"obunachi":"подписчиков"}</div>}
+                  {m.engagement>0 && <div>ER: {m.engagement}%</div>}
+                  {m.price_post>0 && <div>{m.price_post?.toLocaleString()} {lang==="uz"?"so'm/post":"сум/пост"}</div>}
+                  {m.address && <div>📍 {m.address}</div>}
+                  <div className="mt-1">{m.verified ? t.verified : t.notVerified}</div>
+                </div>
+              )}
+              {user.role==="reklamachi" && (
+                <div className="text-sm text-gray-500 mb-3">
+                  <div>{SECTORS.find(s=>s.v===m.sector)?.l}</div>
+                  {m.max_budget>0 && <div>{lang==="uz"?"Byudjet":"Бюджет"}: {m.max_budget?.toLocaleString()} {lang==="uz"?"so'm":"сум"}</div>}
+                  {m.campaign_goal && <div>{m.campaign_goal}</div>}
+                </div>
+              )}
+              <div className="flex gap-2 flex-wrap">
+                <Btn onClick={()=>setDetailModal(m)} color="ghost" small>{t.details}</Btn>
+                <Btn onClick={()=>setOfferModal(m)} color="blue" small>{t.sendOffer}</Btn>
+                {user.role==="reklamachi" && !freeUsed && (
+                  <Btn onClick={()=>{setOfferModal(m);}} color="green" small>{t.freeOfferBtn}</Btn>
+                )}
               </div>
             </div>
           );
         })}
-        <div ref={msgEnd}/>
       </div>
-      <div style={{padding:"12px 16px",background:"#111827",borderTop:`1px solid ${C.border}`,
-        display:"flex",gap:10,alignItems:"center"}}>
-        <input value={text} onChange={e=>setText(e.target.value)}
-          onKeyDown={e=>e.key==="Enter"&&sendMsg()}
-          placeholder={t.typeMessage}
-          style={{flex:1,padding:"10px 14px",borderRadius:20,border:`1.5px solid ${C.border}`,
-            background:"#0F172A",color:C.text,fontSize:14,outline:"none",fontFamily:"inherit"}}/>
-        <button onClick={sendMsg} style={{width:40,height:40,borderRadius:12,
-          background:`linear-gradient(135deg,${C.blue},${C.indigo})`,
-          border:"none",cursor:"pointer",fontSize:18,display:"flex",alignItems:"center",justifyContent:"center"}}>
-          ➤
-        </button>
-      </div>
-    </div>
-  );
 
-  return (
-    <div style={{padding:"20px 16px 100px"}}>
-      <h2 style={{color:C.text,fontSize:20,fontWeight:800,margin:"0 0 14px"}}>💬 {t.chats}</h2>
-      {loading?<div style={{textAlign:"center",padding:40,color:C.sub}}>{t.searching}</div>
-        :chats.length===0?(
-          <div style={{textAlign:"center",padding:60}}>
-            <div style={{fontSize:48,marginBottom:12}}>💬</div>
-            <p style={{color:C.sub}}>{t.noChats}</p>
-            <p style={{color:"#4B5563",fontSize:12}}>{t.noChatsSub}</p>
+      {/* Offer Modal */}
+      {offerModal && (
+        <Modal title={t.sendOffer} onClose={()=>setOfferModal(null)}>
+          <p className="text-gray-600 mb-3">{offerModal.full_name}</p>
+          <textarea value={offerMsg} onChange={e=>setOfferMsg(e.target.value)} rows={4}
+            placeholder={t.offerMsg}
+            className="w-full px-3 py-2 rounded-xl border border-gray-200 text-sm mb-3 focus:outline-none focus:border-blue-400"/>
+          <div className="flex flex-col gap-2">
+            <Btn onClick={()=>sendOffer(false)} color="blue" full>{t.sendOffer}</Btn>
+            {user.role==="reklamachi" && !freeUsed && (
+              <Btn onClick={()=>sendOffer(true)} color="green" full>{t.freeOffer}</Btn>
+            )}
           </div>
-        ):chats.map(chat=>(
-          <Card key={chat.id} style={{cursor:"pointer"}} >
-            <div onClick={()=>openChat(chat)} style={{display:"flex",gap:12,alignItems:"center"}}>
-              <div style={{width:46,height:46,borderRadius:12,
-                background:`linear-gradient(135deg,${C.blue},${C.indigo})`,
-                display:"flex",alignItems:"center",justifyContent:"center",fontSize:22}}>💬</div>
-              <div style={{flex:1,minWidth:0}}>
-                <div style={{display:"flex",justifyContent:"space-between",alignItems:"center"}}>
-                  <span style={{color:C.text,fontWeight:700,fontSize:15}}>{chat.partner_name}</span>
-                  {chat.unread>0&&(
-                    <span style={{background:C.blue,color:"#fff",borderRadius:10,padding:"2px 8px",fontSize:11,fontWeight:700}}>{chat.unread}</span>
-                  )}
-                </div>
-                <div style={{color:C.sub,fontSize:12,marginTop:2,overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap"}}>
-                  {chat.last_message||"..."}
-                </div>
-              </div>
-              {chat.last_message_time&&(
-                <span style={{color:"#4B5563",fontSize:11,flexShrink:0}}>{timeAgo(chat.last_message_time,t)}</span>
-              )}
-            </div>
-          </Card>
-        ))}
+        </Modal>
+      )}
+
+      {/* Detail Modal */}
+      {detailModal && (
+        <Modal title={detailModal.full_name} onClose={()=>setDetailModal(null)}>
+          <div className="space-y-2 text-sm">
+            {detailModal.platform && <div><b>{t.platform}:</b> {PLATFORMS_ALL.find(p=>p.v===detailModal.platform)?.l}</div>}
+            {detailModal.profile_link && <div><b>Link:</b> <a href={detailModal.profile_link} className="text-blue-500 break-all">{detailModal.profile_link}</a></div>}
+            {detailModal.followers>0 && <div><b>{t.followers}:</b> {detailModal.followers?.toLocaleString()}</div>}
+            {detailModal.engagement>0 && <div><b>ER:</b> {detailModal.engagement}%</div>}
+            {detailModal.price_post>0 && <div><b>{t.pricePost}:</b> {detailModal.price_post?.toLocaleString()} {lang==="uz"?"so'm":"сум"}</div>}
+            {detailModal.price_story>0 && <div><b>{t.priceStory}:</b> {detailModal.price_story?.toLocaleString()} {lang==="uz"?"so'm":"сум"}</div>}
+            {detailModal.price_video>0 && <div><b>{t.priceVideo}:</b> {detailModal.price_video?.toLocaleString()} {lang==="uz"?"so'm":"сум"}</div>}
+            {detailModal.price_description && <div><b>{t.priceDesc}:</b> {detailModal.price_description}</div>}
+            {detailModal.address && <div><b>{t.address}:</b> {detailModal.address}</div>}
+            {detailModal.sector && <div><b>{t.sector}:</b> {SECTORS.find(s=>s.v===detailModal.sector)?.l}</div>}
+            {detailModal.campaign_goal && <div><b>{t.goal}:</b> {detailModal.campaign_goal}</div>}
+            {detailModal.max_budget>0 && <div><b>{lang==="uz"?"Byudjet":"Бюджет"}:</b> {detailModal.max_budget?.toLocaleString()} {lang==="uz"?"so'm":"сум"}</div>}
+            <div><b>⭐ {lang==="uz"?"Reyting":"Рейтинг"}:</b> {detailModal.rating?.toFixed?.(1)||"5.0"}</div>
+            {detailModal.verified!==undefined && <div>{detailModal.verified ? t.verified : t.notVerified}</div>}
+          </div>
+        </Modal>
+      )}
     </div>
   );
 }
 
-// --- NOTIFICATIONS PAGE ---
-function NotificationsPage({userId, t}) {
-  const [notifs, setNotifs] = useState([]);
-  const [loading, setLoading] = useState(true);
+// ==================== CHATS ====================
 
-  useEffect(()=>{
-    api.get(`/api/notifications/${userId}`).then(setNotifs).catch(console.error).finally(()=>setLoading(false));
-  },[userId]);
+function ChatsPage({user, lang}) {
+  const t = T[lang];
+  const [chats, setChats] = useState([]);
+  const [broadcasts, setBroadcasts] = useState([]);
+  const [openChat, setOpenChat] = useState(null); // {id, partner_name, partner_id}
+  const [messages, setMessages] = useState([]);
+  const [text, setText] = useState("");
+  const [showMidas, setShowMidas] = useState(false);
+  const msgEndRef = useRef();
 
-  const markAll = async()=>{
-    await api.put(`/api/notifications/${userId}/read`);
-    setNotifs(n=>n.map(x=>({...x,is_read:1})));
+  const loadChats = useCallback(async () => {
+    try {
+      const res = await api(`/api/chats/${user.telegram_id}`);
+      setChats(Array.isArray(res) ? res : []);
+    } catch {}
+  }, [user]);
+
+  const loadBroadcasts = useCallback(async () => {
+    try {
+      const res = await api(`/api/broadcasts?tg_id=${user.telegram_id}`);
+      setBroadcasts(Array.isArray(res) ? res : []);
+    } catch {}
+  }, [user]);
+
+  useEffect(() => { loadChats(); loadBroadcasts(); }, [loadChats, loadBroadcasts]);
+
+  const openChatFn = async (chat) => {
+    setOpenChat(chat);
+    try {
+      const res = await api(`/api/chats/${chat.id}/messages`);
+      setMessages(Array.isArray(res) ? res : []);
+      await api(`/api/chats/${chat.id}/read?tg_id=${user.telegram_id}`, "PUT");
+    } catch {}
   };
 
-  const typeIcon={offer:"📩",message:"💬",info:"ℹ️"};
+  useEffect(() => {
+    if (!openChat) return;
+    const iv = setInterval(async () => {
+      const res = await api(`/api/chats/${openChat.id}/messages`).catch(()=>null);
+      if (res) setMessages(Array.isArray(res) ? res : []);
+    }, 3000);
+    return () => clearInterval(iv);
+  }, [openChat]);
 
-  return (
-    <div style={{padding:"20px 16px 100px"}}>
-      <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:16}}>
-        <h2 style={{color:C.text,fontSize:20,fontWeight:800,margin:0}}>🔔 {t.notifications}</h2>
-        <button onClick={markAll} style={{background:"none",border:"none",color:C.blue,fontSize:12,cursor:"pointer",fontFamily:"inherit"}}>{t.markRead}</button>
-      </div>
-      {loading?<div style={{textAlign:"center",padding:40,color:C.sub}}>{t.searching}</div>
-        :notifs.length===0?(
-          <div style={{textAlign:"center",padding:60}}>
-            <div style={{fontSize:48,marginBottom:12}}>🔔</div>
-            <p style={{color:C.sub}}>{t.noNotif}</p>
-          </div>
-        ):notifs.map(n=>(
-          <Card key={n.id} style={{opacity:n.is_read?0.6:1,borderLeft:n.is_read?"none":`3px solid ${C.blue}`}}>
-            <div style={{display:"flex",gap:12,alignItems:"flex-start"}}>
-              <div style={{fontSize:22}}>{typeIcon[n.type]||"🔔"}</div>
-              <div style={{flex:1}}>
-                <div style={{color:C.text,fontWeight:600,fontSize:14}}>{n.title}</div>
-                <div style={{color:"#9CA3AF",fontSize:12,marginTop:3}}>{n.body}</div>
-                <div style={{color:C.sub,fontSize:11,marginTop:4}}>{timeAgo(n.created_at,t)} {t.ago}</div>
-              </div>
-            </div>
-          </Card>
-        ))}
-    </div>
-  );
-}
+  useEffect(() => { msgEndRef.current?.scrollIntoView({behavior:"smooth"}); }, [messages]);
 
-// --- PROFILE PAGE ---
-function ProfilePage({userId, user, role, onEdit, t, lang, onLangChange}) {
-  const [stats, setStats] = useState(null);
-
-  useEffect(()=>{
-    api.get(`/api/users/${userId}/stats`).then(setStats).catch(console.error);
-  },[userId]);
-
-  return (
-    <div style={{padding:"20px 16px 100px"}}>
-      <div style={{textAlign:"center",marginBottom:24}}>
-        <div style={{width:80,height:80,borderRadius:24,
-          background:`linear-gradient(135deg,${C.blue},${C.indigo})`,
-          margin:"0 auto 12px",display:"flex",alignItems:"center",justifyContent:"center",fontSize:36}}>
-          {role==="tadbirkor"?"🏢":"📢"}
-        </div>
-        <h2 style={{color:C.text,fontSize:22,fontWeight:800,margin:0}}>{user?.full_name}</h2>
-        <div style={{display:"flex",gap:8,justifyContent:"center",marginTop:8}}>
-          <Badge color={role==="tadbirkor"?C.green:"#8B5CF6"}>
-            {role==="tadbirkor"?t.tadbirkor:t.reklamachi}
-          </Badge>
-          {user?.is_premium?<Badge color={C.gold}>⭐ Premium</Badge>:null}
-        </div>
-        {user?.rating&&<div style={{marginTop:8}}><StarRating rating={user.rating}/></div>}
-      </div>
-
-      {stats&&(
-        <div style={{display:"grid",gridTemplateColumns:"1fr 1fr 1fr",gap:10,marginBottom:20}}>
-          {[{l:t.deals,v:stats.deals,icon:"🤝"},{l:t.totalOffers,v:stats.total_offers,icon:"📨"},{l:t.totalChats,v:stats.chats,icon:"💬"}].map(s=>(
-            <Card key={s.l} style={{textAlign:"center",padding:"12px 8px"}}>
-              <div style={{fontSize:22,marginBottom:4}}>{s.icon}</div>
-              <div style={{color:C.text,fontSize:22,fontWeight:800}}>{s.v}</div>
-              <div style={{color:C.sub,fontSize:11}}>{s.l}</div>
-            </Card>
-          ))}
-        </div>
-      )}
-
-      <Card>
-        {[{l:"📱 "+t.phone,v:user?.phone||t.notEntered},{l:"🆔 Telegram ID",v:userId},{l:"📅 "+t.regDate,v:user?.created_at?new Date(user.created_at).toLocaleDateString("uz-UZ"):"—"}].map(r=>(
-          <div key={r.l} style={{display:"flex",justifyContent:"space-between",marginBottom:10,paddingBottom:10,borderBottom:`1px solid ${C.border}`}}>
-            <span style={{color:C.sub,fontSize:13}}>{r.l}</span>
-            <span style={{color:C.text,fontSize:13,fontWeight:500}}>{r.v}</span>
-          </div>
-        ))}
-        <div style={{display:"flex",justifyContent:"space-between"}}>
-          <span style={{color:C.sub,fontSize:13}}>🌐 Til</span>
-          <div style={{display:"flex",gap:6}}>
-            <button onClick={()=>onLangChange("uz")} style={{padding:"3px 10px",borderRadius:10,border:`1px solid ${lang==="uz"?C.blue:C.border}`,background:lang==="uz"?C.blue+"33":"transparent",color:lang==="uz"?C.blue:"#9CA3AF",cursor:"pointer",fontSize:11,fontFamily:"inherit"}}>🇺🇿 UZ</button>
-            <button onClick={()=>onLangChange("ru")} style={{padding:"3px 10px",borderRadius:10,border:`1px solid ${lang==="ru"?C.blue:C.border}`,background:lang==="ru"?C.blue+"33":"transparent",color:lang==="ru"?C.blue:"#9CA3AF",cursor:"pointer",fontSize:11,fontFamily:"inherit"}}>🇷🇺 RU</button>
-          </div>
-        </div>
-      </Card>
-
-      <Btn full v="primary" onClick={onEdit}>{t.editProfile}</Btn>
-    </div>
-  );
-}
-
-// --- ADMIN PAGE ---
-function AdminPage({userId, t}) {
-  const [stats, setStats] = useState(null);
-  const [users, setUsers] = useState([]);
-  const [queue, setQueue] = useState([]);
-  const [tab, setTab] = useState("stats");
-  const [loading, setLoading] = useState(true);
-
-  useEffect(()=>{
-    const load = async()=>{
-      try {
-        const [s,u,q] = await Promise.all([
-          api.get(`/api/admin/stats?admin_id=${userId}`),
-          api.get(`/api/admin/users?admin_id=${userId}`),
-          api.get(`/api/admin/verify-queue?admin_id=${userId}`),
-        ]);
-        setStats(s); setUsers(u); setQueue(q);
-      } catch(e){console.error(e);}
-      setLoading(false);
-    };
-    load();
-  },[userId]);
-
-  const refresh = async()=>{
-    const [u,q] = await Promise.all([
-      api.get(`/api/admin/users?admin_id=${userId}`),
-      api.get(`/api/admin/verify-queue?admin_id=${userId}`),
-    ]);
-    setUsers(u); setQueue(q);
+  const sendMsg = async () => {
+    if (!text.trim() || !openChat) return;
+    const t2 = text; setText("");
+    try {
+      await api("/api/messages", "POST", {
+        chat_id: openChat.id,
+        sender_id: user.telegram_id,
+        receiver_id: openChat.partner_id,
+        message_text: t2
+      });
+      const res = await api(`/api/chats/${openChat.id}/messages`);
+      setMessages(Array.isArray(res) ? res : []);
+    } catch {}
   };
 
-  if(loading) return <div style={{textAlign:"center",padding:60,color:C.sub}}>{t.searching}</div>;
-
-  return (
-    <div style={{padding:"20px 16px 100px"}}>
-      <h2 style={{color:C.text,fontSize:20,fontWeight:800,margin:"0 0 14px"}}>🛡 {t.adminPanel}</h2>
-
-      <div style={{display:"flex",gap:6,marginBottom:16,overflowX:"auto",paddingBottom:4}}>
-        {[{v:"stats",l:"📊 Statistika"},{v:"users",l:`👥 ${t.users}`},{v:"verify",l:`✅ ${t.verifyQueue} (${queue.length})`}].map(tb=>(
-          <button key={tb.v} onClick={()=>setTab(tb.v)} style={{
-            padding:"7px 14px",borderRadius:20,border:"none",whiteSpace:"nowrap",
-            background:tab===tb.v?C.blue:"#111827",color:tab===tb.v?"#fff":"#9CA3AF",
-            cursor:"pointer",fontSize:12,fontWeight:600,fontFamily:"inherit"}}>
-            {tb.l}
-          </button>
-        ))}
+  if (openChat) return (
+    <div className="flex flex-col h-screen">
+      <div className="bg-white border-b p-4 flex items-center gap-3 sticky top-0 z-10">
+        <button onClick={()=>{setOpenChat(null);loadChats();}} className="text-blue-500 text-xl">←</button>
+        <span className="font-bold">{openChat.partner_name}</span>
       </div>
-
-      {tab==="stats"&&stats&&(
-        <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:10}}>
-          {[
-            {l:t.totalUsers,v:stats.total_users,icon:"👥"},
-            {l:t.tadbirkor,v:stats.tadbirkorlar,icon:"🏢"},
-            {l:t.reklamachi,v:stats.reklamachilar,icon:"📢"},
-            {l:"⭐ Premium",v:stats.premium,icon:"⭐"},
-            {l:t.totalOffers,v:stats.total_offers,icon:"📨"},
-            {l:t.acceptedOffers,v:stats.accepted_offers,icon:"✅"},
-            {l:t.activeChats,v:stats.active_chats,icon:"💬"},
-            {l:"Xabarlar",v:stats.total_messages,icon:"📝"},
-          ].map(s=>(
-            <Card key={s.l} style={{textAlign:"center",padding:"14px 8px"}}>
-              <div style={{fontSize:24,marginBottom:4}}>{s.icon}</div>
-              <div style={{color:C.text,fontSize:24,fontWeight:800}}>{s.v}</div>
-              <div style={{color:C.sub,fontSize:11}}>{s.l}</div>
-            </Card>
-          ))}
-        </div>
-      )}
-
-      {tab==="users"&&(
-        <div>
-          {users.map(u=>(
-            <Card key={u.telegram_id}>
-              <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:8}}>
-                <div>
-                  <div style={{color:C.text,fontWeight:700,fontSize:14}}>{u.full_name}</div>
-                  <div style={{color:C.sub,fontSize:11}}>ID: {u.telegram_id} | {u.role}</div>
-                </div>
-                <div style={{display:"flex",gap:4,flexWrap:"wrap",justifyContent:"flex-end"}}>
-                  {u.is_premium?<Badge color={C.gold}>⭐</Badge>:null}
-                  {u.is_blocked?<Badge color={C.red}>🚫</Badge>:null}
-                </div>
-              </div>
-              <div style={{display:"flex",gap:6,flexWrap:"wrap"}}>
-                <Btn sm v={u.is_premium?"ghost":"gold"}
-                  onClick={async()=>{
-                    await api.put(`/api/admin/users/${u.telegram_id}/premium`,{admin_id:userId,value:u.is_premium?0:1});
-                    refresh();
-                  }}>
-                  {u.is_premium?t.removePremium:t.givePremium}
-                </Btn>
-                {!u.is_blocked?(
-                  <Btn sm v="danger" onClick={async()=>{
-                    const reason=prompt("Bloklash sababi:");
-                    if(reason!==null){await api.put(`/api/admin/users/${u.telegram_id}/block`,{admin_id:userId,reason});refresh();}
-                  }}>{t.blockUser}</Btn>
-                ):(
-                  <Btn sm v="success" onClick={async()=>{
-                    await api.put(`/api/admin/users/${u.telegram_id}/unblock`,{admin_id:userId});refresh();
-                  }}>{t.unblockUser}</Btn>
-                )}
-              </div>
-            </Card>
-          ))}
-        </div>
-      )}
-
-      {tab==="verify"&&(
-        <div>
-          {queue.length===0?(
-            <div style={{textAlign:"center",padding:40,color:C.sub}}>{t.noQueue}</div>
-          ):queue.map(p=>(
-            <Card key={p.user_id}>
-              <div style={{marginBottom:8}}>
-                <div style={{color:C.text,fontWeight:700,fontSize:14}}>{p.full_name}</div>
-                <div style={{color:C.sub,fontSize:12}}>{p.platform} | {fmt(p.followers)} obs | ER: {p.engagement}%</div>
-                {p.profile_link&&<a href={p.profile_link} style={{color:C.blue,fontSize:12}} target="_blank" rel="noreferrer">{p.profile_link}</a>}
-              </div>
-              <div style={{display:"flex",gap:8}}>
-                <Btn sm v="success" onClick={async()=>{
-                  await api.put(`/api/admin/verify/${p.user_id}`,{admin_id:userId,value:1});refresh();
-                }}>{t.verify}</Btn>
-                <Btn sm v="danger" onClick={async()=>{
-                  await api.put(`/api/admin/verify/${p.user_id}`,{admin_id:userId,value:0});refresh();
-                }}>{t.verifyReject}</Btn>
-              </div>
-            </Card>
-          ))}
-        </div>
-      )}
+      <div className="flex-1 overflow-y-auto p-4 bg-gray-50 space-y-2">
+        {messages.map((m,i) => (
+          <div key={i} className={`flex ${m.sender_id===user.telegram_id?"justify-end":"justify-start"}`}>
+            <div className={`max-w-xs px-3 py-2 rounded-2xl text-sm ${m.sender_id===user.telegram_id?"bg-blue-500 text-white rounded-br-sm":"bg-white text-gray-800 shadow-sm rounded-bl-sm"}`}>
+              {m.message_text}
+              <div className={`text-xs mt-0.5 ${m.sender_id===user.telegram_id?"text-blue-100":"text-gray-400"}`}>{m.created_at?.slice(11,16)}</div>
+            </div>
+          </div>
+        ))}
+        <div ref={msgEndRef}/>
+      </div>
+      <div className="bg-white border-t p-3 flex gap-2">
+        <input value={text} onChange={e=>setText(e.target.value)} onKeyDown={e=>e.key==="Enter"&&sendMsg()}
+          className="flex-1 px-3 py-2 rounded-xl border border-gray-200 text-sm focus:outline-none focus:border-blue-400"
+          placeholder={lang==="uz"?"Xabar yozing...":"Напишите сообщение..."}/>
+        <Btn onClick={sendMsg} color="blue" small>{t.send}</Btn>
+      </div>
     </div>
   );
-}
 
-// --- BOTTOM NAV ---
-function BottomNav({tab, onChange, unread=0, notifCount=0, isAdmin=false}) {
-  const items = [
-    {v:"match",icon:"🎯",label:"Match"},
-    {v:"offers",icon:"📨",label:"Offers",badge:0},
-    {v:"chats",icon:"💬",label:"Chats",badge:unread},
-    {v:"notif",icon:"🔔",label:"Notif",badge:notifCount},
-    {v:"profile",icon:"👤",label:"Profil"},
-  ];
-  if(isAdmin) items.push({v:"admin",icon:"🛡",label:"Admin"});
+  if (showMidas) return (
+    <div className="flex flex-col min-h-screen">
+      <div className="bg-white border-b p-4 flex items-center gap-3 sticky top-0">
+        <button onClick={()=>setShowMidas(false)} className="text-blue-500 text-xl">←</button>
+        <span className="font-bold">📢 MIDAS</span>
+      </div>
+      <div className="flex-1 p-4 space-y-3">
+        {broadcasts.length===0 && <div className="text-center text-gray-400 py-8">{t.noChats}</div>}
+        {broadcasts.map((b,i) => (
+          <div key={i} className="bg-white rounded-xl p-4 shadow-sm border border-gray-100">
+            <div className="flex justify-between text-xs text-gray-400 mb-2">
+              <span>📢 MIDAS Admin</span><span>{b.created_at?.slice(0,16)}</span>
+            </div>
+            <p className="text-sm text-gray-800">{b.message_text}</p>
+          </div>
+        ))}
+      </div>
+    </div>
+  );
 
   return (
-    <div style={{position:"fixed",bottom:0,left:0,right:0,
-      background:"#111827",borderTop:`1px solid ${C.border}`,
-      display:"flex",height:62,zIndex:100}}>
-      {items.map(item=>(
-        <button key={item.v} onClick={()=>onChange(item.v)} style={{
-          flex:1,background:"none",border:"none",cursor:"pointer",
-          display:"flex",flexDirection:"column",alignItems:"center",justifyContent:"center",
-          gap:2,position:"relative"}}>
-          <span style={{fontSize:20}}>{item.icon}</span>
-          <span style={{fontSize:9,fontWeight:600,color:tab===item.v?C.blue:C.sub}}>{item.label}</span>
-          {item.badge>0&&(
-            <span style={{position:"absolute",top:4,right:"calc(50% - 18px)",
-              background:C.red,color:"#fff",borderRadius:10,padding:"1px 5px",fontSize:9,fontWeight:700}}>
-              {item.badge}
-            </span>
-          )}
-          {tab===item.v&&(
-            <div style={{position:"absolute",bottom:0,width:28,height:3,
-              background:C.blue,borderRadius:"3px 3px 0 0"}}/>
-          )}
+    <div className="p-4">
+      <h2 className="font-bold text-lg mb-4">💬 {t.chats}</h2>
+      <button onClick={()=>setShowMidas(true)}
+        className="w-full bg-gradient-to-r from-blue-500 to-purple-600 text-white rounded-xl p-4 mb-4 text-left flex justify-between items-center">
+        <div>
+          <div className="font-bold">{t.midasChat}</div>
+          {broadcasts.length>0 && <div className="text-xs text-blue-100 mt-0.5">{broadcasts[0]?.message_text?.slice(0,40)}...</div>}
+        </div>
+        <span className="text-2xl">›</span>
+      </button>
+      {chats.length===0 && <div className="text-center text-gray-400 py-8">{t.noChats}</div>}
+      {chats.map(chat => (
+        <button key={chat.id} onClick={()=>openChatFn(chat)}
+          className="w-full bg-white rounded-xl p-4 mb-2 text-left shadow-sm border border-gray-100 flex justify-between items-center">
+          <div>
+            <div className="font-medium text-gray-800">{chat.partner_name}</div>
+            {chat.last_message && <div className="text-xs text-gray-400 mt-0.5 truncate max-w-xs">{chat.last_message}</div>}
+          </div>
+          <div className="flex flex-col items-end gap-1">
+            {chat.unread>0 && <span className="bg-blue-500 text-white text-xs rounded-full w-5 h-5 flex items-center justify-center">{chat.unread}</span>}
+            <span className="text-gray-300">›</span>
+          </div>
         </button>
       ))}
     </div>
   );
 }
 
-// ============================================================
-// MAIN APP
-// ============================================================
-export default function App() {
-  const [appState, setAppState] = useState("loading");
-  const [user, setUser] = useState(null);
-  const [tgUser, setTgUser] = useState(null);
-  const [role, setRole] = useState("");
-  const [tab, setTab] = useState("match");
-  const [lang, setLang] = useState("uz");
-  const [notifCount, setNotifCount] = useState(0);
-  const t = T[lang] || T.uz;
+// ==================== OFFERS ====================
 
-  const userId = tgUser?.id || 99999;
-  const ADMIN_LIST = (process.env.REACT_APP_ADMIN_IDS||"").split(",").map(x=>+x).filter(Boolean);
-  const isAdmin = ADMIN_LIST.includes(userId);
+function OffersPage({user, lang}) {
+  const t = T[lang];
+  const [offers, setOffers] = useState([]);
+  const [rateModal, setRateModal] = useState(null);
+  const [rating, setRating] = useState(5);
 
-  useEffect(()=>{
-    if(tg){tg.ready();tg.expand();tg.setHeaderColor("#0A0F1E");tg.setBackgroundColor("#0A0F1E");}
-    const tgU = tg?.initDataUnsafe?.user || {id:99999,first_name:"Demo",username:"demo"};
-    setTgUser(tgU);
+  const load = useCallback(async () => {
+    const res = await api(`/api/offers/${user.telegram_id}`).catch(()=>[]);
+    setOffers(Array.isArray(res) ? res : []);
+  }, [user]);
 
-    const seenLang = localStorage.getItem("midas_lang");
-    if(!seenLang){setAppState("langSelect");return;}
-    setLang(seenLang);
+  useEffect(() => { load(); }, [load]);
 
-    const seenOnb = localStorage.getItem("midas_onb");
-    if(!seenOnb){setAppState("onboarding");return;}
-
-    api.get(`/api/users/${tgU.id}`)
-      .then(u=>{
-        setUser(u); setRole(u.role);
-        setLang(u.lang||seenLang||"uz");
-        setAppState("main");
-      })
-      .catch(()=>setAppState("register"));
-  },[]);
-
-  useEffect(()=>{
-    if(appState!=="main") return;
-    const poll=setInterval(async()=>{
-      try{const r=await api.get(`/api/notifications/${userId}/count`);setNotifCount(r.count);}catch{}
-    },10000);
-    api.get(`/api/notifications/${userId}/count`).then(r=>setNotifCount(r.count)).catch(()=>{});
-    return()=>clearInterval(poll);
-  },[appState,userId]);
-
-  const handleLangChange = async(l)=>{
-    setLang(l);
-    localStorage.setItem("midas_lang",l);
-    try{await api.put(`/api/users/${userId}/lang`,{lang:l});}catch{}
+  const updateStatus = async (id, status) => {
+    await api(`/api/offers/${id}/status?status=${status}`, "PUT");
+    load();
   };
 
-  if(appState==="loading") return (
-    <div style={{height:"100vh",background:C.bg,display:"flex",flexDirection:"column",
-      alignItems:"center",justifyContent:"center"}}>
-      <div style={{fontSize:64,marginBottom:16}}>⚡</div>
-      <h2 style={{color:C.text,fontSize:26,fontWeight:800,margin:0}}>MIDAS</h2>
-      <p style={{color:C.sub,fontSize:14,marginTop:8}}>{t.loading}</p>
+  const submitRating = async () => {
+    await api(`/api/offers/${rateModal.id}/rate`, "POST", {rating});
+    setRateModal(null); load();
+  };
+
+  const statusColor = {pending:"bg-yellow-50 border-yellow-200",accepted:"bg-green-50 border-green-200",rejected:"bg-red-50 border-red-100"};
+  const statusText = {
+    pending: lang==="uz"?"⏳ Kutilmoqda":"⏳ В ожидании",
+    accepted: lang==="uz"?"✅ Qabul qilindi":"✅ Принято",
+    rejected: lang==="uz"?"❌ Rad etildi":"❌ Отклонено"
+  };
+
+  return (
+    <div className="p-4">
+      <h2 className="font-bold text-lg mb-4">📨 {lang==="uz"?"Takliflar":"Предложения"}</h2>
+      {offers.length===0 && <div className="text-center text-gray-400 py-8">{lang==="uz"?"Hali takliflar yo'q":"Предложений пока нет"}</div>}
+      {offers.map(o => (
+        <div key={o.id} className={`rounded-xl border p-4 mb-3 ${statusColor[o.status]||"bg-white border-gray-200"}`}>
+          <div className="flex justify-between items-start mb-2">
+            <div>
+              <span className="font-medium">{o.from_id===user.telegram_id ? (lang==="uz"?"Yuborildi":"Отправлено") : (lang==="uz"?"Keldi":"Получено")}</span>
+              <span className="text-xs text-gray-400 ml-2">{o.created_at?.slice(0,10)}</span>
+            </div>
+            <span className="text-xs px-2 py-0.5 rounded-full bg-white/70">{statusText[o.status]}</span>
+          </div>
+          <div className="text-sm text-gray-600 mb-1">
+            {o.from_id===user.telegram_id ? `→ ${o.to_name}` : `← ${o.from_name}`}
+          </div>
+          {o.message && <p className="text-sm text-gray-700 mb-2 italic">"{o.message}"</p>}
+          {o.is_free===1 && <span className="text-xs bg-green-100 text-green-700 px-2 py-0.5 rounded-full mr-2">Tekin taklif</span>}
+          {o.to_id===user.telegram_id && o.status==="pending" && (
+            <div className="flex gap-2 mt-2">
+              <Btn onClick={()=>updateStatus(o.id,"accepted")} color="green" small>{t.accept}</Btn>
+              <Btn onClick={()=>updateStatus(o.id,"rejected")} color="red" small>{t.reject}</Btn>
+            </div>
+          )}
+          {o.status==="accepted" && !o.rated && o.from_id===user.telegram_id && (
+            <Btn onClick={()=>setRateModal(o)} color="yellow" small>{t.rate}</Btn>
+          )}
+        </div>
+      ))}
+      {rateModal && (
+        <Modal title={t.ratePartner} onClose={()=>setRateModal(null)}>
+          <p className="text-gray-600 mb-4">{rateModal.to_name}</p>
+          <div className="flex justify-center gap-3 mb-4">
+            {[1,2,3,4,5].map(n => (
+              <button key={n} onClick={()=>setRating(n)} className={`text-3xl transition-all ${n<=rating?"text-yellow-400":"text-gray-200"}`}>★</button>
+            ))}
+          </div>
+          <Btn onClick={submitRating} color="blue" full>{t.save}</Btn>
+        </Modal>
+      )}
+    </div>
+  );
+}
+
+// ==================== PROFILE ====================
+
+function ProfilePage({user, lang, onLangChange}) {
+  const t = T[lang];
+  const [userData, setUserData] = useState(user);
+  const [bt, setBt] = useState(null);
+  const [rp, setRp] = useState(null);
+  const [editModal, setEditModal] = useState(null);
+  const [saving, setSaving] = useState(false);
+  const [stats, setStats] = useState({});
+
+  const load = useCallback(async () => {
+    try {
+      const [u, s] = await Promise.all([
+        api(`/api/users/${user.telegram_id}`),
+        api(`/api/users/${user.telegram_id}/stats`)
+      ]);
+      setUserData(u); setStats(s);
+      if (u.role==="tadbirkor") {
+        const b = await api(`/api/business-targets/${user.telegram_id}`).catch(()=>null);
+        if (b) setBt(b);
+      } else {
+        const r = await api(`/api/reklamachi-profiles/${user.telegram_id}`).catch(()=>null);
+        if (r) setRp(r);
+      }
+    } catch {}
+  }, [user]);
+
+  useEffect(() => { load(); }, [load]);
+
+  const saveEdit = async (data) => {
+    setSaving(true);
+    try {
+      if (editModal.type === "user") {
+        if (data.phone && !PHONE_REGEX.test(data.phone.replace(/[\s-]/g,""))) {
+          alert(t.phoneInvalid); setSaving(false); return;
+        }
+        await api(`/api/users/${user.telegram_id}`, "PUT", data);
+      } else if (editModal.type === "bt") {
+        await api(`/api/business-targets/${user.telegram_id}`, "POST", {...bt, ...data});
+      } else if (editModal.type === "rp") {
+        await api(`/api/reklamachi-profiles/${user.telegram_id}`, "PUT", data);
+      }
+      await load();
+      setEditModal(null);
+    } catch(e) { alert(e.message); }
+    setSaving(false);
+  };
+
+  const sectorLabel = bt ? SECTORS.find(s=>s.v===bt.sector)?.l : "";
+  const platformLabel = rp ? PLATFORMS_ALL.find(p=>p.v===rp.platform)?.l : "";
+
+  return (
+    <div className="p-4 pb-24">
+      {/* Header */}
+      <div className="bg-gradient-to-r from-blue-500 to-purple-600 rounded-2xl p-5 mb-4 text-white text-center">
+        <div className="w-16 h-16 bg-white/20 rounded-full flex items-center justify-center text-3xl mx-auto mb-2">
+          {userData.role==="tadbirkor"?"🏢":"📢"}
+        </div>
+        <h2 className="font-bold text-xl">{userData.full_name}</h2>
+        <p className="text-blue-100 text-sm">{userData.role==="tadbirkor"?t.tadbirkor:t.reklamachi}</p>
+        <div className="flex justify-center gap-4 mt-3 text-sm">
+          <div><b>{stats.deals||0}</b><br/><span className="text-blue-100 text-xs">{lang==="uz"?"Bitim":"Сделки"}</span></div>
+          <div><b>{userData.rating?.toFixed?.(1)||"5.0"}⭐</b><br/><span className="text-blue-100 text-xs">{lang==="uz"?"Reyting":"Рейтинг"}</span></div>
+          <div><b>{stats.total_offers||0}</b><br/><span className="text-blue-100 text-xs">{lang==="uz"?"Taklif":"Предл."}</span></div>
+        </div>
+        {userData.is_premium===1 && <div className="mt-2 bg-yellow-400 text-yellow-900 text-xs font-bold px-3 py-1 rounded-full inline-block">⭐ PREMIUM</div>}
+      </div>
+
+      {/* Asosiy ma'lumot */}
+      <Section title={lang==="uz"?"Asosiy ma'lumot":"Основные данные"}
+        onEdit={()=>setEditModal({type:"user", data:{full_name:userData.full_name, phone:userData.phone}})}>
+        <Row label={t.fullName} value={userData.full_name}/>
+        <Row label={lang==="uz"?"Til":"Язык"} value={lang==="uz"?"O'zbek":"Русский"} extra={
+          <div className="flex gap-1 mt-1">
+            <button onClick={()=>onLangChange("uz")} className={`px-2 py-0.5 rounded text-xs ${lang==="uz"?"bg-blue-500 text-white":"bg-gray-100"}`}>UZ</button>
+            <button onClick={()=>onLangChange("ru")} className={`px-2 py-0.5 rounded text-xs ${lang==="ru"?"bg-blue-500 text-white":"bg-gray-100"}`}>RU</button>
+          </div>
+        }/>
+      </Section>
+
+      {/* Tadbirkor */}
+      {userData.role==="tadbirkor" && bt && (
+        <Section title={lang==="uz"?"Biznes ma'lumotlari":"Данные бизнеса"}
+          onEdit={()=>setEditModal({type:"bt", data:bt})}>
+          <Row label={t.sector} value={sectorLabel}/>
+          {bt.sub_sector && <Row label={t.subSector} value={bt.sub_sector}/>}
+          {bt.preferred_platforms?.length>0 && <Row label={t.platforms} value={bt.preferred_platforms.map(p=>PLATFORMS_ALL.find(x=>x.v===p)?.l||p).join(", ")}/>}
+          {bt.ages?.length>0 && <Row label={t.ages} value={bt.ages.map(a=>AGE_OPTIONS.find(x=>x.v===a)?.l||a).join(", ")}/>}
+          {bt.location?.length>0 && <Row label={t.location} value={bt.location.map(l=>LOCATIONS.find(x=>x.v===l)?.l||l).join(", ")}/>}
+          {bt.interests?.length>0 && <Row label={t.interests} value={bt.interests.join(", ")}/>}
+          {bt.max_budget>0 && <Row label={t.budget} value={`${bt.max_budget?.toLocaleString()} ${lang==="uz"?"so'm":"сум"}`}/>}
+          {bt.campaign_goal && <Row label={t.goal} value={bt.campaign_goal}/>}
+        </Section>
+      )}
+
+      {/* Reklamachi */}
+      {userData.role==="reklamachi" && rp && (
+        <Section title={lang==="uz"?"Reklama ma'lumotlari":"Данные рекламы"}
+          onEdit={()=>setEditModal({type:"rp_price", data:rp})}>
+          <Row label={t.platform} value={platformLabel}/>
+          {rp.profile_link && <Row label="Link" value={rp.profile_link} link/>}
+          {rp.address && <Row label={t.address} value={rp.address}/>}
+          {rp.followers>0 && <Row label={t.followers} value={rp.followers?.toLocaleString()}/>}
+          {rp.engagement>0 && <Row label={t.engagement} value={`${rp.engagement}%`}/>}
+          {rp.price_post>0 && <Row label={t.pricePost} value={`${rp.price_post?.toLocaleString()} ${lang==="uz"?"so'm":"сум"}`}/>}
+          {rp.price_story>0 && <Row label={t.priceStory} value={`${rp.price_story?.toLocaleString()} ${lang==="uz"?"so'm":"сум"}`}/>}
+          {rp.price_video>0 && <Row label={t.priceVideo} value={`${rp.price_video?.toLocaleString()} ${lang==="uz"?"so'm":"сум"}`}/>}
+          {rp.interests?.length>0 && <Row label={t.interests} value={rp.interests.join(", ")}/>}
+          <Row label={lang==="uz"?"Holat":"Статус"} value={rp.verified ? t.verified : t.notVerified}/>
+        </Section>
+      )}
+
+      {/* Edit modals */}
+      {editModal?.type==="user" && (
+        <EditUserModal data={editModal.data} t={t} onSave={saveEdit} onClose={()=>setEditModal(null)} saving={saving}/>
+      )}
+      {editModal?.type==="bt" && (
+        <EditBtModal data={editModal.data} t={t} lang={lang} onSave={saveEdit} onClose={()=>setEditModal(null)} saving={saving}/>
+      )}
+      {editModal?.type==="rp_price" && (
+        <EditRpModal data={editModal.data} t={t} lang={lang} onSave={saveEdit} onClose={()=>setEditModal(null)} saving={saving}/>
+      )}
+    </div>
+  );
+}
+
+function Section({title, children, onEdit}) {
+  return (
+    <div className="bg-white rounded-2xl shadow-sm border border-gray-100 p-4 mb-3">
+      <div className="flex justify-between items-center mb-3">
+        <h3 className="font-bold text-gray-800">{title}</h3>
+        {onEdit && <button onClick={onEdit} className="text-blue-500 text-sm font-medium">✏️</button>}
+      </div>
+      {children}
+    </div>
+  );
+}
+
+function Row({label, value, link, extra}) {
+  return (
+    <div className="flex flex-col mb-2 last:mb-0">
+      <span className="text-xs text-gray-400">{label}</span>
+      {link ? <a href={value} className="text-blue-500 text-sm break-all">{value}</a>
+             : <span className="text-sm text-gray-800">{value||"—"}</span>}
+      {extra}
+    </div>
+  );
+}
+
+function EditUserModal({data, t, onSave, onClose, saving}) {
+  const [form, setForm] = useState({...data});
+  return (
+    <Modal title={t.edit} onClose={onClose}>
+      <Input label={t.fullName} value={form.full_name||""} onChange={v=>setForm({...form,full_name:v})}/>
+      <Input label={t.phone} value={form.phone||""} onChange={v=>setForm({...form,phone:v})} placeholder="+998901234567"/>
+      <div className="flex gap-2 mt-2">
+        <Btn onClick={onClose} color="gray" full>{t.cancel}</Btn>
+        <Btn onClick={()=>onSave(form)} color="blue" full disabled={saving}>{saving?t.saving:t.save}</Btn>
+      </div>
+    </Modal>
+  );
+}
+
+function EditBtModal({data, t, lang, onSave, onClose, saving}) {
+  const [form, setForm] = useState({...data});
+  return (
+    <Modal title={`✏️ ${t.edit}`} onClose={onClose}>
+      <div className="max-h-96 overflow-y-auto">
+        <TagSelect options={PLATFORMS_ALL} selected={form.preferred_platforms||[]} onChange={v=>setForm({...form,preferred_platforms:v})} label={t.platforms}/>
+        <TagSelect options={AGE_OPTIONS} selected={form.ages||[]} onChange={v=>setForm({...form,ages:v})} label={t.ages}/>
+        <TagSelect options={LOCATIONS} selected={form.location||[]} onChange={v=>setForm({...form,location:v})} label={t.location}/>
+        <TagSelect options={(SECTOR_INTERESTS[form.sector]||SECTOR_INTERESTS.default).map(i=>({v:i,l:i}))}
+          selected={form.interests||[]} onChange={v=>setForm({...form,interests:v})} max={3} label={t.interests}/>
+        <Input label={t.budget} value={form.max_budget||""} onChange={v=>setForm({...form,max_budget:v})} type="number"/>
+        <Input label={t.goal} value={form.campaign_goal||""} onChange={v=>setForm({...form,campaign_goal:v})}/>
+      </div>
+      <div className="flex gap-2 mt-2">
+        <Btn onClick={onClose} color="gray" full>{t.cancel}</Btn>
+        <Btn onClick={()=>onSave(form)} color="blue" full disabled={saving}>{saving?t.saving:t.save}</Btn>
+      </div>
+    </Modal>
+  );
+}
+
+function EditRpModal({data, t, lang, onSave, onClose, saving}) {
+  const [form, setForm] = useState({...data});
+  const isOnline = PLATFORMS_ONLINE.map(p=>p.v).includes(form.platform);
+  const isOffline = PLATFORMS_OFFLINE.map(p=>p.v).includes(form.platform);
+  return (
+    <Modal title={`✏️ ${t.edit}`} onClose={onClose}>
+      <div className="max-h-96 overflow-y-auto">
+        {isOnline && <>
+          <Input label={t.profileLink} value={form.profile_link||""} onChange={v=>setForm({...form,profile_link:v})}/>
+          <Input label={t.followers} value={form.followers||""} onChange={v=>setForm({...form,followers:v})} type="number"/>
+          <Input label={t.engagement} value={form.engagement||""} onChange={v=>setForm({...form,engagement:v})} type="number"/>
+        </>}
+        {isOffline && <Input label={t.address} value={form.address||""} onChange={v=>setForm({...form,address:v})}/>}
+        <Input label={t.pricePost} value={form.price_post||""} onChange={v=>setForm({...form,price_post:v})} type="number"/>
+        {isOnline && <>
+          <Input label={t.priceStory} value={form.price_story||""} onChange={v=>setForm({...form,price_story:v})} type="number"/>
+          <Input label={t.priceVideo} value={form.price_video||""} onChange={v=>setForm({...form,price_video:v})} type="number"/>
+        </>}
+        <Input label={t.priceDesc} value={form.price_description||""} onChange={v=>setForm({...form,price_description:v})}/>
+        <TagSelect options={AGE_OPTIONS} selected={form.audience_ages||[]} onChange={v=>setForm({...form,audience_ages:v})} label={t.audienceAges}/>
+        <TagSelect options={SECTOR_INTERESTS.default.map(i=>({v:i,l:i}))} selected={form.interests||[]} onChange={v=>setForm({...form,interests:v})} max={3} label={t.interests}/>
+      </div>
+      <div className="flex gap-2 mt-2">
+        <Btn onClick={onClose} color="gray" full>{t.cancel}</Btn>
+        <Btn onClick={()=>onSave(form)} color="blue" full disabled={saving}>{saving?t.saving:t.save}</Btn>
+      </div>
+    </Modal>
+  );
+}
+
+// ==================== NOTIFICATIONS ====================
+
+function NotifsPage({user, lang, onRead}) {
+  const t = T[lang];
+  const [notifs, setNotifs] = useState([]);
+
+  useEffect(() => {
+    api(`/api/notifications/${user.telegram_id}`).then(res=>setNotifs(Array.isArray(res)?res:[])).catch(()=>{});
+    api(`/api/notifications/${user.telegram_id}/read`,"PUT").then(onRead).catch(()=>{});
+  }, [user, onRead]);
+
+  const typeIcon = {info:"ℹ️",success:"✅",warning:"⚠️",offer:"📨",message:"💬",broadcast:"📢"};
+
+  return (
+    <div className="p-4">
+      <h2 className="font-bold text-lg mb-4">🔔 {t.notifs}</h2>
+      {notifs.length===0 && <div className="text-center text-gray-400 py-8">{t.noNotifs}</div>}
+      {notifs.map(n => (
+        <div key={n.id} className={`bg-white rounded-xl p-4 mb-2 border shadow-sm ${!n.is_read?"border-blue-200":"border-gray-100"}`}>
+          <div className="flex gap-3">
+            <span className="text-2xl">{typeIcon[n.type]||"🔔"}</span>
+            <div className="flex-1">
+              <div className="font-medium text-sm text-gray-800">{n.title}</div>
+              <div className="text-xs text-gray-500 mt-0.5">{n.body}</div>
+              <div className="text-xs text-gray-300 mt-1">{n.created_at?.slice(0,16)}</div>
+            </div>
+          </div>
+        </div>
+      ))}
+    </div>
+  );
+}
+
+// ==================== ADMIN ====================
+
+function AdminPage({user, lang}) {
+  const [stats, setStats] = useState(null);
+  const [view, setView] = useState("main");
+  const [queue, setQueue] = useState([]);
+  const [users, setUsers] = useState([]);
+  const [search, setSearch] = useState("");
+  const [bcMsg, setBcMsg] = useState("");
+  const [bcTarget, setBcTarget] = useState("all");
+  const t = T[lang];
+
+  useEffect(() => {
+    api(`/api/admin/stats?admin_id=${user.telegram_id}`).then(setStats).catch(()=>{});
+  }, [user]);
+
+  const loadQueue = async () => {
+    const res = await api(`/api/admin/verify-queue?admin_id=${user.telegram_id}`).catch(()=>[]);
+    setQueue(Array.isArray(res)?res:[]);
+    setView("verify");
+  };
+  const loadUsers = async () => {
+    const res = await api(`/api/admin/users?admin_id=${user.telegram_id}&page=1&search=${search}`).catch(()=>[]);
+    setUsers(Array.isArray(res)?res:[]);
+    setView("users");
+  };
+  const verifyUser = async (id, val) => {
+    await api(`/api/admin/verify/${id}?admin_id=${user.telegram_id}&value=${val}`, "PUT");
+    loadQueue();
+  };
+  const togglePremium = async (id, current) => {
+    await api(`/api/admin/users/${id}/premium?admin_id=${user.telegram_id}&value=${current?0:1}`, "PUT");
+    loadUsers();
+  };
+  const blockUser = async (id) => {
+    const reason = prompt(lang==="uz"?"Bloklash sababi:":"Причина блокировки:");
+    if (!reason) return;
+    await api(`/api/admin/users/${id}/block?admin_id=${user.telegram_id}&reason=${encodeURIComponent(reason)}`, "PUT");
+    loadUsers();
+  };
+  const sendBroadcast = async () => {
+    if (!bcMsg.trim()) return;
+    await api("/api/admin/broadcast","POST",{sender_id:user.telegram_id,target:bcTarget,message_text:bcMsg});
+    setBcMsg(""); alert(lang==="uz"?"Yuborildi ✅":"Отправлено ✅");
+  };
+
+  if (view === "verify") return (
+    <div className="p-4">
+      <div className="flex items-center gap-2 mb-4">
+        <button onClick={()=>setView("main")} className="text-blue-500">← {t.back}</button>
+        <h2 className="font-bold">✅ {lang==="uz"?"Tasdiqlash":"Подтверждение"} ({queue.length})</h2>
+      </div>
+      {queue.map(p=>(
+        <div key={p.user_id} className="bg-white rounded-xl p-4 mb-3 shadow-sm border">
+          <div className="font-bold mb-1">{p.full_name}</div>
+          <div className="text-sm text-gray-500 mb-2">
+            <div>{PLATFORMS_ALL.find(x=>x.v===p.platform)?.l}</div>
+            {p.profile_link && <a href={p.profile_link} className="text-blue-500 break-all text-xs">{p.profile_link}</a>}
+            <div>{p.followers?.toLocaleString()} {lang==="uz"?"obunachi":"подписчиков"} | ER: {p.engagement}%</div>
+          </div>
+          <div className="flex gap-2">
+            <Btn onClick={()=>verifyUser(p.user_id,1)} color="green" small>✅ {lang==="uz"?"Tasdiqlash":"Подтвердить"}</Btn>
+            <Btn onClick={()=>verifyUser(p.user_id,0)} color="red" small>❌ {lang==="uz"?"Rad etish":"Отклонить"}</Btn>
+          </div>
+        </div>
+      ))}
     </div>
   );
 
-  if(appState==="langSelect") return (
-    <LangSelector onSelect={l=>{
-      setLang(l);localStorage.setItem("midas_lang",l);
-      setAppState("onboarding");
-    }}/>
+  if (view === "users") return (
+    <div className="p-4">
+      <div className="flex items-center gap-2 mb-4">
+        <button onClick={()=>setView("main")} className="text-blue-500">← {t.back}</button>
+        <h2 className="font-bold">👥 {lang==="uz"?"Foydalanuvchilar":"Пользователи"}</h2>
+      </div>
+      <div className="flex gap-2 mb-3">
+        <input value={search} onChange={e=>setSearch(e.target.value)} placeholder={lang==="uz"?"Qidirish...":"Поиск..."}
+          className="flex-1 px-3 py-2 rounded-xl border border-gray-200 text-sm"/>
+        <Btn onClick={loadUsers} color="blue" small>{lang==="uz"?"Izla":"Найти"}</Btn>
+      </div>
+      {users.map(u=>(
+        <div key={u.telegram_id} className="bg-white rounded-xl p-3 mb-2 shadow-sm border text-sm">
+          <div className="flex justify-between">
+            <div>
+              <div className="font-medium">{u.full_name}</div>
+              <div className="text-gray-400 text-xs">{u.role} | {u.phone||"—"}</div>
+            </div>
+            <div className="text-xs text-right">
+              {u.is_premium===1 && <div className="text-yellow-600">⭐ Premium</div>}
+              {u.is_blocked===1 && <div className="text-red-500">🚫 Bloklangan</div>}
+            </div>
+          </div>
+          <div className="flex gap-2 mt-2 flex-wrap">
+            <Btn onClick={()=>togglePremium(u.telegram_id,u.is_premium)} color={u.is_premium?"gray":"yellow"} small>
+              {u.is_premium?(lang==="uz"?"Premium olish":"Убрать Premium"):(lang==="uz"?"Premium berish":"Дать Premium")}
+            </Btn>
+            {!u.is_blocked && <Btn onClick={()=>blockUser(u.telegram_id)} color="red" small>🚫</Btn>}
+          </div>
+        </div>
+      ))}
+    </div>
   );
 
-  if(appState==="onboarding") return (
-    <OnboardingPage t={t} onFinish={()=>{localStorage.setItem("midas_onb","1");setAppState("register");}}/>
+  if (view === "broadcast") return (
+    <div className="p-4">
+      <div className="flex items-center gap-2 mb-4">
+        <button onClick={()=>setView("main")} className="text-blue-500">← {t.back}</button>
+        <h2 className="font-bold">📢 {lang==="uz"?"Xabar yuborish":"Рассылка"}</h2>
+      </div>
+      <div className="flex gap-2 mb-3">
+        {[["all",lang==="uz"?"Barchasiga":"Всем"],["tadbirkor",lang==="uz"?"Tadbirkorlarga":"Предпринимателям"],["reklamachi",lang==="uz"?"Reklamachilarga":"Рекламодателям"]].map(([v,l])=>(
+          <button key={v} onClick={()=>setBcTarget(v)}
+            className={`flex-1 py-2 rounded-xl text-xs border ${bcTarget===v?"bg-blue-500 text-white border-blue-500":"bg-white text-gray-600 border-gray-200"}`}>{l}</button>
+        ))}
+      </div>
+      <textarea value={bcMsg} onChange={e=>setBcMsg(e.target.value)} rows={5}
+        placeholder={lang==="uz"?"Xabar matni...":"Текст сообщения..."}
+        className="w-full px-3 py-2 rounded-xl border border-gray-200 text-sm mb-3 focus:outline-none focus:border-blue-400"/>
+      <Btn onClick={sendBroadcast} color="blue" full>{lang==="uz"?"Yuborish":"Отправить"}</Btn>
+    </div>
   );
-
-  if(appState==="register") return (
-    <RegisterPage tgUser={tgUser} t={t} onDone={r=>{setRole(r);setAppState("setup");}}/>
-  );
-
-  if(appState==="setup") return role==="tadbirkor"
-    ? <BusinessTargetSetup userId={userId} t={t} lang={lang} onDone={()=>{
-        api.get(`/api/users/${userId}`).then(u=>{setUser(u);setAppState("main");});
-      }}/>
-    : <ReklamachiProfileSetup userId={userId} t={t} lang={lang} onDone={()=>{
-        api.get(`/api/users/${userId}`).then(u=>{setUser(u);setAppState("main");});
-      }}/>;
 
   return (
-    <div style={{background:C.bg,minHeight:"100vh",fontFamily:"'SF Pro Display',-apple-system,BlinkMacSystemFont,sans-serif"}}>
-      <style>{`
-        *{box-sizing:border-box;-webkit-tap-highlight-color:transparent;}
-        body{margin:0;overflow-x:hidden;}
-        input,button{font-family:inherit;}
-        ::-webkit-scrollbar{width:0;height:0;}
-      `}</style>
-
-      {tab==="match"&&<MatchPage userId={userId} role={role} t={t}/>}
-      {tab==="offers"&&<OffersPage userId={userId} t={t}/>}
-      {tab==="chats"&&<ChatPage userId={userId} t={t}/>}
-      {tab==="notif"&&<NotificationsPage userId={userId} t={t}/>}
-      {tab==="profile"&&(
-        <ProfilePage userId={userId} user={user} role={role} t={t} lang={lang}
-          onLangChange={handleLangChange}
-          onEdit={()=>setAppState("setup")}/>
+    <div className="p-4">
+      <h2 className="font-bold text-lg mb-4">🛡 Admin Panel</h2>
+      {stats && (
+        <div className="grid grid-cols-2 gap-3 mb-4">
+          {[
+            ["👥",stats.total_users,lang==="uz"?"Foydalanuvchi":"Польз."],
+            ["🏢",stats.tadbirkorlar,lang==="uz"?"Tadbirkor":"Предпр."],
+            ["📢",stats.reklamachilar,lang==="uz"?"Reklamachi":"Реклам."],
+            ["⭐",stats.premium,"Premium"],
+            ["📨",stats.total_offers,lang==="uz"?"Takliflar":"Предлож."],
+            ["✅",stats.accepted_offers,lang==="uz"?"Qabul qilingan":"Принято"],
+            ["💬",stats.active_chats,lang==="uz"?"Chatlar":"Чаты"],
+            ["⏳",stats.unverified,lang==="uz"?"Kutmoqda":"В ожид."],
+          ].map(([icon,val,label])=>(
+            <div key={label} className="bg-white rounded-xl p-3 shadow-sm border text-center">
+              <div className="text-2xl">{icon}</div>
+              <div className="font-bold text-xl text-blue-600">{val||0}</div>
+              <div className="text-xs text-gray-400">{label}</div>
+            </div>
+          ))}
+        </div>
       )}
-      {tab==="admin"&&isAdmin&&<AdminPage userId={userId} t={t}/>}
+      <div className="flex flex-col gap-2">
+        <Btn onClick={loadQueue} color="blue" full>✅ {lang==="uz"?"Profillarni tasdiqlash":"Подтвердить профили"} {stats?.unverified>0&&`(${stats.unverified})`}</Btn>
+        <Btn onClick={loadUsers} color="purple" full>👥 {lang==="uz"?"Foydalanuvchilar":"Пользователи"}</Btn>
+        <Btn onClick={()=>setView("broadcast")} color="green" full>📢 {lang==="uz"?"Xabar yuborish":"Рассылка"}</Btn>
+      </div>
+    </div>
+  );
+}
 
-      <BottomNav tab={tab} onChange={setTab} notifCount={notifCount} isAdmin={isAdmin}/>
+// ==================== MAIN APP ====================
+
+export default function App() {
+  const tgUser = tg?.initDataUnsafe?.user || { id: 123456789, first_name: "Test", username: "test" };
+  const [user, setUser] = useState(null);
+  const [loading, setLoading] = useState(true);
+  const [tab, setTab] = useState("match");
+  const [lang, setLang] = useState("uz");
+  const [notifCount, setNotifCount] = useState(0);
+
+  useEffect(() => {
+    tg?.ready();
+    tg?.expand();
+    checkUser();
+  }, []);
+
+  const checkUser = async () => {
+    try {
+      const u = await api(`/api/users/${tgUser.id}`);
+      setLang(u.lang || "uz");
+      setUser(u);
+    } catch (e) {
+      if (e.message?.includes("404") || e.message === "404") setUser(null);
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const onRegDone = async (chosenLang) => {
+    setLang(chosenLang);
+    await api(`/api/users/${tgUser.id}/lang?lang=${chosenLang}`, "PUT");
+    const u = await api(`/api/users/${tgUser.id}`);
+    setUser(u);
+  };
+
+  const refreshNotifs = useCallback(async () => {
+    if (!user) return;
+    try {
+      const res = await api(`/api/notifications/${user.telegram_id}/count`);
+      setNotifCount(res?.count || 0);
+    } catch {}
+  }, [user]);
+
+  useEffect(() => {
+    if (!user) return;
+    refreshNotifs();
+    const iv = setInterval(refreshNotifs, 15000);
+    return () => clearInterval(iv);
+  }, [user, refreshNotifs]);
+
+  const t = T[lang];
+
+  if (loading) return (
+    <div className="min-h-screen flex items-center justify-center bg-gradient-to-br from-blue-600 to-purple-700">
+      <div className="text-white text-center">
+        <div className="text-5xl mb-3 animate-pulse">⭐</div>
+        <p className="text-xl font-bold">MIDAS</p>
+        <p className="text-blue-200 text-sm mt-1">{t.loading}</p>
+      </div>
+    </div>
+  );
+
+  if (!user) return <Registration tgUser={tgUser} user={null} onDone={onRegDone}/>;
+
+  const isAdmin = ADMIN_IDS.includes(user.telegram_id);
+
+  const tabs = [
+    {id:"match", icon:"🎯", label:t.match},
+    {id:"offers", icon:"📨", label:lang==="uz"?"Takliflar":"Предлож."},
+    {id:"chats", icon:"💬", label:t.chats},
+    {id:"notifs", icon:"🔔", label:t.notifs, badge:notifCount},
+    {id:"profile", icon:"👤", label:t.profile},
+    ...(isAdmin ? [{id:"admin", icon:"🛡", label:t.admin}] : []),
+  ];
+
+  return (
+    <div className="min-h-screen bg-gray-50 pb-16">
+      {/* Page */}
+      {tab==="match" && <MatchPage user={user} lang={lang}/>}
+      {tab==="offers" && <OffersPage user={user} lang={lang}/>}
+      {tab==="chats" && <ChatsPage user={user} lang={lang}/>}
+      {tab==="notifs" && <NotifsPage user={user} lang={lang} onRead={()=>setNotifCount(0)}/>}
+      {tab==="profile" && <ProfilePage user={user} lang={lang} onLangChange={async (l)=>{setLang(l);await api(`/api/users/${user.telegram_id}/lang?lang=${l}`,"PUT");}}/>}
+      {tab==="admin" && isAdmin && <AdminPage user={user} lang={lang}/>}
+
+      {/* Bottom nav */}
+      <nav className="fixed bottom-0 left-0 right-0 bg-white border-t border-gray-200 flex z-40">
+        {tabs.map(tb => (
+          <button key={tb.id} onClick={()=>setTab(tb.id)}
+            className={`flex-1 py-2 flex flex-col items-center relative transition-all ${tab===tb.id?"text-blue-600":"text-gray-400"}`}>
+            <span className="text-xl">{tb.icon}</span>
+            <span className="text-xs mt-0.5">{tb.label}</span>
+            {tb.badge>0 && <span className="absolute top-1 right-1/4 bg-red-500 text-white text-xs rounded-full w-4 h-4 flex items-center justify-center">{tb.badge}</span>}
+          </button>
+        ))}
+      </nav>
     </div>
   );
 }
