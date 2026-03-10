@@ -415,7 +415,7 @@ async def admin_text_handler(update: Update, ctx: ContextTypes.DEFAULT_TYPE):
 
 # ==================== MAIN ====================
 
-def main():
+async def main():
     app = Application.builder().token(BOT_TOKEN).build()
 
     app.add_handler(CommandHandler("start", cmd_start))
@@ -427,7 +427,10 @@ def main():
     app.add_handler(MessageHandler(filters.TEXT & ~filters.COMMAND, admin_text_handler))
 
     logger.info("🤖 MIDAS Bot ishga tushdi!")
-    app.run_polling(drop_pending_updates=True)
+    await app.initialize()
+    await app.start()
+    await app.updater.start_polling(drop_pending_updates=True)
+    await asyncio.Event().wait()
 
 if __name__ == "__main__":
-    main()
+    asyncio.run(main())
