@@ -1,6 +1,7 @@
 """
-MIDAS Bot v8
+MIDAS Bot v8 (FIXED)
 ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+✅ Event loop muammosi tuzatildi
 ✅ /start har doim ishlaydi
 ✅ Inline tugmalar — miniapp, chatlar, offers
 ✅ Chatlar inline tugma — qabul qilingan takliflar
@@ -12,7 +13,10 @@ MIDAS Bot v8
 ✅ Render worker (PORT yo'q)
 ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 """
-import os, logging
+import os
+import logging
+import asyncio
+import sys
 import aiohttp
 from telegram import (
     Update, InlineKeyboardMarkup, InlineKeyboardButton,
@@ -24,12 +28,20 @@ from telegram.ext import (
 )
 from telegram.constants import ParseMode
 
+# Event loop muammosini hal qilish uchun
+if sys.platform == "win32":
+    asyncio.set_event_loop_policy(asyncio.WindowsSelectorEventLoopPolicy())
+
 BOT_TOKEN    = os.getenv("BOT_TOKEN", "")
 MINI_APP_URL = os.getenv("MINI_APP_URL", "https://midas-frontend.onrender.com")
 API_URL      = os.getenv("API_URL",      "https://midas-backend.onrender.com")
 ADMIN_IDS    = [int(x.strip()) for x in os.getenv("ADMIN_IDS","").split(",") if x.strip().isdigit()]
 
-logging.basicConfig(level=logging.INFO, format="%(asctime)s %(levelname)s %(message)s")
+logging.basicConfig(
+    level=logging.INFO,
+    format="%(asctime)s %(levelname)s %(message)s",
+    handlers=[logging.StreamHandler(sys.stdout)]
+)
 logger = logging.getLogger(__name__)
 
 # ── In-memory state ───────────────────────────────────
@@ -487,10 +499,26 @@ async def message_handler(update: Update, ctx: ContextTypes.DEFAULT_TYPE):
 
 # ── MAIN ──────────────────────────────────────────────
 def main():
+    """Botni ishga tushirish"""
     if not BOT_TOKEN:
-        logger.error("BOT_TOKEN topilmadi!")
+        logger.error("❌ BOT_TOKEN topilmadi! Iltimos, .env faylida BOT_TOKEN ni belgilang.")
         return
+    
+    # Event loop muammosini hal qilish
+    try:
+        # Mavjud event loop ni olishga urinish
+        loop = asyncio.get_event_loop()
+    except RuntimeError:
+        # Agar mavjud bo'lmasa, yangi yaratish
+        loop = asyncio.new_event_loop()
+        asyncio.set_event_loop(loop)
+    
+    logger.info("🚀 MIDAS Bot v8 ishga tushyapti...")
+    
+    # Application yaratish
     app = Application.builder().token(BOT_TOKEN).build()
+    
+    # Handlerlarni qo'shish
     app.add_handler(CommandHandler("start",    cmd_start))
     app.add_handler(CommandHandler("profile",  cmd_profile))
     app.add_handler(CommandHandler("chats",    cmd_chats))
@@ -500,8 +528,18 @@ def main():
     app.add_handler(CommandHandler("help",     cmd_help))
     app.add_handler(CallbackQueryHandler(callback_handler))
     app.add_handler(MessageHandler(filters.ALL & ~filters.COMMAND, message_handler))
-    logger.info("🚀 MIDAS Bot v8 ishga tushdi")
+    
+    # Botni ishga tushirish
+    logger.info("✅ Bot polling boshlanyapti...")
     app.run_polling(allowed_updates=Update.ALL_TYPES, drop_pending_updates=True)
 
+# ── Asosiy ishga tushirish ────────────────────────────
 if __name__ == "__main__":
-    main()
+    try:
+        main()
+    except KeyboardInterrupt:
+        logger.info("⏹️ Bot to'xtatildi (KeyboardInterrupt)")
+    except Exception as e:
+        logger.error(f"❌ Kutilmagan xato: {e}", exc_info=True)
+    finally:
+        logger.info("👋 Bot ishdan to'xtadi")
