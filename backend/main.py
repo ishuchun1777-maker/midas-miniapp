@@ -7,6 +7,7 @@ import sqlite3
 import re
 from flask import Flask, request, jsonify
 from flask_cors import CORS
+from ai_advisor import generate_advice
 from matching import calc_score, calc_offline_score, PLATFORMS_OFFLINE
 
 BOT_TOKEN = os.getenv("BOT_TOKEN", "YOUR_BOT_TOKEN")
@@ -141,6 +142,38 @@ def validate_phone(phone):
 OFFLINE_PLATFORMS = [p["v"] for p in PLATFORMS_OFFLINE]
 
 # ==================== ROUTES ====================
+
+@app.route("/api/ai/advice/<int:tg_id>", methods=["POST"])
+def ai_advice(tg_id):
+    conn = get_conn()
+    u = conn.execute("SELECT * FROM users WHERE telegram_id=?", (tg_id,)).fetchone()
+    if not u: conn.close(); return err("Topilmadi", 404)
+    lang = u["lang"] or "uz"
+    
+    user_data = {"role": u["role"], "lang": lang}
+    
+    if u["role"] == "tadbirkor":
+        bt = conn.execute("SELECT * FROM business_targets WHERE user_id=?", (tg_id,)).fetchone()
+        if bt:
+            user_data.update({
+                "sector": bt["sector"],
+                "budget": bt["max_budget"],
+                "location": json.loads(bt["location"] or "[]"),
+            })
+    elif u["role"] == "reklamachi":
+        rp = conn.execute("SELECT * FROM reklamachi_profiles WHERE user_id=?", (tg_id,)).fetchone()
+        if rp:
+            user_data.update({
+                "platform": rp["platform"],
+                "followers": rp["followers"],
+                "engagement": rp["engagement"],
+            })
+    
+    conn.close()
+    result = generate_advice(user_data, lang)
+    return ok(result)
+
+
 
 @app.route("/")
 def root(): return ok({"status": "ok", "app": "MIDAS API v3.0"})

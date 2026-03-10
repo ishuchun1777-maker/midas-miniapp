@@ -1,279 +1,274 @@
-import { useState, useEffect, useRef, useCallback } from "react";
-import {
-  SECTORS, PLATFORMS_ONLINE, PLATFORMS_OFFLINE, PLATFORMS_ALL,
-  MATCH_PLATFORMS, AGE_OPTIONS, LOCATIONS, SECTOR_INTERESTS, PHONE_REGEX
-} from "./constants";
+// ═══════════════════════════════════════════════════════
+// MIDAS v5 — Part 6 (MAIN): App entry — barcha qismlar
+// ═══════════════════════════════════════════════════════
+import { useState, useEffect } from "react";
 
-const API = process.env.REACT_APP_API_URL || "https://midas-backend.onrender.com";
+// Part imports
+import { buildTheme, http, MidasLogo, Badge, tg } from "./App_v5_part1";
+import { OnboardingSlides, LegalScreen, Registration } from "./App_v5_part2";
+import { MatchPage, NotifOffersPage, ChatsPage } from "./App_v5_part3";
+import { AIAdvisorPage, TenderPage, AnalyticsPage, ProfilePage } from "./App_v5_part4";
+import { AdminPanel } from "./App_v5_part5";
+
 const ADMIN_IDS = (process.env.REACT_APP_ADMIN_IDS || "").split(",").map(Number).filter(Boolean);
-const tg = window.Telegram?.WebApp;
 
-const getTgTheme = () => {
-  const tp = tg?.themeParams || {};
-  const cs = tg?.colorScheme || "light";
-  return {
-    isDark: cs==="dark",
-    bg: tp.bg_color||(cs==="dark"?"#1a1a2e":"#f4f6f8"),
-    card: tp.secondary_bg_color||(cs==="dark"?"#16213e":"#ffffff"),
-    text: tp.text_color||(cs==="dark"?"#e8e8e8":"#1a1a2e"),
-    hint: tp.hint_color||(cs==="dark"?"#8892a4":"#6b7280"),
-    accent: tp.button_color||"#4f8a5b",
-    buttonText: tp.button_text_color||"#ffffff",
-    accentLight: cs==="dark"?"#2d5a3d":"#e8f5ec",
-    border: cs==="dark"?"#2a2a4a":"#e5e7eb",
-    inputBg: cs==="dark"?"#0f3460":"#f3f4f6",
-    danger:"#e53e3e", gold:"#c9a84c",
-  };
-};
+// ── BOTTOM NAV ─────────────────────────────────────────
+function BottomNav({ tab, setTab, role, unread, lang, theme, isAdmin }) {
+  const items = role === "tadbirkor" ? [
+    { v:"match",    icon:"🎯", uz:"Match",    ru:"Матч"       },
+    { v:"tender",   icon:"📋", uz:"Tender",   ru:"Тендер"     },
+    { v:"notifs",   icon:"🔔", uz:"Xabarlar", ru:"Уведомл."   },
+    { v:"analytics",icon:"📊", uz:"Analitik", ru:"Аналитика"  },
+    { v:"profile",  icon:"👤", uz:"Profil",   ru:"Профиль"    },
+  ] : [
+    { v:"match",    icon:"🎯", uz:"Match",    ru:"Матч"       },
+    { v:"tender",   icon:"📋", uz:"Tender",   ru:"Тендер"     },
+    { v:"chats",    icon:"💬", uz:"Chatlar",  ru:"Чаты"       },
+    { v:"ai",       icon:"🤖", uz:"AI",       ru:"AI"         },
+    { v:"profile",  icon:"👤", uz:"Profil",   ru:"Профиль"    },
+  ];
 
-const T={uz:{welcome:"MIDAS ga xush kelibsiz",tagline:"Businessman and Advertiser",chooseRole:"Rolingizni tanlang",tadbirkor:"Tadbirkor",tadbirkorDesc:"Reklama buyurtma qilaman",reklamachi:"Reklamachi",reklamachiDesc:"Reklama joylashtirishni taklif qilaman",register:"Ro'yxatdan o'tish",fullName:"To'liq ismingiz *",phone:"Telefon raqam *",phonePlaceholder:"+998901234567",phoneInvalid:"Format: +998XXXXXXXXX (masalan: +998901234567)",phoneNote:"Telefon raqam faqat adminga ko'rinadi",sector:"Soha *",platforms:"Reklama platformalari",ages:"Maqsadli yosh guruhi",gender:"Maqsadli jins",genderAll:"Barcha",genderM:"Erkaklar",genderF:"Ayollar",location:"Hudud",interests:"Qiziqishlar (max 3)",budget:"Maksimal byudjet (so'm)",minFollowers:"Minimal obunachi soni",goal:"Kampaniya maqsadi",platform:"Platforma *",profileLink:"Profil havolasi *",profileLinkEx:"instagram.com/username",followers:"Obunachi soni *",engagement:"Aktivlik % *",pricePost:"Post narxi (so'm) *",priceStory:"Story narxi (so'm)",priceVideo:"Video narxi (so'm)",priceDesc:"Narx haqida qo'shimcha",address:"Aniq manzil *",coordinates:"Koordinata (ixtiyoriy)",audienceGender:"Auditoriya jinsi",audienceLocation:"Auditoriya hududi",audienceAges:"Auditoriya yoshi",next:"Davom etish →",back:"← Orqaga",save:"Saqlash",cancel:"Bekor qilish",edit:"Tahrirlash",match:"Match",chats:"Chatlar",profile:"Profil",notifs:"Bildirishnomalar",admin:"Admin",sendOffer:"Taklif yuborish",freeOffer:"Bepul taklif (1×)",offerMsg:"Taklif xabari...",accept:"✓ Qabul",reject:"✗ Rad",rate:"Baholash",matchScore:"mos",details:"Batafsil",verified:"✅ Tasdiqlangan",notVerified:"⏳ Tasdiqlanmoqda",noMatches:"Mos hamkorlar topilmadi",loading:"Yuklanmoqda...",send:"Yuborish",midasChat:"MIDAS xabarlari",noChats:"Hali chatlar yo'q",noNotifs:"Hali bildirishnomalar yo'q",ratePartner:"Hamkorni baholang",whereAdvert:"Qayerda reklama qilmoqchisiz?",allPartners:"Barcha tadbirkorlar",bestMatch:"Mos hamkorlar",freeOfferBtn:"Bepul sinov taklifi",verifyNote:"Ma'lumotlaringiz tekshiriladi, tasdiqlangach xabar beramiz. Aniq ma'lumot kiriting.",saving:"Saqlanmoqda...",fillRequired:"Barcha * maydonlarni to'ldiring",required:"* — majburiy maydonlar",pending:"Kutilmoqda",accepted:"Qabul qilindi",rejected:"Rad etildi",sent:"Yuborildi →",received:"← Keldi",noOffers:"Hali takliflar yo'q",lang:"Til"},
-ru:{welcome:"Добро пожаловать в MIDAS",tagline:"Businessman and Advertiser",chooseRole:"Выберите роль",tadbirkor:"Предприниматель",tadbirkorDesc:"Заказываю рекламу",reklamachi:"Рекламодатель",reklamachiDesc:"Предлагаю размещение рекламы",register:"Регистрация",fullName:"Полное имя *",phone:"Номер телефона *",phonePlaceholder:"+998901234567",phoneInvalid:"Формат: +998XXXXXXXXX (например: +998901234567)",phoneNote:"Номер телефона виден только администратору",sector:"Сфера *",platforms:"Платформы рекламы",ages:"Целевой возраст",gender:"Целевой пол",genderAll:"Все",genderM:"Мужчины",genderF:"Женщины",location:"Регион",interests:"Интересы (макс 3)",budget:"Максимальный бюджет (сум)",minFollowers:"Мин. подписчиков",goal:"Цель кампании",platform:"Платформа *",profileLink:"Ссылка на профиль *",profileLinkEx:"instagram.com/username",followers:"Подписчиков *",engagement:"Активность % *",pricePost:"Цена поста (сум) *",priceStory:"Цена stories (сум)",priceVideo:"Цена видео (сум)",priceDesc:"Доп. о цене",address:"Точный адрес *",coordinates:"Координаты (необязательно)",audienceGender:"Пол аудитории",audienceLocation:"Регион аудитории",audienceAges:"Возраст аудитории",next:"Продолжить →",back:"← Назад",save:"Сохранить",cancel:"Отмена",edit:"Редактировать",match:"Подбор",chats:"Чаты",profile:"Профиль",notifs:"Уведомления",admin:"Админ",sendOffer:"Отправить предложение",freeOffer:"Бесплатное предложение (1×)",offerMsg:"Сообщение...",accept:"✓ Принять",reject:"✗ Отклонить",rate:"Оценить",matchScore:"совп.",details:"Подробнее",verified:"✅ Подтверждён",notVerified:"⏳ На проверке",noMatches:"Подходящих партнёров нет",loading:"Загрузка...",send:"Отправить",midasChat:"Сообщения MIDAS",noChats:"Чатов пока нет",noNotifs:"Уведомлений пока нет",ratePartner:"Оцените партнёра",whereAdvert:"Где хотите рекламироваться?",allPartners:"Все предприниматели",bestMatch:"Подходящие партнёры",freeOfferBtn:"Бесплатное тестовое предложение",verifyNote:"Данные будут проверены, после подтверждения получите уведомление. Указывайте точные данные.",saving:"Сохранение...",fillRequired:"Заполните все поля *",required:"* — обязательные поля",pending:"В ожидании",accepted:"Принято",rejected:"Отклонено",sent:"Отправлено →",received:"← Получено",noOffers:"Предложений пока нет",lang:"Язык"}};
-
-const api=async(path,method="GET",body=null)=>{const opts={method,headers:{"Content-Type":"application/json"}};if(body)opts.body=JSON.stringify(body);const r=await fetch(API+path,opts);if(!r.ok){const e=await r.json().catch(()=>{});throw new Error(e?.error||String(r.status));}return r.json();};
-
-function Logo({size=40,withText=false,theme}){const c=theme.accent;return(<div style={{display:"flex",alignItems:"center",gap:10}}><svg width={size} height={size} viewBox="0 0 100 100" fill="none"><polygon points="50,5 93,27.5 93,72.5 50,95 7,72.5 7,27.5" fill={c} opacity="0.15"/><polygon points="50,12 87,32 87,68 50,88 13,68 13,32" fill="none" stroke={c} strokeWidth="3"/><polygon points="50,22 77,37 77,63 50,78 23,63 23,37" fill="none" stroke={c} strokeWidth="2" opacity="0.6"/><path d="M38,35 L38,65 M38,35 L50,55 L62,35 M62,35 L62,65" stroke={c} strokeWidth="5" strokeLinecap="round" strokeLinejoin="round"/></svg>{withText&&(<div><div style={{fontFamily:"Georgia,serif",fontWeight:700,fontSize:size*0.55,color:theme.text,letterSpacing:3}}>MIDAS</div><div style={{fontSize:size*0.22,color:theme.hint,letterSpacing:1.5,textTransform:"uppercase"}}>Businessman & Advertiser</div></div>)}</div>);}
-
-function Card({children,theme,style={}}){return <div style={{background:theme.card,borderRadius:16,padding:16,marginBottom:12,border:`1px solid ${theme.border}`,...style}}>{children}</div>;}
-
-function Btn({children,onClick,disabled,theme,variant="primary",style={},full=false}){const bg=variant==="primary"?theme.accent:variant==="danger"?theme.danger:variant==="ghost"?"transparent":variant==="gold"?theme.gold:theme.inputBg;const color=variant==="ghost"?theme.accent:variant==="secondary"?theme.text:"#fff";return(<button onClick={onClick} disabled={disabled} style={{background:bg,color,border:variant==="ghost"?`1.5px solid ${theme.accent}`:"none",borderRadius:12,padding:"11px 18px",fontWeight:600,fontSize:14,cursor:disabled?"not-allowed":"pointer",opacity:disabled?0.5:1,width:full?"100%":"auto",fontFamily:"inherit",...style}}>{children}</button>);}
-
-function SBtn({children,onClick,theme,variant="primary",style={}}){const bg=variant==="primary"?theme.accent:variant==="danger"?theme.danger:variant==="ghost"?"transparent":variant==="gold"?theme.gold:theme.inputBg;const color=variant==="ghost"?theme.accent:variant==="secondary"?theme.text:"#fff";return(<button onClick={onClick} style={{background:bg,color,border:variant==="ghost"?`1px solid ${theme.accent}`:"none",borderRadius:8,padding:"7px 13px",fontWeight:600,fontSize:12,cursor:"pointer",fontFamily:"inherit",...style}}>{children}</button>);}
-
-function TInput({label,value,onChange,placeholder,type="text",error,note,theme}){return(<div style={{marginBottom:14}}>{label&&<div style={{fontSize:12,color:theme.hint,marginBottom:5,fontWeight:500}}>{label}</div>}<input type={type} value={value} onChange={e=>onChange(e.target.value)} placeholder={placeholder} style={{width:"100%",padding:"12px 14px",borderRadius:10,border:`1.5px solid ${error?theme.danger:theme.border}`,background:theme.inputBg,color:theme.text,fontSize:14,outline:"none",boxSizing:"border-box",fontFamily:"inherit"}}/>{error&&<div style={{color:theme.danger,fontSize:11,marginTop:4}}>⚠ {error}</div>}{note&&<div style={{color:theme.hint,fontSize:11,marginTop:4}}>🔒 {note}</div>}</div>);}
-
-function Tags({options,selected,onChange,max,label,theme}){const toggle=v=>{if(selected.includes(v))onChange(selected.filter(x=>x!==v));else if(!max||selected.length<max)onChange([...selected,v]);};return(<div style={{marginBottom:14}}>{label&&<div style={{fontSize:12,color:theme.hint,marginBottom:6,fontWeight:500}}>{label}</div>}<div style={{display:"flex",flexWrap:"wrap",margin:-3}}>{options.map(o=>(<button key={o.v} onClick={()=>toggle(o.v)} style={{padding:"7px 12px",borderRadius:20,fontSize:12,fontWeight:500,border:`1.5px solid ${selected.includes(o.v)?theme.accent:theme.border}`,background:selected.includes(o.v)?theme.accent:theme.card,color:selected.includes(o.v)?theme.buttonText:theme.text,cursor:"pointer",margin:3,fontFamily:"inherit"}}>{o.l}</button>))}</div>{max&&selected.length>=max&&<div style={{color:theme.gold,fontSize:11,marginTop:4}}>⚠ Maks {max} ta</div>}</div>);}
-
-function Modal({title,children,onClose,theme}){return(<div style={{position:"fixed",inset:0,background:"rgba(0,0,0,0.6)",display:"flex",alignItems:"flex-end",zIndex:100}} onClick={onClose}><div style={{background:theme.card,borderRadius:"20px 20px 0 0",width:"100%",maxHeight:"90vh",overflowY:"auto",padding:20}} onClick={e=>e.stopPropagation()}><div style={{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:16}}><div style={{fontWeight:700,fontSize:16,color:theme.text}}>{title}</div><button onClick={onClose} style={{color:theme.hint,fontSize:24,background:"none",border:"none",cursor:"pointer"}}>×</button></div>{children}</div></div>);}
-
-function Steps({cur,total,theme}){return(<div style={{display:"flex",gap:4,marginBottom:20}}>{Array.from({length:total}).map((_,i)=>(<div key={i} style={{flex:1,height:3,borderRadius:2,background:i<=cur?theme.accent:theme.border,opacity:i<cur?0.5:1}}/>))}</div>);}
-
-// ---- REGISTRATION ----
-function Registration({tgUser,onDone,theme}){
-  const[step,setStep]=useState(0);
-  const[lang,setLang]=useState("uz");
-  const[role,setRole]=useState("");
-  const[fullName,setFullName]=useState(tgUser?.first_name||"");
-  const[phone,setPhone]=useState("");
-  const[errs,setErrs]=useState({});
-  const[sector,setSector]=useState("");
-  const[subSector,setSubSector]=useState("");
-  const[expanded,setExpanded]=useState(null);
-  const[platforms,setPlatforms]=useState([]);
-  const[ages,setAges]=useState([]);
-  const[gender,setGender]=useState("all");
-  const[locs,setLocs]=useState([]);
-  const[ints,setInts]=useState([]);
-  const[budget,setBudget]=useState("");
-  const[minF,setMinF]=useState("");
-  const[goal,setGoal]=useState("");
-  const[platform,setPlatform]=useState("");
-  const[profileLink,setProfileLink]=useState("");
-  const[followers,setFollowers]=useState("");
-  const[engagement,setEngagement]=useState("");
-  const[pricePost,setPricePost]=useState("");
-  const[priceStory,setPriceStory]=useState("");
-  const[priceVideo,setPriceVideo]=useState("");
-  const[priceDesc,setPriceDesc]=useState("");
-  const[address,setAddress]=useState("");
-  const[coords,setCoords]=useState("");
-  const[audAges,setAudAges]=useState([]);
-  const[audGender,setAudGender]=useState("all");
-  const[audLoc,setAudLoc]=useState("all");
-  const[rekInts,setRekInts]=useState([]);
-  const[saving,setSaving]=useState(false);
-  const t=T[lang];
-  const isOnline=PLATFORMS_ONLINE.map(p=>p.v).includes(platform);
-  const isOffline=PLATFORMS_OFFLINE.map(p=>p.v).includes(platform);
-
-  const validate=(fields)=>{const e={};
-    if(fields.includes("name")&&!fullName.trim())e.name=t.fillRequired;
-    if(fields.includes("phone")){if(!phone.trim())e.phone=t.fillRequired;else if(!PHONE_REGEX.test(phone.replace(/[\s-]/g,"")))e.phone=t.phoneInvalid;}
-    if(fields.includes("sector")&&!sector)e.sector=t.fillRequired;
-    if(fields.includes("platform")&&!platform)e.platform=t.fillRequired;
-    if(fields.includes("link")&&isOnline&&!profileLink.trim())e.link=t.fillRequired;
-    if(fields.includes("fol")&&isOnline&&!followers)e.fol=t.fillRequired;
-    if(fields.includes("eng")&&isOnline&&!engagement)e.eng=t.fillRequired;
-    if(fields.includes("price")&&!pricePost)e.price=t.fillRequired;
-    if(fields.includes("addr")&&isOffline&&!address.trim())e.addr=t.fillRequired;
-    setErrs(e);return Object.keys(e).length===0;};
-
-  const submit=async()=>{
-    if(!validate(isOnline?["link","fol","eng","price"]:isOffline?["addr","price"]:[])){return;}
-    setSaving(true);
-    try{
-      await api("/api/users/register","POST",{telegram_id:tgUser.id,username:tgUser.username,full_name:fullName,role,phone:phone.replace(/[\s-]/g,""),lang});
-      if(role==="tadbirkor"){await api(`/api/business-targets/${tgUser.id}`,"POST",{sector,sub_sector:subSector,preferred_platforms:platforms,ages,target_gender:gender,location:locs,interests:ints,min_followers:Number(minF)||0,max_budget:Number(budget)||0,campaign_goal:goal});}
-      else{await api(`/api/reklamachi-profiles/${tgUser.id}`,"POST",{platform,profile_link:profileLink,followers:Number(followers)||0,engagement:Number(engagement)||0,price_post:Number(pricePost)||0,price_story:Number(priceStory)||0,price_video:Number(priceVideo)||0,price_description:priceDesc,address,coordinates:coords,audience_ages:isOnline?audAges:[],audience_gender:isOnline?audGender:"all",audience_location:audLoc,interests:isOnline?rekInts:[]});}
-      onDone(lang);
-    }catch(e){alert(e.message);}
-    setSaving(false);};
-
-  const S={padding:"16px 16px 40px",minHeight:"100vh",background:theme.bg,boxSizing:"border-box"};
-  const center={minHeight:"100vh",background:theme.bg,display:"flex",alignItems:"center",justifyContent:"center",padding:20};
-
-  if(step===0)return(<div style={center}><div style={{width:"100%",maxWidth:340,textAlign:"center"}}><div style={{display:"flex",justifyContent:"center",marginBottom:20}}><Logo size={80} theme={theme}/></div><div style={{fontFamily:"Georgia,serif",fontSize:30,fontWeight:700,color:theme.text,letterSpacing:4,marginBottom:4}}>MIDAS</div><div style={{fontSize:11,color:theme.hint,letterSpacing:2,textTransform:"uppercase",marginBottom:32}}>Businessman & Advertiser</div><div style={{fontSize:14,color:theme.hint,marginBottom:16}}>Tilni tanlang / Выберите язык</div><div style={{display:"flex",gap:12}}><button onClick={()=>{setLang("uz");setStep(1);}} style={{flex:1,padding:14,borderRadius:12,border:`2px solid ${theme.accent}`,background:theme.accentLight,color:theme.accent,fontWeight:700,fontSize:15,cursor:"pointer"}}>🇺🇿 O'zbek</button><button onClick={()=>{setLang("ru");setStep(1);}} style={{flex:1,padding:14,borderRadius:12,border:`2px solid ${theme.border}`,background:theme.card,color:theme.text,fontWeight:700,fontSize:15,cursor:"pointer"}}>🇷🇺 Русский</button></div></div></div>);
-
-  if(step===1)return(<div style={{...S,display:"flex",flexDirection:"column",justifyContent:"center"}}><div style={{textAlign:"center",marginBottom:32}}><Logo size={56} theme={theme}/><div style={{fontFamily:"Georgia,serif",fontSize:24,fontWeight:700,color:theme.text,marginTop:12,letterSpacing:3}}>MIDAS</div><div style={{fontSize:13,color:theme.hint,marginTop:6}}>{t.chooseRole}</div></div><div style={{display:"flex",flexDirection:"column",gap:12}}>{[{role:"tadbirkor",icon:"🏢",title:t.tadbirkor,desc:t.tadbirkorDesc},{role:"reklamachi",icon:"📢",title:t.reklamachi,desc:t.reklamachiDesc}].map(r=>(<button key={r.role} onClick={()=>{setRole(r.role);setStep(2);}} style={{background:theme.card,border:`2px solid ${theme.border}`,borderRadius:16,padding:"18px 20px",textAlign:"left",cursor:"pointer"}}><div style={{display:"flex",alignItems:"center",gap:14}}><div style={{fontSize:34}}>{r.icon}</div><div><div style={{fontWeight:700,fontSize:16,color:theme.text}}>{r.title}</div><div style={{fontSize:12,color:theme.hint,marginTop:3}}>{r.desc}</div></div><div style={{marginLeft:"auto",color:theme.hint,fontSize:22}}>›</div></div></button>))}</div><button onClick={()=>setStep(0)} style={{marginTop:20,color:theme.hint,fontSize:13,background:"none",border:"none",cursor:"pointer"}}>{t.back}</button></div>);
-
-  if(step===2)return(<div style={S}><Steps cur={0} total={2} theme={theme}/><div style={{fontWeight:700,fontSize:18,color:theme.text,marginBottom:4}}>👤 {t.register}</div><div style={{fontSize:11,color:theme.hint,marginBottom:20}}>{t.required}</div><TInput label={t.fullName} value={fullName} onChange={setFullName} placeholder={t.fullName.replace(" *","")} error={errs.name} theme={theme}/><TInput label={t.phone} value={phone} onChange={v=>{setPhone(v);setErrs(e=>({...e,phone:""}));}} placeholder={t.phonePlaceholder} error={errs.phone} note={t.phoneNote} theme={theme}/><div style={{display:"flex",gap:10,marginTop:8}}><Btn onClick={()=>setStep(1)} theme={theme} variant="secondary" full>{t.back}</Btn><Btn onClick={()=>{if(validate(["name","phone"]))setStep(3);}} theme={theme} full>{t.next}</Btn></div></div>);
-
-  if(step===3&&role==="tadbirkor")return(<div style={S}><Steps cur={1} total={2} theme={theme}/><div style={{fontWeight:700,fontSize:18,color:theme.text,marginBottom:16}}>🏢 {lang==="uz"?"Biznes ma'lumotlari":"Данные бизнеса"}</div><div style={{fontSize:12,color:theme.hint,marginBottom:8,fontWeight:500}}>{t.sector}</div>{errs.sector&&<div style={{color:theme.danger,fontSize:11,marginBottom:6}}>⚠ {errs.sector}</div>}<div style={{display:"flex",flexDirection:"column",gap:6,marginBottom:16}}>{SECTORS.map(s=>(<div key={s.v}><button onClick={()=>{setSector(s.v);setSubSector("");setExpanded(expanded===s.v?null:s.v);setInts([]);setErrs(e=>({...e,sector:""}));}} style={{width:"100%",display:"flex",justifyContent:"space-between",alignItems:"center",padding:"11px 14px",borderRadius:10,border:`1.5px solid ${sector===s.v?theme.accent:theme.border}`,background:sector===s.v?theme.accentLight:theme.card,color:sector===s.v?theme.accent:theme.text,fontWeight:600,fontSize:13,cursor:"pointer",boxSizing:"border-box"}}><span>{s.l}</span><span>{expanded===s.v?"▲":"▼"}</span></button>{expanded===s.v&&(<div style={{marginLeft:12,marginTop:4,display:"flex",flexDirection:"column",gap:4}}>{s.sub.map(sub=>(<button key={sub.v} onClick={()=>setSubSector(sub.v)} style={{textAlign:"left",padding:"9px 12px",borderRadius:8,border:`1px solid ${subSector===sub.v?theme.accent:theme.border}`,background:subSector===sub.v?theme.accentLight:theme.inputBg,color:subSector===sub.v?theme.accent:theme.hint,fontSize:12,cursor:"pointer"}}>{sub.l}</button>))}</div>)}</div>))}</div><Tags options={PLATFORMS_ALL} selected={platforms} onChange={setPlatforms} label={t.platforms} theme={theme}/><Tags options={AGE_OPTIONS} selected={ages} onChange={setAges} label={t.ages} theme={theme}/><div style={{marginBottom:14}}><div style={{fontSize:12,color:theme.hint,marginBottom:8,fontWeight:500}}>{t.gender}</div><div style={{display:"flex",gap:8}}>{[["all",t.genderAll],["male",t.genderM],["female",t.genderF]].map(([v,l])=>(<button key={v} onClick={()=>setGender(v)} style={{flex:1,padding:9,borderRadius:9,fontSize:12,fontWeight:500,border:`1.5px solid ${gender===v?theme.accent:theme.border}`,background:gender===v?theme.accentLight:theme.card,color:gender===v?theme.accent:theme.text,cursor:"pointer"}}>{l}</button>))}</div></div><Tags options={LOCATIONS} selected={locs} onChange={setLocs} label={t.location} theme={theme}/><Tags options={(SECTOR_INTERESTS[sector]||SECTOR_INTERESTS.default).map(i=>({v:i,l:i}))} selected={ints} onChange={setInts} max={3} label={t.interests} theme={theme}/><TInput label={t.budget} value={budget} onChange={setBudget} type="number" placeholder="1 000 000" theme={theme}/><TInput label={t.minFollowers} value={minF} onChange={setMinF} type="number" placeholder="5 000" theme={theme}/><TInput label={t.goal} value={goal} onChange={setGoal} placeholder={lang==="uz"?"Brend tanishtirish...":"Знакомство с брендом..."} theme={theme}/><div style={{display:"flex",gap:10,marginTop:8}}><Btn onClick={()=>setStep(2)} theme={theme} variant="secondary" full>{t.back}</Btn><Btn onClick={()=>{if(validate(["sector"]))submit();}} disabled={saving} theme={theme} full>{saving?t.saving:t.save}</Btn></div></div>);
-
-  if(role==="reklamachi")return(<div style={S}><Steps cur={1} total={2} theme={theme}/><div style={{fontWeight:700,fontSize:18,color:theme.text,marginBottom:16}}>📢 {lang==="uz"?"Reklama ma'lumotlari":"Данные рекламы"}</div><div style={{fontSize:12,color:theme.hint,marginBottom:8,fontWeight:500}}>{t.platform}</div>{errs.platform&&<div style={{color:theme.danger,fontSize:11,marginBottom:6}}>⚠ {errs.platform}</div>}<div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:8,marginBottom:16}}>{PLATFORMS_ALL.map(p=>(<button key={p.v} onClick={()=>{setPlatform(p.v);setErrs(e=>({...e,platform:""}));}} style={{padding:"12px 10px",borderRadius:10,fontSize:12,fontWeight:600,border:`1.5px solid ${platform===p.v?theme.accent:theme.border}`,background:platform===p.v?theme.accentLight:theme.card,color:platform===p.v?theme.accent:theme.text,cursor:"pointer",boxSizing:"border-box"}}>{p.l}</button>))}</div>{platform&&(<>{isOnline&&(<div style={{background:theme.accentLight,border:`1px solid ${theme.accent}`,borderRadius:12,padding:"10px 14px",marginBottom:14,fontSize:12,color:theme.accent}}>ℹ️ {t.verifyNote}</div>)}{isOnline&&<><TInput label={`${t.profileLink} (${t.profileLinkEx})`} value={profileLink} onChange={v=>{setProfileLink(v);setErrs(e=>({...e,link:""}));}} placeholder="https://instagram.com/username" error={errs.link} theme={theme}/><TInput label={t.followers} value={followers} onChange={v=>{setFollowers(v);setErrs(e=>({...e,fol:""}));}} type="number" placeholder="10 000" error={errs.fol} theme={theme}/><TInput label={t.engagement} value={engagement} onChange={v=>{setEngagement(v);setErrs(e=>({...e,eng:""}));}} type="number" placeholder="3.5" error={errs.eng} theme={theme}/></>}{isOffline&&<TInput label={t.address} value={address} onChange={v=>{setAddress(v);setErrs(e=>({...e,addr:""}));}} placeholder={lang==="uz"?"Toshkent, Chilonzor...":"Ташкент, Чиланзар..."} error={errs.addr} theme={theme}/>}{isOffline&&<TInput label={t.coordinates} value={coords} onChange={setCoords} placeholder="41.2995, 69.2401" theme={theme}/>}<TInput label={t.pricePost} value={pricePost} onChange={v=>{setPricePost(v);setErrs(e=>({...e,price:""}));}} type="number" placeholder="150 000" error={errs.price} theme={theme}/>{isOnline&&<><TInput label={t.priceStory} value={priceStory} onChange={setPriceStory} type="number" placeholder="80 000" theme={theme}/><TInput label={t.priceVideo} value={priceVideo} onChange={setPriceVideo} type="number" placeholder="300 000" theme={theme}/></>}<TInput label={t.priceDesc} value={priceDesc} onChange={setPriceDesc} placeholder={lang==="uz"?"Narx haqida...":"О цене..."} theme={theme}/>{isOnline&&<><Tags options={AGE_OPTIONS} selected={audAges} onChange={setAudAges} label={t.audienceAges} theme={theme}/><div style={{marginBottom:14}}><div style={{fontSize:12,color:theme.hint,marginBottom:8,fontWeight:500}}>{t.audienceGender}</div><div style={{display:"flex",gap:8}}>{[["all",t.genderAll],["male",t.genderM],["female",t.genderF]].map(([v,l])=>(<button key={v} onClick={()=>setAudGender(v)} style={{flex:1,padding:9,borderRadius:9,fontSize:12,border:`1.5px solid ${audGender===v?theme.accent:theme.border}`,background:audGender===v?theme.accentLight:theme.card,color:audGender===v?theme.accent:theme.text,cursor:"pointer"}}>{l}</button>))}</div></div><div style={{marginBottom:14}}><div style={{fontSize:12,color:theme.hint,marginBottom:6,fontWeight:500}}>{t.audienceLocation}</div><select value={audLoc} onChange={e=>setAudLoc(e.target.value)} style={{width:"100%",padding:"11px 12px",borderRadius:10,border:`1.5px solid ${theme.border}`,background:theme.inputBg,color:theme.text,fontSize:13,outline:"none",fontFamily:"inherit"}}>{LOCATIONS.map(l=><option key={l.v} value={l.v}>{l.l}</option>)}</select></div><Tags options={SECTOR_INTERESTS.default.map(i=>({v:i,l:i}))} selected={rekInts} onChange={setRekInts} max={3} label={t.interests} theme={theme}/></>}</>)}<div style={{display:"flex",gap:10,marginTop:16}}><Btn onClick={()=>setStep(2)} theme={theme} variant="secondary" full>{t.back}</Btn><Btn onClick={()=>{if(validate(["platform","link","fol","eng","price","addr"]))submit();}} disabled={saving||!platform} theme={theme} full>{saving?t.saving:t.save}</Btn></div></div>);
-  return null;
+  return (
+    <div style={{
+      position:"fixed", bottom:0, left:0, right:0, zIndex:100,
+      background:theme.card, borderTop:`1px solid ${theme.border}`,
+      display:"flex", paddingBottom:"env(safe-area-inset-bottom,0px)"
+    }}>
+      {items.map(it => (
+        <button key={it.v} onClick={() => setTab(it.v)} style={{
+          flex:1, padding:"10px 4px 8px", background:"none", border:"none",
+          cursor:"pointer", display:"flex", flexDirection:"column",
+          alignItems:"center", gap:3, position:"relative"
+        }}>
+          <span style={{ fontSize:22, lineHeight:1 }}>{it.icon}</span>
+          <span style={{
+            fontSize:10, fontWeight:tab===it.v?700:500,
+            color:tab===it.v?theme.accent:theme.hint,
+            transition:"color 0.15s"
+          }}>{lang==="uz"?it.uz:it.ru}</span>
+          {/* Active dot */}
+          {tab===it.v && (
+            <div style={{ position:"absolute", top:6, width:4, height:4, borderRadius:2, background:theme.accent }}/>
+          )}
+          {/* Unread badge */}
+          {it.v==="notifs" && unread.notifs>0 && (
+            <div style={{ position:"absolute", top:4, right:"18%", background:theme.danger, color:"#fff", fontSize:9, borderRadius:8, minWidth:16, height:16, display:"flex", alignItems:"center", justifyContent:"center", fontWeight:700, padding:"0 4px" }}>{unread.notifs}</div>
+          )}
+          {it.v==="chats" && unread.chats>0 && (
+            <div style={{ position:"absolute", top:4, right:"18%", background:theme.danger, color:"#fff", fontSize:9, borderRadius:8, minWidth:16, height:16, display:"flex", alignItems:"center", justifyContent:"center", fontWeight:700, padding:"0 4px" }}>{unread.chats}</div>
+          )}
+        </button>
+      ))}
+      {isAdmin && (
+        <button onClick={() => setTab("admin")} style={{ flex:1, padding:"10px 4px 8px", background:"none", border:"none", cursor:"pointer", display:"flex", flexDirection:"column", alignItems:"center", gap:3 }}>
+          <span style={{ fontSize:22 }}>⚙️</span>
+          <span style={{ fontSize:10, fontWeight:tab==="admin"?700:500, color:tab==="admin"?theme.accent:theme.hint }}>Admin</span>
+        </button>
+      )}
+    </div>
+  );
 }
 
-// ---- MATCH ----
-function MatchPage({user,lang,theme}){
-  const t=T[lang];
-  const[matches,setMatches]=useState([]);
-  const[loading,setLoading]=useState(false);
-  const[pf,setPf]=useState("");
-  const[offerM,setOfferM]=useState(null);
-  const[offerMsg,setOfferMsg]=useState("");
-  const[detailM,setDetailM]=useState(null);
-  const[freeUsed,setFreeUsed]=useState(false);
-  const load=useCallback(async(filter="")=>{setLoading(true);try{const url=filter&&filter!=="midas"?`/api/match/${user.telegram_id}?platform_filter=${filter}`:`/api/match/${user.telegram_id}`;const res=await api(url);setMatches(Array.isArray(res)?res:[]);}catch{}setLoading(false);},[user]);
-  useEffect(()=>{if(user.role==="reklamachi"){load();api(`/api/reklamachi-profiles/${user.telegram_id}`).then(r=>setFreeUsed(!!r.free_offer_used)).catch(()=>{});}},[user,load]);
-  const sendOffer=async(isFree=false)=>{try{await api("/api/offers","POST",{from_id:user.telegram_id,to_id:offerM.uid||offerM.user_id,message:offerMsg,is_free:isFree?1:0});setOfferM(null);setOfferMsg("");if(isFree)setFreeUsed(true);alert(lang==="uz"?"Taklif yuborildi ✓":"Предложение отправлено ✓");}catch(e){alert(e.message);}};
-  const sc=s=>s>=80?"#22c55e":s>=60?theme.accent:s>=40?"#f59e0b":"#9ca3af";
-  if(user.role==="tadbirkor"&&!pf)return(<div style={{padding:16}}><div style={{fontWeight:700,fontSize:18,color:theme.text,marginBottom:4}}>🎯 {t.whereAdvert}</div><div style={{fontSize:12,color:theme.hint,marginBottom:16}}>{lang==="uz"?"Platformani tanlang":"Выберите платформу"}</div><div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:10}}>{MATCH_PLATFORMS.map(p=>(<button key={p.v} onClick={()=>{setPf(p.v);load(p.v);}} style={{background:theme.card,border:`1.5px solid ${theme.border}`,borderRadius:14,padding:"16px 12px",textAlign:"center",cursor:"pointer",fontWeight:600,fontSize:13,color:theme.text}}>{p.l}</button>))}</div></div>);
-  return(<div style={{padding:16}}>{user.role==="tadbirkor"&&pf&&(<div style={{display:"flex",alignItems:"center",gap:10,marginBottom:16}}><button onClick={()=>setPf("")} style={{color:theme.accent,fontSize:13,background:"none",border:"none",cursor:"pointer"}}>{t.back}</button><span style={{fontWeight:700,color:theme.text}}>{MATCH_PLATFORMS.find(p=>p.v===pf)?.l}</span></div>)}{user.role==="reklamachi"&&(<div style={{display:"flex",gap:8,marginBottom:16,flexWrap:"wrap"}}><SBtn onClick={()=>load()} theme={theme} variant={!pf?"primary":"secondary"}>{t.bestMatch}</SBtn><SBtn onClick={()=>{setPf("all");load("all");}} theme={theme} variant={pf==="all"?"primary":"secondary"}>{t.allPartners}</SBtn></div>)}{loading&&<div style={{textAlign:"center",padding:"40px 0",color:theme.hint}}>{t.loading}</div>}{!loading&&matches.length===0&&<div style={{textAlign:"center",padding:"40px 0",color:theme.hint}}>{t.noMatches}</div>}{matches.map((m,i)=>(<Card key={i} theme={theme}><div style={{display:"flex",justifyContent:"space-between",alignItems:"flex-start",marginBottom:10}}><div><span style={{fontWeight:700,color:theme.text,fontSize:15}}>{m.full_name}</span>{m.is_premium===1&&<span style={{marginLeft:8,fontSize:11,background:"#fef3c7",color:"#92400e",padding:"2px 8px",borderRadius:10}}>⭐ Premium</span>}</div><div style={{background:sc(m.match_score)+"22",color:sc(m.match_score),fontSize:12,fontWeight:700,padding:"4px 10px",borderRadius:10}}>{m.match_score}% {t.matchScore}</div></div><div style={{fontSize:12,color:theme.hint,marginBottom:12,lineHeight:1.8}}>{m.platform&&<div>{PLATFORMS_ALL.find(p=>p.v===m.platform)?.l}</div>}{m.followers>0&&<div>{m.followers?.toLocaleString()} {lang==="uz"?"obunachi":"подписчиков"}</div>}{m.engagement>0&&<div>ER: {m.engagement}%</div>}{m.price_post>0&&<div>{m.price_post?.toLocaleString()} {lang==="uz"?"so'm/post":"сум/пост"}</div>}{m.address&&<div>📍 {m.address}</div>}{m.sector&&<div>{SECTORS.find(s=>s.v===m.sector)?.l}</div>}{m.max_budget>0&&<div>{lang==="uz"?"Byudjet":"Бюджет"}: {m.max_budget?.toLocaleString()} {lang==="uz"?"so'm":"сум"}</div>}{m.verified!==undefined&&<div style={{color:m.verified?theme.accent:theme.gold}}>{m.verified?t.verified:t.notVerified}</div>}</div><div style={{display:"flex",gap:8,flexWrap:"wrap"}}><SBtn onClick={()=>setDetailM(m)} theme={theme} variant="ghost">{t.details}</SBtn><SBtn onClick={()=>setOfferM(m)} theme={theme}>{t.sendOffer}</SBtn>{user.role==="reklamachi"&&!freeUsed&&<SBtn onClick={()=>setOfferM({...m,_free:true})} theme={theme} variant="gold">{t.freeOfferBtn}</SBtn>}</div></Card>))}{offerM&&(<Modal title={t.sendOffer} onClose={()=>setOfferM(null)} theme={theme}><div style={{fontSize:14,color:theme.hint,marginBottom:12}}>{offerM.full_name}</div>{offerM._free&&<div style={{background:theme.accentLight,color:theme.accent,fontSize:12,padding:"8px 12px",borderRadius:8,marginBottom:12}}>🎁 {t.freeOffer}</div>}<textarea value={offerMsg} onChange={e=>setOfferMsg(e.target.value)} rows={4} placeholder={t.offerMsg} style={{width:"100%",padding:"11px 13px",borderRadius:10,border:`1.5px solid ${theme.border}`,background:theme.inputBg,color:theme.text,fontSize:13,fontFamily:"inherit",resize:"none",marginBottom:12,boxSizing:"border-box"}}/><Btn onClick={()=>sendOffer(offerM._free)} theme={theme} full>{t.sendOffer}</Btn></Modal>)}{detailM&&(<Modal title={detailM.full_name} onClose={()=>setDetailM(null)} theme={theme}><div style={{display:"flex",flexDirection:"column",gap:10,fontSize:13}}>{[[t.platform,PLATFORMS_ALL.find(p=>p.v===detailM.platform)?.l],["Link",detailM.profile_link],["Obunachi",detailM.followers>0?detailM.followers?.toLocaleString():null],["ER",detailM.engagement>0?`${detailM.engagement}%`:null],[t.pricePost?.replace(" *",""),detailM.price_post>0?`${detailM.price_post?.toLocaleString()} ${lang==="uz"?"so'm":"сум"}`:null],[t.address?.replace(" *",""),detailM.address],[t.sector?.replace(" *",""),SECTORS.find(s=>s.v===detailM.sector)?.l],[t.goal,detailM.campaign_goal],[lang==="uz"?"Byudjet":"Бюджет",detailM.max_budget>0?`${detailM.max_budget?.toLocaleString()} ${lang==="uz"?"so'm":"сум"}`:null],["⭐ Reyting",`${detailM.rating?.toFixed?.(1)||"5.0"}`],[lang==="uz"?"Holat":"Статус",detailM.verified?t.verified:t.notVerified]].filter(([,v])=>v).map(([k,v])=>(<div key={k} style={{display:"flex",justifyContent:"space-between",padding:"8px 0",borderBottom:`1px solid ${theme.border}`}}><span style={{color:theme.hint}}>{k}</span><span style={{color:theme.text,fontWeight:500,textAlign:"right",maxWidth:"60%"}}>{v}</span></div>))}</div></Modal>)}</div>);
+// ── STREAK / FOMO HEADER ───────────────────────────────
+function FOMOBar({ lang, theme, user }) {
+  const [info, setInfo] = useState(null);
+  useEffect(() => {
+    http(`/api/fomo?tg_id=${user.telegram_id}`).then(setInfo).catch(() => {});
+  }, [user]);
+  if (!info) return null;
+  return (
+    <div style={{ background: theme.accentLight, borderBottom: `1px solid ${theme.accentB}`, padding: "8px 16px", display: "flex", gap: 16, overflowX: "auto" }}>
+      {info.streak > 1 && (
+        <div style={{ fontSize: 12, color: theme.accent, fontWeight: 600, whiteSpace: "nowrap" }}>
+          🔥 {info.streak} {lang==="uz"?"kun ketma-ket":"дней подряд"}
+        </div>
+      )}
+      {info.new_tenders > 0 && (
+        <div style={{ fontSize: 12, color: theme.accent, fontWeight: 600, whiteSpace: "nowrap" }}>
+          📋 {lang==="uz"?`Bugun ${info.new_tenders} yangi tender`:`Сегодня ${info.new_tenders} новых тендеров`}
+        </div>
+      )}
+      {info.new_partners > 0 && (
+        <div style={{ fontSize: 12, color: theme.accent, fontWeight: 600, whiteSpace: "nowrap" }}>
+          🤝 {lang==="uz"?`${info.new_partners} yangi hamkor qo'shildi`:`${info.new_partners} новых партнёров`}
+        </div>
+      )}
+    </div>
+  );
 }
 
-// ---- CHATS ----
-function ChatsPage({user,lang,theme}){
-  const t=T[lang];
-  const[chats,setChats]=useState([]);
-  const[bcs,setBcs]=useState([]);
-  const[openChat,setOpenChat]=useState(null);
-  const[msgs,setMsgs]=useState([]);
-  const[text,setText]=useState("");
-  const[midas,setMidas]=useState(false);
-  const msgEnd=useRef();
-  const loadAll=useCallback(async()=>{api(`/api/chats/${user.telegram_id}`).then(r=>setChats(Array.isArray(r)?r:[])).catch(()=>{});api(`/api/broadcasts?tg_id=${user.telegram_id}`).then(r=>setBcs(Array.isArray(r)?r:[])).catch(()=>{});},[user]);
-  useEffect(()=>{loadAll();},[loadAll]);
-  useEffect(()=>{if(!openChat)return;const iv=setInterval(()=>{api(`/api/chats/${openChat.id}/messages`).then(r=>setMsgs(Array.isArray(r)?r:[])).catch(()=>{});},3000);return()=>clearInterval(iv);},[openChat]);
-  useEffect(()=>{msgEnd.current?.scrollIntoView({behavior:"smooth"});},[msgs]);
-  const openFn=async(chat)=>{setOpenChat(chat);const r=await api(`/api/chats/${chat.id}/messages`).catch(()=>[]);setMsgs(Array.isArray(r)?r:[]);api(`/api/chats/${chat.id}/read?tg_id=${user.telegram_id}`,"PUT").catch(()=>{});};
-  const send=async()=>{if(!text.trim()||!openChat)return;const t2=text;setText("");await api("/api/messages","POST",{chat_id:openChat.id,sender_id:user.telegram_id,receiver_id:openChat.partner_id,message_text:t2}).catch(()=>{});const r=await api(`/api/chats/${openChat.id}/messages`).catch(()=>[]);setMsgs(Array.isArray(r)?r:[]);};
-  if(openChat)return(<div style={{display:"flex",flexDirection:"column",height:"100vh",background:theme.bg}}><div style={{background:theme.card,borderBottom:`1px solid ${theme.border}`,padding:"14px 16px",display:"flex",alignItems:"center",gap:12}}><button onClick={()=>{setOpenChat(null);loadAll();}} style={{color:theme.accent,fontSize:20,background:"none",border:"none",cursor:"pointer"}}>←</button><span style={{fontWeight:700,color:theme.text}}>{openChat.partner_name}</span></div><div style={{flex:1,overflowY:"auto",padding:"12px 16px",display:"flex",flexDirection:"column",gap:8}}>{msgs.map((m,i)=>(<div key={i} style={{display:"flex",justifyContent:m.sender_id===user.telegram_id?"flex-end":"flex-start"}}><div style={{maxWidth:"75%",padding:"10px 13px",borderRadius:m.sender_id===user.telegram_id?"16px 16px 4px 16px":"16px 16px 16px 4px",background:m.sender_id===user.telegram_id?theme.accent:theme.card,color:m.sender_id===user.telegram_id?"#fff":theme.text,fontSize:13,lineHeight:1.5}}>{m.message_text}<div style={{fontSize:10,opacity:0.6,marginTop:3,textAlign:"right"}}>{m.created_at?.slice(11,16)}</div></div></div>))}<div ref={msgEnd}/></div><div style={{background:theme.card,borderTop:`1px solid ${theme.border}`,padding:"10px 12px",display:"flex",gap:8}}><input value={text} onChange={e=>setText(e.target.value)} onKeyDown={e=>e.key==="Enter"&&send()} placeholder={lang==="uz"?"Xabar yozing...":"Напишите сообщение..."} style={{flex:1,padding:"10px 14px",borderRadius:20,border:`1.5px solid ${theme.border}`,background:theme.inputBg,color:theme.text,fontSize:13,outline:"none",fontFamily:"inherit"}}/><button onClick={send} style={{background:theme.accent,color:"#fff",borderRadius:20,border:"none",padding:"10px 18px",fontWeight:600,fontSize:13,cursor:"pointer"}}>{t.send}</button></div></div>);
-  if(midas)return(<div style={{padding:16,background:theme.bg,minHeight:"100vh"}}><div style={{display:"flex",alignItems:"center",gap:10,marginBottom:16}}><button onClick={()=>setMidas(false)} style={{color:theme.accent,background:"none",border:"none",cursor:"pointer",fontSize:13}}>{t.back}</button><Logo size={22} theme={theme}/><span style={{fontWeight:700,color:theme.text}}>MIDAS</span></div>{bcs.length===0&&<div style={{textAlign:"center",padding:40,color:theme.hint}}>{t.noChats}</div>}{bcs.map((b,i)=>(<Card key={i} theme={theme}><div style={{display:"flex",justifyContent:"space-between",fontSize:11,color:theme.hint,marginBottom:8}}><span>📢 MIDAS Admin</span><span>{b.created_at?.slice(0,16)}</span></div><p style={{fontSize:13,color:theme.text,margin:0,lineHeight:1.6}}>{b.message_text}</p></Card>))}</div>);
-  return(<div style={{padding:16}}><div style={{fontWeight:700,fontSize:18,color:theme.text,marginBottom:16}}>💬 {t.chats}</div><button onClick={()=>setMidas(true)} style={{width:"100%",background:`linear-gradient(135deg,${theme.accent},#1e4d2b)`,borderRadius:14,padding:"14px 16px",border:"none",cursor:"pointer",display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:12}}><div style={{display:"flex",alignItems:"center",gap:10}}><Logo size={26} theme={{...theme,accent:"#fff"}}/><div style={{textAlign:"left"}}><div style={{fontWeight:700,color:"#fff",fontSize:14}}>{t.midasChat}</div>{bcs.length>0&&<div style={{fontSize:11,color:"rgba(255,255,255,0.7)",marginTop:2}}>{bcs[0]?.message_text?.slice(0,35)}...</div>}</div></div><span style={{color:"rgba(255,255,255,0.5)",fontSize:20}}>›</span></button>{chats.length===0&&<div style={{textAlign:"center",padding:"32px 0",color:theme.hint}}>{t.noChats}</div>}{chats.map(chat=>(<button key={chat.id} onClick={()=>openFn(chat)} style={{width:"100%",background:theme.card,borderRadius:12,padding:"13px 14px",border:`1px solid ${theme.border}`,cursor:"pointer",display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:8,boxSizing:"border-box"}}><div style={{textAlign:"left"}}><div style={{fontWeight:600,color:theme.text,fontSize:14}}>{chat.partner_name}</div>{chat.last_message&&<div style={{fontSize:12,color:theme.hint,marginTop:3}}>{chat.last_message?.slice(0,40)}</div>}</div><div style={{display:"flex",flexDirection:"column",alignItems:"flex-end",gap:4}}>{chat.unread>0&&<span style={{background:theme.accent,color:"#fff",fontSize:11,borderRadius:10,padding:"2px 7px"}}>{chat.unread}</span>}<span style={{color:theme.hint}}>›</span></div></button>))}</div>);
+// ── PROFILE PROGRESS BAR ───────────────────────────────
+function ProfileProgress({ user, lang, theme, onGoProfile }) {
+  const [pct, setPct] = useState(null);
+  useEffect(() => {
+    http(`/api/users/${user.telegram_id}/progress`).then(r => setPct(r.percent)).catch(() => {});
+  }, [user]);
+  if (!pct || pct >= 100) return null;
+  return (
+    <button onClick={onGoProfile} style={{ width:"100%", background:theme.card, borderBottom:`1px solid ${theme.border}`, padding:"10px 16px", display:"flex", alignItems:"center", gap:12, border:"none", cursor:"pointer", boxSizing:"border-box" }}>
+      <div style={{ flex:1 }}>
+        <div style={{ display:"flex", justifyContent:"space-between", fontSize:12, color:theme.sub, marginBottom:5 }}>
+          <span>👤 {lang==="uz"?"Profil to'ldirilishi":"Профиль заполнен"}</span>
+          <span style={{ fontWeight:700, color:theme.accent }}>{pct}%</span>
+        </div>
+        <div style={{ height:6, borderRadius:3, background:theme.border, overflow:"hidden" }}>
+          <div style={{ height:"100%", width:`${pct}%`, background:theme.accent, borderRadius:3, transition:"width 0.5s" }}/>
+        </div>
+      </div>
+      <span style={{ color:theme.accent, fontSize:18 }}>›</span>
+    </button>
+  );
 }
 
-// ---- OFFERS ----
-function OffersPage({user,lang,theme}){
-  const t=T[lang];
-  const[offers,setOffers]=useState([]);
-  const[rateM,setRateM]=useState(null);
-  const[rating,setRating]=useState(5);
-  const load=useCallback(async()=>{api(`/api/offers/${user.telegram_id}`).then(r=>setOffers(Array.isArray(r)?r:[])).catch(()=>{});},[user]);
-  useEffect(()=>{load();},[load]);
-  const sc={pending:{bg:"#fef3c7",c:"#92400e"},accepted:{bg:"#d1fae5",c:"#065f46"},rejected:{bg:"#fee2e2",c:"#991b1b"}};
-  return(<div style={{padding:16}}><div style={{fontWeight:700,fontSize:18,color:theme.text,marginBottom:16}}>📨 {lang==="uz"?"Takliflar":"Предложения"}</div>{offers.length===0&&<div style={{textAlign:"center",padding:"40px 0",color:theme.hint}}>{t.noOffers}</div>}{offers.map(o=>(<Card key={o.id} theme={theme}><div style={{display:"flex",justifyContent:"space-between",marginBottom:8}}><span style={{fontWeight:600,color:theme.text,fontSize:13}}>{o.from_id===user.telegram_id?`→ ${o.to_name}`:`← ${o.from_name}`}</span><span style={{fontSize:11,padding:"3px 8px",borderRadius:8,background:sc[o.status]?.bg||"#f3f4f6",color:sc[o.status]?.c||theme.hint}}>{t[o.status]||o.status}</span></div><div style={{fontSize:11,color:theme.hint,marginBottom:8}}>{o.from_id===user.telegram_id?t.sent:t.received} · {o.created_at?.slice(0,10)}{o.is_free===1&&<span style={{marginLeft:8,background:"#d1fae5",color:"#065f46",padding:"1px 6px",borderRadius:6}}>{lang==="uz"?"Bepul":"Бесплатно"}</span>}</div>{o.message&&<p style={{fontSize:13,color:theme.text,fontStyle:"italic",margin:"0 0 10px"}}>"{o.message}"</p>}{o.to_id===user.telegram_id&&o.status==="pending"&&(<div style={{display:"flex",gap:8}}><SBtn onClick={async()=>{await api(`/api/offers/${o.id}/status?status=accepted`,"PUT");load();}} theme={theme}>{t.accept}</SBtn><SBtn onClick={async()=>{await api(`/api/offers/${o.id}/status?status=rejected`,"PUT");load();}} theme={theme} variant="danger">{t.reject}</SBtn></div>)}{o.status==="accepted"&&!o.rated&&o.from_id===user.telegram_id&&(<SBtn onClick={()=>setRateM(o)} theme={theme} variant="ghost">{t.rate}</SBtn>)}</Card>))}{rateM&&(<Modal title={t.ratePartner} onClose={()=>setRateM(null)} theme={theme}><div style={{fontSize:14,color:theme.hint,marginBottom:16}}>{rateM.to_name}</div><div style={{display:"flex",justifyContent:"center",gap:12,marginBottom:20}}>{[1,2,3,4,5].map(n=>(<button key={n} onClick={()=>setRating(n)} style={{fontSize:36,background:"none",border:"none",cursor:"pointer",color:n<=rating?"#f59e0b":"#e5e7eb"}}>★</button>))}</div><Btn onClick={async()=>{await api(`/api/offers/${rateM.id}/rate`,"POST",{rating});setRateM(null);load();}} theme={theme} full>{t.save}</Btn></Modal>)}</div>);
-}
+// ── MAIN APP ───────────────────────────────────────────
+export default function App() {
+  const theme   = buildTheme();
 
-// ---- PROFILE ----
-function ProfilePage({user,lang,theme,onLangChange}){
-  const t=T[lang];
-  const[ud,setUd]=useState(user);
-  const[bt,setBt]=useState(null);
-  const[rp,setRp]=useState(null);
-  const[stats,setStats]=useState({});
-  const[editM,setEditM]=useState(null);
-  const[form,setForm]=useState({});
-  const[saving,setSaving]=useState(false);
-  const load=useCallback(async()=>{try{const[u,s]=await Promise.all([api(`/api/users/${user.telegram_id}`),api(`/api/users/${user.telegram_id}/stats`)]);setUd(u);setStats(s);if(u.role==="tadbirkor")api(`/api/business-targets/${user.telegram_id}`).then(setBt).catch(()=>{});else api(`/api/reklamachi-profiles/${user.telegram_id}`).then(setRp).catch(()=>{});}catch{}},[user]);
-  useEffect(()=>{load();},[load]);
-  const save=async()=>{setSaving(true);try{if(editM==="user")await api(`/api/users/${user.telegram_id}`,"PUT",form);else if(editM==="bt")await api(`/api/business-targets/${user.telegram_id}`,"POST",{...bt,...form});else if(editM==="rp")await api(`/api/reklamachi-profiles/${user.telegram_id}`,"PUT",form);await load();setEditM(null);}catch(e){alert(e.message);}setSaving(false);};
-  return(<div style={{padding:16,paddingBottom:80}}><div style={{background:`linear-gradient(135deg,${theme.accent},#1a4a2e)`,borderRadius:18,padding:20,marginBottom:16,textAlign:"center"}}><div style={{display:"flex",justifyContent:"center",marginBottom:12}}><Logo size={36} theme={{...theme,accent:"rgba(255,255,255,0.7)"}}/></div><div style={{fontWeight:700,fontSize:20,color:"#fff"}}>{ud.full_name}</div><div style={{fontSize:12,color:"rgba(255,255,255,0.7)",marginTop:4}}>{ud.role==="tadbirkor"?`🏢 ${t.tadbirkor}`:`📢 ${t.reklamachi}`}{ud.is_premium===1&&<span style={{marginLeft:8,background:"#fef3c7",color:"#92400e",padding:"1px 8px",borderRadius:10,fontSize:11}}>⭐ Premium</span>}</div><div style={{display:"flex",justifyContent:"center",gap:24,marginTop:16}}>{[[stats.deals||0,lang==="uz"?"Bitim":"Сделки"],[`${ud.rating?.toFixed?.(1)||"5.0"}⭐`,lang==="uz"?"Reyting":"Рейтинг"],[stats.total_offers||0,lang==="uz"?"Taklif":"Предл."]].map(([v,l])=>(<div key={l} style={{textAlign:"center"}}><div style={{fontWeight:700,fontSize:18,color:"#fff"}}>{v}</div><div style={{fontSize:10,color:"rgba(255,255,255,0.6)",marginTop:2}}>{l}</div></div>))}</div></div>
-  <Card theme={theme}><div style={{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:14}}><span style={{fontWeight:700,color:theme.text,fontSize:14}}>{lang==="uz"?"Asosiy ma'lumot":"Основные данные"}</span><button onClick={()=>{setForm({full_name:ud.full_name,phone:ud.phone||""});setEditM("user");}} style={{color:theme.accent,fontSize:12,fontWeight:600,background:"none",border:"none",cursor:"pointer"}}>✏️</button></div><PRow label={t.fullName?.replace(" *","")} value={ud.full_name} theme={theme}/><div><div style={{fontSize:11,color:theme.hint,marginBottom:6}}>{t.lang}</div><div style={{display:"flex",gap:6}}>{["uz","ru"].map(l=>(<button key={l} onClick={()=>onLangChange(l)} style={{padding:"5px 14px",borderRadius:8,fontSize:12,fontWeight:600,background:lang===l?theme.accent:theme.inputBg,color:lang===l?"#fff":theme.text,border:"none",cursor:"pointer"}}>{l.toUpperCase()}</button>))}</div></div></Card>
-  {ud.role==="tadbirkor"&&bt&&(<Card theme={theme}><div style={{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:14}}><span style={{fontWeight:700,color:theme.text,fontSize:14}}>{lang==="uz"?"Biznes ma'lumotlari":"Данные бизнеса"}</span><button onClick={()=>{setForm({...bt});setEditM("bt");}} style={{color:theme.accent,fontSize:12,fontWeight:600,background:"none",border:"none",cursor:"pointer"}}>✏️</button></div>{[[t.sector?.replace(" *",""),SECTORS.find(s=>s.v===bt.sector)?.l],[t.platforms,bt.preferred_platforms?.map(p=>PLATFORMS_ALL.find(x=>x.v===p)?.l||p).join(", ")],[t.location,bt.location?.map(l=>LOCATIONS.find(x=>x.v===l)?.l||l).join(", ")],[t.interests,bt.interests?.join(", ")],[t.budget,bt.max_budget>0?`${bt.max_budget?.toLocaleString()} ${lang==="uz"?"so'm":"сум"}`:null],[t.goal,bt.campaign_goal]].filter(([,v])=>v).map(([k,v])=>(<PRow key={k} label={k} value={v} theme={theme}/>))}</Card>)}
-  {ud.role==="reklamachi"&&rp&&(<Card theme={theme}><div style={{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:14}}><span style={{fontWeight:700,color:theme.text,fontSize:14}}>{lang==="uz"?"Reklama ma'lumotlari":"Данные рекламы"}</span><button onClick={()=>{setForm({...rp});setEditM("rp");}} style={{color:theme.accent,fontSize:12,fontWeight:600,background:"none",border:"none",cursor:"pointer"}}>✏️</button></div>{[[t.platform?.replace(" *",""),PLATFORMS_ALL.find(p=>p.v===rp.platform)?.l],["Link",rp.profile_link],[t.address?.replace(" *",""),rp.address],[t.followers?.replace(" *",""),rp.followers>0?rp.followers?.toLocaleString():null],["ER",rp.engagement>0?`${rp.engagement}%`:null],[t.pricePost?.replace(" *",""),rp.price_post>0?`${rp.price_post?.toLocaleString()} ${lang==="uz"?"so'm":"сум"}`:null],[lang==="uz"?"Holat":"Статус",rp.verified?t.verified:t.notVerified]].filter(([,v])=>v).map(([k,v])=>(<PRow key={k} label={k} value={v} theme={theme} highlight={k===(lang==="uz"?"Holat":"Статус")&&!rp.verified}/>))}</Card>)}
-  {editM&&(<Modal title={`✏️ ${t.edit}`} onClose={()=>setEditM(null)} theme={theme}><div style={{maxHeight:"60vh",overflowY:"auto"}}>{editM==="user"&&<><TInput label={t.fullName} value={form.full_name||""} onChange={v=>setForm(f=>({...f,full_name:v}))} theme={theme}/><TInput label={t.phone} value={form.phone||""} onChange={v=>setForm(f=>({...f,phone:v}))} placeholder="+998901234567" note={t.phoneNote} theme={theme}/></>}{editM==="bt"&&<><Tags options={PLATFORMS_ALL} selected={form.preferred_platforms||[]} onChange={v=>setForm(f=>({...f,preferred_platforms:v}))} label={t.platforms} theme={theme}/><Tags options={AGE_OPTIONS} selected={form.ages||[]} onChange={v=>setForm(f=>({...f,ages:v}))} label={t.ages} theme={theme}/><Tags options={LOCATIONS} selected={form.location||[]} onChange={v=>setForm(f=>({...f,location:v}))} label={t.location} theme={theme}/><Tags options={(SECTOR_INTERESTS[form.sector]||SECTOR_INTERESTS.default).map(i=>({v:i,l:i}))} selected={form.interests||[]} onChange={v=>setForm(f=>({...f,interests:v}))} max={3} label={t.interests} theme={theme}/><TInput label={t.budget} value={form.max_budget||""} onChange={v=>setForm(f=>({...f,max_budget:v}))} type="number" theme={theme}/><TInput label={t.goal} value={form.campaign_goal||""} onChange={v=>setForm(f=>({...f,campaign_goal:v}))} theme={theme}/></>}{editM==="rp"&&<>{PLATFORMS_ONLINE.map(p=>p.v).includes(form.platform)&&<><TInput label={t.profileLink} value={form.profile_link||""} onChange={v=>setForm(f=>({...f,profile_link:v}))} theme={theme}/><TInput label={t.followers} value={form.followers||""} onChange={v=>setForm(f=>({...f,followers:v}))} type="number" theme={theme}/><TInput label={t.engagement} value={form.engagement||""} onChange={v=>setForm(f=>({...f,engagement:v}))} type="number" theme={theme}/></>}{PLATFORMS_OFFLINE.map(p=>p.v).includes(form.platform)&&<TInput label={t.address} value={form.address||""} onChange={v=>setForm(f=>({...f,address:v}))} theme={theme}/>}<TInput label={t.pricePost} value={form.price_post||""} onChange={v=>setForm(f=>({...f,price_post:v}))} type="number" theme={theme}/><TInput label={t.priceStory} value={form.price_story||""} onChange={v=>setForm(f=>({...f,price_story:v}))} type="number" theme={theme}/><TInput label={t.priceVideo} value={form.price_video||""} onChange={v=>setForm(f=>({...f,price_video:v}))} type="number" theme={theme}/><TInput label={t.priceDesc} value={form.price_description||""} onChange={v=>setForm(f=>({...f,price_description:v}))} theme={theme}/><Tags options={SECTOR_INTERESTS.default.map(i=>({v:i,l:i}))} selected={form.interests||[]} onChange={v=>setForm(f=>({...f,interests:v}))} max={3} label={t.interests} theme={theme}/></>}</div><div style={{display:"flex",gap:10,marginTop:16}}><Btn onClick={()=>setEditM(null)} theme={theme} variant="secondary" full>{t.cancel}</Btn><Btn onClick={save} disabled={saving} theme={theme} full>{saving?t.saving:t.save}</Btn></div></Modal>)}</div>);
-}
-function PRow({label,value,theme,highlight}){return(<div style={{marginBottom:12}}><div style={{fontSize:11,color:theme.hint,marginBottom:3}}>{label}</div><div style={{fontSize:13,color:highlight?theme.gold:theme.text,fontWeight:500}}>{value||"—"}</div></div>);}
+  // Telegram user
+  const tgUser = tg?.initDataUnsafe?.user || { id:12345, first_name:"Test", username:"testuser" };
 
-// ---- NOTIFS ----
-function NotifsPage({user,lang,theme,onRead}){
-  const t=T[lang];
-  const[notifs,setNotifs]=useState([]);
-  const icons={info:"ℹ️",success:"✅",warning:"⚠️",offer:"📨",message:"💬",broadcast:"📢"};
-  useEffect(()=>{api(`/api/notifications/${user.telegram_id}`).then(r=>setNotifs(Array.isArray(r)?r:[])).catch(()=>{});api(`/api/notifications/${user.telegram_id}/read`,"PUT").then(onRead).catch(()=>{});},[user,onRead]);
-  return(<div style={{padding:16}}><div style={{fontWeight:700,fontSize:18,color:theme.text,marginBottom:16}}>🔔 {t.notifs}</div>{notifs.length===0&&<div style={{textAlign:"center",padding:"40px 0",color:theme.hint}}>{t.noNotifs}</div>}{notifs.map(n=>(<Card key={n.id} theme={theme} style={{borderLeft:`3px solid ${n.is_read?theme.border:theme.accent}`}}><div style={{display:"flex",gap:12}}><span style={{fontSize:22}}>{icons[n.type]||"🔔"}</span><div style={{flex:1}}><div style={{fontWeight:600,fontSize:13,color:theme.text}}>{n.title}</div><div style={{fontSize:12,color:theme.hint,marginTop:3}}>{n.body}</div><div style={{fontSize:10,color:theme.border,marginTop:6}}>{n.created_at?.slice(0,16)}</div></div></div></Card>))}</div>);
-}
+  const [screen,  setScreen]  = useState("loading"); // loading|onboard|legal|register|main
+  const [user,    setUser]    = useState(null);
+  const [lang,    setLang]    = useState("uz");
+  const [tab,     setTab]     = useState("match");
+  const [unread,  setUnread]  = useState({ notifs:0, chats:0 });
+  const isAdmin = ADMIN_IDS.includes(tgUser?.id);
 
-// ---- ADMIN ----
-function AdminPage({user,lang,theme}){
-  const t=T[lang];
-  const[stats,setStats]=useState(null);
-  const[view,setView]=useState("main");
-  const[queue,setQueue]=useState([]);
-  const[users,setUsers]=useState([]);
-  const[search,setSearch]=useState("");
-  const[bcMsg,setBcMsg]=useState("");
-  const[bcTarget,setBcTarget]=useState("all");
-  useEffect(()=>{api(`/api/admin/stats?admin_id=${user.telegram_id}`).then(setStats).catch(()=>{});},[user]);
-  const loadQ=async()=>{api(`/api/admin/verify-queue?admin_id=${user.telegram_id}`).then(r=>{setQueue(Array.isArray(r)?r:[]);setView("verify");}).catch(()=>{});};
-  const loadU=async()=>{api(`/api/admin/users?admin_id=${user.telegram_id}&page=1&search=${search}`).then(r=>{setUsers(Array.isArray(r)?r:[]);setView("users");}).catch(()=>{});};
-  if(view==="verify")return(<div style={{padding:16}}><div style={{display:"flex",gap:10,alignItems:"center",marginBottom:16}}><button onClick={()=>setView("main")} style={{color:theme.accent,background:"none",border:"none",cursor:"pointer"}}>{t.back}</button><span style={{fontWeight:700,color:theme.text}}>✅ {lang==="uz"?"Tasdiqlash":"Подтверждение"} ({queue.length})</span></div>{queue.map(p=>(<Card key={p.user_id} theme={theme}><div style={{fontWeight:700,color:theme.text,marginBottom:6}}>{p.full_name}</div><div style={{fontSize:12,color:theme.hint,lineHeight:1.7,marginBottom:10}}><div>{PLATFORMS_ALL.find(x=>x.v===p.platform)?.l}</div>{p.profile_link&&<a href={p.profile_link} style={{color:theme.accent}}>{p.profile_link}</a>}<div>{p.followers?.toLocaleString()} {lang==="uz"?"obunachi":"подписчиков"} · ER: {p.engagement}%</div></div><div style={{display:"flex",gap:8}}><SBtn onClick={async()=>{await api(`/api/admin/verify/${p.user_id}?admin_id=${user.telegram_id}&value=1`,"PUT");loadQ();}} theme={theme}>✅ {lang==="uz"?"Tasdiqlash":"Подтвердить"}</SBtn><SBtn onClick={async()=>{await api(`/api/admin/verify/${p.user_id}?admin_id=${user.telegram_id}&value=0`,"PUT");loadQ();}} theme={theme} variant="danger">❌ {lang==="uz"?"Rad":"Отклонить"}</SBtn></div></Card>))}</div>);
-  if(view==="users")return(<div style={{padding:16}}><div style={{display:"flex",gap:10,alignItems:"center",marginBottom:16}}><button onClick={()=>setView("main")} style={{color:theme.accent,background:"none",border:"none",cursor:"pointer"}}>{t.back}</button><span style={{fontWeight:700,color:theme.text}}>👥</span></div><div style={{display:"flex",gap:8,marginBottom:12}}><input value={search} onChange={e=>setSearch(e.target.value)} placeholder={lang==="uz"?"Qidirish...":"Поиск..."} style={{flex:1,padding:"10px 13px",borderRadius:10,border:`1.5px solid ${theme.border}`,background:theme.inputBg,color:theme.text,fontSize:13,outline:"none",fontFamily:"inherit"}}/><SBtn onClick={loadU} theme={theme}>{lang==="uz"?"Izla":"Найти"}</SBtn></div>{users.map(u=>(<Card key={u.telegram_id} theme={theme}><div style={{display:"flex",justifyContent:"space-between",marginBottom:8}}><div><div style={{fontWeight:600,color:theme.text,fontSize:13}}>{u.full_name}</div><div style={{fontSize:11,color:theme.hint}}>{u.role} · {u.phone||"—"}</div></div><div style={{textAlign:"right",fontSize:11}}>{u.is_premium===1&&<div style={{color:theme.gold}}>⭐ Premium</div>}{u.is_blocked===1&&<div style={{color:theme.danger}}>🚫</div>}</div></div><div style={{display:"flex",gap:6,flexWrap:"wrap"}}><SBtn onClick={async()=>{await api(`/api/admin/users/${u.telegram_id}/premium?admin_id=${user.telegram_id}&value=${u.is_premium?0:1}`,"PUT");loadU();}} theme={theme} variant={u.is_premium?"secondary":"gold"}>{u.is_premium?(lang==="uz"?"Premium olish":"Убрать"):"⭐ Premium"}</SBtn>{!u.is_blocked&&<SBtn onClick={async()=>{const r=prompt(lang==="uz"?"Sabab:":"Причина:");if(r){await api(`/api/admin/users/${u.telegram_id}/block?admin_id=${user.telegram_id}&reason=${encodeURIComponent(r)}`,"PUT");loadU();}}} theme={theme} variant="danger">🚫</SBtn>}{u.is_blocked&&<SBtn onClick={async()=>{await api(`/api/admin/users/${u.telegram_id}/unblock?admin_id=${user.telegram_id}`,"PUT");loadU();}} theme={theme} variant="ghost">✅ {lang==="uz"?"Blokdan chiqarish":"Разблокировать"}</SBtn>}</div></Card>))}</div>);
-  if(view==="broadcast")return(<div style={{padding:16}}><div style={{display:"flex",gap:10,alignItems:"center",marginBottom:16}}><button onClick={()=>setView("main")} style={{color:theme.accent,background:"none",border:"none",cursor:"pointer"}}>{t.back}</button><span style={{fontWeight:700,color:theme.text}}>📢 {lang==="uz"?"Xabar yuborish":"Рассылка"}</span></div><div style={{display:"flex",gap:6,marginBottom:14}}>{[["all",lang==="uz"?"Barchasiga":"Всем"],["tadbirkor",lang==="uz"?"Tadbirkorlarga":"Предпр."],["reklamachi",lang==="uz"?"Reklamachilarga":"Реклам."]].map(([v,l])=>(<button key={v} onClick={()=>setBcTarget(v)} style={{flex:1,padding:9,borderRadius:9,fontSize:11,fontWeight:600,border:`1.5px solid ${bcTarget===v?theme.accent:theme.border}`,background:bcTarget===v?theme.accentLight:theme.card,color:bcTarget===v?theme.accent:theme.text,cursor:"pointer"}}>{l}</button>))}</div><textarea value={bcMsg} onChange={e=>setBcMsg(e.target.value)} rows={5} placeholder={lang==="uz"?"Xabar matni...":"Текст сообщения..."} style={{width:"100%",padding:12,borderRadius:10,border:`1.5px solid ${theme.border}`,background:theme.inputBg,color:theme.text,fontSize:13,fontFamily:"inherit",resize:"none",marginBottom:12,boxSizing:"border-box"}}/><Btn onClick={async()=>{await api("/api/admin/broadcast","POST",{sender_id:user.telegram_id,target:bcTarget,message_text:bcMsg});setBcMsg("");alert(lang==="uz"?"Yuborildi ✓":"Отправлено ✓");}} theme={theme} full>{lang==="uz"?"Yuborish":"Отправить"}</Btn></div>);
-  return(<div style={{padding:16}}><div style={{display:"flex",alignItems:"center",gap:12,marginBottom:20}}><Logo size={32} theme={theme}/><span style={{fontWeight:700,fontSize:18,color:theme.text}}>Admin Panel</span></div>{stats&&(<div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:10,marginBottom:16}}>{[["👥",stats.total_users,lang==="uz"?"Foydalanuvchi":"Польз."],["🏢",stats.tadbirkorlar,lang==="uz"?"Tadbirkor":"Предпр."],["📢",stats.reklamachilar,lang==="uz"?"Reklamachi":"Реклам."],["⭐",stats.premium,"Premium"],["📨",stats.total_offers,lang==="uz"?"Takliflar":"Предлож."],["✅",stats.accepted_offers,lang==="uz"?"Qabul":"Принято"],["💬",stats.active_chats,lang==="uz"?"Chatlar":"Чаты"],["⏳",stats.unverified,lang==="uz"?"Kutmoqda":"В ожид."]].map(([icon,val,label])=>(<Card key={label} theme={theme} style={{textAlign:"center",marginBottom:0}}><div style={{fontSize:22}}>{icon}</div><div style={{fontWeight:700,fontSize:22,color:theme.accent}}>{val||0}</div><div style={{fontSize:11,color:theme.hint}}>{label}</div></Card>))}</div>)}<div style={{display:"flex",flexDirection:"column",gap:10}}><Btn onClick={loadQ} theme={theme} full>✅ {lang==="uz"?"Profillarni tasdiqlash":"Подтвердить профили"}{stats?.unverified>0?` (${stats.unverified})`:""}</Btn><Btn onClick={loadU} theme={theme} variant="ghost" full>👥 {lang==="uz"?"Foydalanuvchilar":"Пользователи"}</Btn><Btn onClick={()=>setView("broadcast")} theme={theme} variant="secondary" full>📢 {lang==="uz"?"Xabar yuborish":"Рассылка"}</Btn></div></div>);
-}
+  // Init
+  useEffect(() => {
+    tg?.ready?.();
+    tg?.expand?.();
+    tg?.setHeaderColor?.(theme.dk ? "#0d0f1a" : "#f0f2f8");
 
-// ---- MAIN ----
-export default function App(){
-  const tgUser=tg?.initDataUnsafe?.user||{id:123456789,first_name:"Test",username:"test"};
-  const[theme]=useState(getTgTheme);
-  const[user,setUser]=useState(null);
-  const[loading,setLoading]=useState(true);
-  const[tab,setTab]=useState("match");
-  const[lang,setLang]=useState("uz");
-  const[nc,setNc]=useState(0);
+    const init = async () => {
+      try {
+        const u = await http(`/api/users/${tgUser.id}`);
+        if (u && u.role) {
+          setUser(u);
+          setLang(u.lang || "uz");
+          setScreen("main");
+        } else {
+          setScreen("onboard");
+        }
+      } catch {
+        setScreen("onboard");
+      }
+    };
+    init();
+  }, []);
 
-  useEffect(()=>{
-    tg?.ready();tg?.expand();
-    tg?.setHeaderColor?.(theme.card);
-    tg?.setBackgroundColor?.(theme.bg);
-    api(`/api/users/${tgUser.id}`)
-      .then(u=>{setLang(u.lang||"uz");setUser(u);})
-      .catch(()=>setUser(null))
-      .finally(()=>setLoading(false));
-  },[]);
+  // Unread polling
+  useEffect(() => {
+    if (screen !== "main" || !user) return;
+    const poll = async () => {
+      try {
+        const r = await http(`/api/unread/${user.telegram_id}`);
+        setUnread({ notifs: r.notifs || 0, chats: r.chats || 0 });
+      } catch {}
+    };
+    poll();
+    const iv = setInterval(poll, 15000);
+    return () => clearInterval(iv);
+  }, [screen, user]);
 
-  const onRegDone=async(l)=>{
+  const onRegDone = (l) => {
     setLang(l);
-    try{await api(`/api/users/${tgUser.id}/lang?lang=${l}`,"PUT");}catch{}
-    const u=await api(`/api/users/${tgUser.id}`);
-    setUser(u);setTab("match");
+    http(`/api/users/${tgUser.id}`).then(u => { setUser(u); setScreen("main"); }).catch(() => setScreen("main"));
   };
 
-  const refreshNc=useCallback(async()=>{if(!user)return;try{const r=await api(`/api/notifications/${user.telegram_id}/count`);setNc(r?.count||0);}catch{}},[user]);
-  useEffect(()=>{if(!user)return;refreshNc();const iv=setInterval(refreshNc,15000);return()=>clearInterval(iv);},[user,refreshNc]);
+  // ── SCREENS ────────────────────────────────────────
+  if (screen === "loading") return (
+    <div style={{ minHeight:"100vh", background:theme.heroGrad, display:"flex", flexDirection:"column", alignItems:"center", justifyContent:"center" }}>
+      <MidasLogo size={80} theme={theme} white/>
+      <div style={{ fontFamily:"Georgia,serif", fontSize:28, fontWeight:800, color:"#fff", letterSpacing:5, marginTop:16 }}>MIDAS</div>
+      <div style={{ fontSize:11, color:"rgba(255,255,255,0.6)", letterSpacing:3, textTransform:"uppercase", marginTop:6 }}>Businessman & Advertiser</div>
+      <div style={{ marginTop:40, display:"flex", gap:6 }}>
+        {[0,1,2].map(i => (
+          <div key={i} style={{ width:8, height:8, borderRadius:4, background:"rgba(255,255,255,0.5)", animation:`pulse${i} 1.2s ${i*0.2}s infinite` }}/>
+        ))}
+      </div>
+    </div>
+  );
 
-  const t=T[lang];
-  if(loading)return(<div style={{minHeight:"100vh",background:theme.bg,display:"flex",alignItems:"center",justifyContent:"center",flexDirection:"column"}}><Logo size={72} theme={theme}/><div style={{fontFamily:"Georgia,serif",fontSize:26,fontWeight:700,color:theme.text,letterSpacing:4,marginTop:16}}>MIDAS</div><div style={{fontSize:11,color:theme.hint,marginTop:4,letterSpacing:2}}>BUSINESSMAN & ADVERTISER</div><div style={{marginTop:24,color:theme.hint,fontSize:13}}>{t.loading}</div></div>);
-  if(!user)return <Registration tgUser={tgUser} onDone={onRegDone} theme={theme}/>;
+  if (screen === "onboard") return (
+    <OnboardingSlides lang={lang} theme={theme} onFinish={() => setScreen("legal")}/>
+  );
 
-  const isAdmin=ADMIN_IDS.includes(user.telegram_id);
-  const tabs=[{id:"match",icon:"🎯",label:t.match},{id:"offers",icon:"📨",label:lang==="uz"?"Takliflar":"Предлож."},{id:"chats",icon:"💬",label:t.chats},{id:"notifs",icon:"🔔",label:t.notifs,badge:nc},{id:"profile",icon:"👤",label:t.profile},...(isAdmin?[{id:"admin",icon:"🛡",label:t.admin}]:[])];
+  if (screen === "legal") return (
+    <LegalScreen lang={lang} theme={theme} onAgree={() => setScreen("register")}/>
+  );
 
-  return(<div style={{minHeight:"100vh",background:theme.bg,paddingBottom:64}}>
-    {tab==="match"&&<MatchPage user={user} lang={lang} theme={theme}/>}
-    {tab==="offers"&&<OffersPage user={user} lang={lang} theme={theme}/>}
-    {tab==="chats"&&<ChatsPage user={user} lang={lang} theme={theme}/>}
-    {tab==="notifs"&&<NotifsPage user={user} lang={lang} theme={theme} onRead={()=>setNc(0)}/>}
-    {tab==="profile"&&<ProfilePage user={user} lang={lang} theme={theme} onLangChange={async l=>{setLang(l);try{await api(`/api/users/${user.telegram_id}/lang?lang=${l}`,"PUT");}catch{}}}/>}
-    {tab==="admin"&&isAdmin&&<AdminPage user={user} lang={lang} theme={theme}/>}
-    <nav style={{position:"fixed",bottom:0,left:0,right:0,background:theme.card,borderTop:`1px solid ${theme.border}`,display:"flex",zIndex:50}}>
-      {tabs.map(tb=>(<button key={tb.id} onClick={()=>setTab(tb.id)} style={{flex:1,padding:"10px 4px 8px",display:"flex",flexDirection:"column",alignItems:"center",background:"none",border:"none",cursor:"pointer",position:"relative"}}>
-        <span style={{fontSize:20,lineHeight:1}}>{tb.icon}</span>
-        <span style={{fontSize:10,marginTop:3,fontWeight:tb.id===tab?700:400,color:tb.id===tab?theme.accent:theme.hint}}>{tb.label}</span>
-        {tb.id===tab&&<div style={{position:"absolute",bottom:0,left:"25%",right:"25%",height:2,background:theme.accent,borderRadius:2}}/>}
-        {tb.badge>0&&<div style={{position:"absolute",top:6,right:"15%",background:theme.danger,color:"#fff",fontSize:9,borderRadius:8,minWidth:16,height:16,display:"flex",alignItems:"center",justifyContent:"center",fontWeight:700,padding:"0 4px"}}>{tb.badge}</div>}
-      </button>))}
-    </nav>
-  </div>);
+  if (screen === "register") return (
+    <Registration tgUser={tgUser} onDone={onRegDone} theme={theme}/>
+  );
+
+  if (screen !== "main" || !user) return null;
+
+  // ── MAIN APP ──────────────────────────────────────
+  const renderPage = () => {
+    switch (tab) {
+      case "match":
+        return <MatchPage user={user} lang={lang} theme={theme}/>;
+      case "tender":
+        return <TenderPage user={user} lang={lang} theme={theme}/>;
+      case "notifs":
+        return <NotifOffersPage user={user} lang={lang} theme={theme}/>;
+      case "chats":
+        return <ChatsPage user={user} lang={lang} theme={theme}/>;
+      case "analytics":
+        return <AnalyticsPage user={user} lang={lang} theme={theme}/>;
+      case "ai":
+        return <AIAdvisorPage user={user} lang={lang} theme={theme}/>;
+      case "profile":
+        return <ProfilePage user={user} lang={lang} theme={theme} onLangChange={l => { setLang(l); setUser(u => u ? ({ ...u, lang: l }) : u); }}/>;
+      case "admin":
+        return isAdmin ? <AdminPanel user={user} lang={lang} theme={theme}/> : null;
+      default:
+        return <MatchPage user={user} lang={lang} theme={theme}/>;
+    }
+  };
+
+  return (
+    <div style={{ background:theme.bg, minHeight:"100vh", fontFamily:"-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,sans-serif" }}>
+      {/* Top bar */}
+      <div style={{ position:"sticky", top:0, zIndex:50, background:theme.card, borderBottom:`1px solid ${theme.border}`, padding:"12px 16px", display:"flex", justifyContent:"space-between", alignItems:"center" }}>
+        <div style={{ display:"flex", alignItems:"center", gap:10 }}>
+          <MidasLogo size={32} theme={theme}/>
+          <div>
+            <div style={{ fontFamily:"Georgia,serif", fontWeight:800, fontSize:16, color:theme.text, letterSpacing:2 }}>MIDAS</div>
+            <div style={{ fontSize:10, color:theme.hint, letterSpacing:1 }}>
+              {user.role==="tadbirkor" ? (lang==="uz"?"Tadbirkor":"Предприниматель") : (lang==="uz"?"Reklamachi":"Рекламодатель")}
+            </div>
+          </div>
+        </div>
+        <div style={{ display:"flex", alignItems:"center", gap:8 }}>
+          {user.is_premium===1 && (
+            <div style={{ fontSize:10, fontWeight:700, padding:"3px 9px", borderRadius:10, background:theme.goldL, color:theme.gold }}>⭐ Premium</div>
+          )}
+          {!user.is_verified && (
+            <div style={{ fontSize:10, fontWeight:600, padding:"3px 8px", borderRadius:10, background:theme.goldL, color:theme.gold }}>⏳</div>
+          )}
+        </div>
+      </div>
+
+      {/* FOMO bar */}
+      <FOMOBar lang={lang} theme={theme} user={user}/>
+
+      {/* Profile progress */}
+      <ProfileProgress user={user} lang={lang} theme={theme} onGoProfile={() => setTab("profile")}/>
+
+      {/* Page content */}
+      <div style={{ paddingBottom:72 }}>
+        {renderPage()}
+      </div>
+
+      {/* Bottom nav */}
+      <BottomNav
+        tab={tab} setTab={setTab}
+        role={user.role} unread={unread}
+        lang={lang} theme={theme}
+        isAdmin={isAdmin}
+      />
+    </div>
+  );
 }
