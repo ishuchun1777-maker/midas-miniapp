@@ -67,15 +67,9 @@ def clear_state(user_id):
     except: pass
 
 # ==================== KEYBOARDS ====================
-def main_kb():
-    return ReplyKeyboardMarkup(
-        [[KeyboardButton(text="🌐 Mini App ni ochish", web_app=WebAppInfo(url=MINI_APP_URL))]],
-        resize_keyboard=True
-    )
-
 def mini_app_btn():
     return InlineKeyboardMarkup([
-        [InlineKeyboardButton(text="🚀 MIDAS Mini App ni ochish", web_app=WebAppInfo(url=MINI_APP_URL))],
+        [InlineKeyboardButton(text="🚀 MIDAS Mini App", web_app=WebAppInfo(url=MINI_APP_URL))],
     ])
 
 def admin_kb():
@@ -122,7 +116,7 @@ async def cmd_start(update: Update, ctx: ContextTypes.DEFAULT_TYPE):
             f"👇 Mini App ni oching va ro'yxatdan o'ting:"
         )
 
-    await update.message.reply_text(text, parse_mode="HTML", reply_markup=main_kb())
+    await update.message.reply_text(text, parse_mode="HTML")
     await update.message.reply_text("⬇️ Quyidagi tugmani bosing:", reply_markup=mini_app_btn())
 
     try:
