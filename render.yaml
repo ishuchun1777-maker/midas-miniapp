@@ -34,12 +34,12 @@ services:
         fromService:
           name: midas-frontend
           type: web
-          property: hostWithScheme
+          property: host
       - key: API_URL
         fromService:
           name: midas-backend
           type: web
-          property: hostWithScheme
+          property: host
       - key: ADMIN_IDS
         sync: false
 
@@ -55,7 +55,7 @@ services:
         fromService:
           name: midas-backend
           type: web
-          property: hostWithScheme
+          property: host
       - key: REACT_APP_ADMIN_IDS
         sync: false
     headers:
