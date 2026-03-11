@@ -1,0 +1,150 @@
+@import url('https://fonts.googleapis.com/css2?family=Bebas+Neue&family=DM+Sans:ital,opsz,wght@0,9..40,300;0,9..40,400;0,9..40,500;0,9..40,600;0,9..40,700;1,9..40,400&family=JetBrains+Mono:wght@400;500&display=swap');
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+@layer base {
+  :root {
+    --gold: #f59e0b;
+    --gold-dim: #d97706;
+    --bg: #0a0a0a;
+    --surface: #111111;
+    --surface-2: #1a1a1a;
+    --border: #262626;
+    --text: #f5f5f5;
+    --text-muted: #737373;
+  }
+
+  * { box-sizing: border-box; }
+
+  html {
+    scroll-behavior: smooth;
+    -webkit-font-smoothing: antialiased;
+  }
+
+  body {
+    background-color: var(--bg);
+    color: var(--text);
+    font-family: 'DM Sans', sans-serif;
+    line-height: 1.6;
+  }
+
+  ::selection {
+    background: rgba(245, 158, 11, 0.3);
+    color: #fff;
+  }
+
+  ::-webkit-scrollbar { width: 4px; height: 4px; }
+  ::-webkit-scrollbar-track { background: var(--bg); }
+  ::-webkit-scrollbar-thumb { background: var(--border); border-radius: 2px; }
+  ::-webkit-scrollbar-thumb:hover { background: #404040; }
+}
+
+@layer components {
+  .btn-primary {
+    @apply bg-gold-500 hover:bg-gold-400 text-dark-950 font-semibold px-6 py-2.5 rounded-lg transition-all duration-200 active:scale-95 inline-flex items-center gap-2;
+  }
+
+  .btn-secondary {
+    @apply bg-dark-800 hover:bg-dark-700 text-white border border-dark-600 hover:border-dark-500 font-medium px-6 py-2.5 rounded-lg transition-all duration-200 active:scale-95 inline-flex items-center gap-2;
+  }
+
+  .btn-ghost {
+    @apply hover:bg-dark-800 text-dark-300 hover:text-white font-medium px-4 py-2 rounded-lg transition-all duration-200 inline-flex items-center gap-2;
+  }
+
+  .card {
+    @apply bg-dark-900 border border-dark-800 rounded-xl overflow-hidden transition-all duration-200;
+  }
+
+  .card-hover {
+    @apply card hover:border-gold-500/30 hover:shadow-lg hover:shadow-gold-500/5 hover:-translate-y-0.5;
+  }
+
+  .input {
+    @apply bg-dark-800 border border-dark-700 text-white placeholder-dark-400 rounded-lg px-4 py-2.5 w-full focus:outline-none focus:border-gold-500 focus:ring-1 focus:ring-gold-500/50 transition-all duration-200;
+  }
+
+  .label {
+    @apply block text-sm font-medium text-dark-300 mb-1.5;
+  }
+
+  .badge {
+    @apply inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full text-xs font-medium;
+  }
+
+  .badge-gold {
+    @apply badge bg-gold-500/15 text-gold-400 border border-gold-500/20;
+  }
+
+  .badge-green {
+    @apply badge bg-emerald-500/15 text-emerald-400 border border-emerald-500/20;
+  }
+
+  .badge-blue {
+    @apply badge bg-blue-500/15 text-blue-400 border border-blue-500/20;
+  }
+
+  .section-title {
+    @apply font-display text-4xl tracking-wide text-white;
+  }
+
+  .gold-gradient {
+    background: linear-gradient(135deg, #f59e0b, #d97706);
+    -webkit-background-clip: text;
+    -webkit-text-fill-color: transparent;
+    background-clip: text;
+  }
+
+  .shimmer {
+    background: linear-gradient(90deg, var(--surface) 25%, #222 50%, var(--surface) 75%);
+    background-size: 200% 100%;
+    animation: shimmer 2s linear infinite;
+  }
+
+  .noise-overlay {
+    position: relative;
+  }
+  .noise-overlay::after {
+    content: '';
+    position: absolute;
+    inset: 0;
+    background-image: url("data:image/svg+xml,%3Csvg viewBox='0 0 200 200' xmlns='http://www.w3.org/2000/svg'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.85' numOctaves='4' stitchTiles='stitch'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23n)' opacity='0.04'/%3E%3C/svg%3E");
+    pointer-events: none;
+    border-radius: inherit;
+  }
+
+  .stat-card {
+    @apply bg-dark-900 border border-dark-800 rounded-xl p-5 flex flex-col gap-1;
+  }
+
+  .divider {
+    @apply border-dark-800;
+  }
+
+  .nav-link {
+    @apply flex items-center gap-2.5 px-3 py-2 rounded-lg text-dark-400 hover:text-white hover:bg-dark-800 transition-all duration-150 text-sm font-medium;
+  }
+
+  .nav-link-active {
+    @apply flex items-center gap-2.5 px-3 py-2 rounded-lg text-gold-400 bg-gold-500/10 text-sm font-medium border border-gold-500/20;
+  }
+}
+
+@layer utilities {
+  .text-balance { text-wrap: balance; }
+  
+  .gold-border {
+    border: 1px solid rgba(245, 158, 11, 0.3);
+  }
+
+  .gold-glow {
+    box-shadow: 0 0 20px rgba(245, 158, 11, 0.15);
+  }
+
+  .glass {
+    background: rgba(17, 17, 17, 0.8);
+    backdrop-filter: blur(12px);
+    -webkit-backdrop-filter: blur(12px);
+  }
+}

@@ -1,76 +1,20 @@
-# ═══════════════════════════════════════════════════════
-# MIDAS V8 — RENDER.YAML
-# ═══════════════════════════════════════════════════════
-
 services:
-  # ── BACKEND ───────────────────────────────────────────
   - type: web
-    name: midas-backend
-    runtime: python
+    name: midas-api
+    env: python
+    buildCommand: pip install -r requirements.txt
+    startCommand: uvicorn app.main:app --host 0.0.0.0 --port $PORT
     rootDir: backend
-    buildCommand: pip install -r requirements.txt
-    startCommand: gunicorn main:app --bind 0.0.0.0:$PORT --workers 2 --timeout 120 --preload
     envVars:
-      - key: BOT_TOKEN
+      - key: DATABASE_URL
+        value: sqlite+aiosqlite:///./midas.db
+      - key: TELEGRAM_BOT_TOKEN
         sync: false
-      - key: ADMIN_IDS
+      - key: JWT_SECRET
+        generateValue: true
+      - key: SECRET_KEY
+        generateValue: true
+      - key: TELEGRAM_MINI_APP_URL
         sync: false
-      - key: DB_PATH
-        value: /opt/render/project/src/midas.db
-    disk:
-      name: midas-db
-      mountPath: /opt/render/project/src
-      sizeGB: 1
-
-  # ── BOT (worker — PORT yo'q) ──────────────────────────
-  - type: worker
-    name: midas-bot
-    runtime: python
-    rootDir: bot
-    buildCommand: pip install -r requirements.txt
-    startCommand: python bot.py
-    envVars:
-      - key: BOT_TOKEN
-        sync: false
-      - key: ADMIN_IDS
-        sync: false
-      - key: MINI_APP_URL
-        fromService:
-          name: midas-frontend
-          type: web
-          property: hostWithScheme
-      - key: API_URL
-        fromService:
-          name: midas-backend
-          type: web
-          property: hostWithScheme
-
-  # ── FRONTEND ──────────────────────────────────────────
-  - type: web
-    name: midas-frontend
-    runtime: static
-    rootDir: frontend
-    buildCommand: npm install && npm run build
-    staticPublishPath: build
-    envVars:
-      - key: REACT_APP_API_URL
-        fromService:
-          name: midas-backend
-          type: web
-          property: hostWithScheme
-      - key: REACT_APP_ADMIN_IDS
-        sync: false
-    headers:
-      - path: /*
-        name: Cache-Control
-        value: no-cache, no-store, must-revalidate
-      - path: /*
-        name: X-Content-Type-Options
-        value: nosniff
-      - path: /*
-        name: X-Frame-Options
-        value: DENY
-    routes:
-      - type: rewrite
-        source: /*
-        destination: /index.html
+      - key: DEBUG
+        value: "false"
