@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'react'
-import { BrowserRouter, Routes, Route, Link, useLocation, Navigate } from 'react-router-dom'
+import { BrowserRouter, Routes, Route, Link, useLocation } from 'react-router-dom'
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query'
 import { Toaster } from 'react-hot-toast'
 import { Home, Compass, Megaphone, MessageSquare, User, Zap } from 'lucide-react'
@@ -8,7 +8,6 @@ import { useAuthStore } from './store/authStore'
 import { authApi } from './utils/api'
 import './styles/globals.css'
 
-// Pages
 import MiniHomePage from './pages/MiniHomePage'
 import MiniExplorePage from './pages/MiniExplorePage'
 import MiniCampaignsPage from './pages/MiniCampaignsPage'
@@ -19,7 +18,6 @@ const queryClient = new QueryClient({
   defaultOptions: { queries: { staleTime: 30_000, retry: 1 } },
 })
 
-// Telegram WebApp integration
 declare global {
   interface Window {
     Telegram?: {
@@ -27,16 +25,18 @@ declare global {
         initData: string
         initDataUnsafe: Record<string, unknown>
         colorScheme: 'light' | 'dark'
-        themeParams: Record<string, string>
         isExpanded: boolean
+        viewportHeight: number
+        viewportStableHeight: number
         expand: () => void
         close: () => void
         ready: () => void
+        enableClosingConfirmation: () => void
         BackButton: { show: () => void; hide: () => void; onClick: (cb: () => void) => void }
         MainButton: { text: string; show: () => void; hide: () => void; onClick: (cb: () => void) => void }
         HapticFeedback: {
-          impactOccurred: (style: string) => void
-          notificationOccurred: (type: string) => void
+          impactOccurred: (style: 'light' | 'medium' | 'heavy') => void
+          notificationOccurred: (type: 'error' | 'success' | 'warning') => void
         }
         setHeaderColor: (color: string) => void
         setBackgroundColor: (color: string) => void
@@ -55,14 +55,12 @@ function BottomNav() {
     { to: '/profile', icon: User, label: 'Profil' },
   ]
 
-  const isActive = (to: string) => {
-    if (to === '/') return location.pathname === '/'
-    return location.pathname.startsWith(to)
-  }
+  const isActive = (to: string) =>
+    to === '/' ? location.pathname === '/' : location.pathname.startsWith(to)
 
   return (
     <nav className="fixed bottom-0 left-0 right-0 z-50 glass border-t border-dark-800 pb-safe">
-      <div className="flex items-center justify-around px-2 py-1.5">
+      <div className="flex items-center justify-around px-1 py-1">
         {items.map(({ to, icon: Icon, label }) => {
           const active = isActive(to)
           return (
@@ -70,23 +68,17 @@ function BottomNav() {
               key={to}
               to={to}
               className={clsx(
-                'flex flex-col items-center gap-1 py-1.5 px-3 rounded-xl transition-all min-w-[52px]',
+                'flex flex-col items-center gap-0.5 py-2 px-3 rounded-xl transition-all tap-target',
                 active ? 'text-gold-400' : 'text-dark-500'
               )}
-              onClick={() => window.Telegram?.WebApp.HapticFeedback?.impactOccurred('light')}
+              onClick={() =>
+                window.Telegram?.WebApp.HapticFeedback?.impactOccurred('light')
+              }
             >
-              <div className={clsx(
-                'w-6 h-6 flex items-center justify-center',
-                active && 'scale-110'
-              )}>
-                <Icon className="w-5 h-5" strokeWidth={active ? 2.5 : 1.8} />
-              </div>
+              <Icon className="w-5 h-5" strokeWidth={active ? 2.5 : 1.8} />
               <span className={clsx('text-[10px] font-medium', active ? 'text-gold-400' : 'text-dark-600')}>
                 {label}
               </span>
-              {active && (
-                <span className="w-1 h-1 rounded-full bg-gold-400 absolute bottom-1" />
-              )}
             </Link>
           )
         })}
@@ -102,6 +94,7 @@ function AppInner() {
   useEffect(() => {
     const tg = window.Telegram?.WebApp
     if (tg) {
+      // Telegram WebApp ni to'liq ekranga yoyish
       tg.expand()
       tg.ready()
       tg.setBackgroundColor('#0a0a0a')
@@ -110,9 +103,7 @@ function AppInner() {
       // Auto-login
       if (tg.initData && !isAuthenticated) {
         authApi.telegramLogin(tg.initData)
-          .then((res) => {
-            setAuth(res.data.access_token, res.data.user)
-          })
+          .then((res) => setAuth(res.data.access_token, res.data.user))
           .catch(() => {})
           .finally(() => setLoading(false))
       } else {
@@ -125,7 +116,7 @@ function AppInner() {
 
   if (loading) {
     return (
-      <div className="min-h-screen bg-dark-950 flex items-center justify-center">
+      <div className="fixed inset-0 bg-dark-950 flex items-center justify-center">
         <div className="flex flex-col items-center gap-4">
           <div className="w-14 h-14 rounded-2xl bg-gold-500 flex items-center justify-center animate-pulse">
             <Zap className="w-7 h-7 text-dark-950" fill="currentColor" />
@@ -138,7 +129,7 @@ function AppInner() {
 
   return (
     <BrowserRouter>
-      <div className="min-h-screen bg-dark-950 pb-20">
+      <div className="w-full min-h-screen min-h-dvh bg-dark-950 pb-20">
         <Routes>
           <Route path="/" element={<MiniHomePage />} />
           <Route path="/explore" element={<MiniExplorePage />} />
@@ -156,7 +147,8 @@ function AppInner() {
             color: '#f5f5f5',
             border: '1px solid #262626',
             borderRadius: '12px',
-            fontSize: '13px',
+            fontSize: '14px',
+            maxWidth: '320px',
           },
         }}
       />
