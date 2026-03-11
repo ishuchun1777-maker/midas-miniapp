@@ -2,9 +2,9 @@ import hmac
 import hashlib
 import json
 import time
-from datetime import datetime, timedelta
+from datetime import datetime, timedelta, timezone
 from typing import Optional, Dict, Any
-from jose import JWTError, jwt
+import jwt
 from fastapi import HTTPException, status, Depends
 from fastapi.security import HTTPBearer, HTTPAuthorizationCredentials
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -46,7 +46,6 @@ def verify_telegram_init_data(init_data: str) -> Optional[Dict[str, Any]]:
         if not hmac.compare_digest(computed_hash, hash_value):
             return None
 
-        # Check auth date (max 24 hours)
         auth_date = int(parsed.get("auth_date", 0))
         if time.time() - auth_date > 86400:
             return None
@@ -59,12 +58,12 @@ def verify_telegram_init_data(init_data: str) -> Optional[Dict[str, Any]]:
 
 
 def create_access_token(user_id: int, telegram_id: int) -> str:
-    expire = datetime.utcnow() + timedelta(minutes=settings.JWT_EXPIRE_MINUTES)
+    expire = datetime.now(timezone.utc) + timedelta(minutes=settings.JWT_EXPIRE_MINUTES)
     payload = {
         "sub": str(user_id),
         "telegram_id": telegram_id,
         "exp": expire,
-        "iat": datetime.utcnow(),
+        "iat": datetime.now(timezone.utc),
     }
     return jwt.encode(payload, settings.JWT_SECRET, algorithm=settings.JWT_ALGORITHM)
 
@@ -75,7 +74,7 @@ def decode_token(token: str) -> Optional[Dict]:
             token, settings.JWT_SECRET, algorithms=[settings.JWT_ALGORITHM]
         )
         return payload
-    except JWTError:
+    except jwt.PyJWTError:
         return None
 
 
