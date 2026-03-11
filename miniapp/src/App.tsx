@@ -23,23 +23,15 @@ declare global {
     Telegram?: {
       WebApp: {
         initData: string
-        initDataUnsafe: Record<string, unknown>
-        colorScheme: 'light' | 'dark'
+        initDataUnsafe: { user?: Record<string, unknown> }
         isExpanded: boolean
-        viewportHeight: number
-        viewportStableHeight: number
         expand: () => void
-        close: () => void
         ready: () => void
-        enableClosingConfirmation: () => void
-        BackButton: { show: () => void; hide: () => void; onClick: (cb: () => void) => void }
-        MainButton: { text: string; show: () => void; hide: () => void; onClick: (cb: () => void) => void }
-        HapticFeedback: {
-          impactOccurred: (style: 'light' | 'medium' | 'heavy') => void
-          notificationOccurred: (type: 'error' | 'success' | 'warning') => void
-        }
         setHeaderColor: (color: string) => void
         setBackgroundColor: (color: string) => void
+        HapticFeedback: {
+          impactOccurred: (style: 'light' | 'medium' | 'heavy') => void
+        }
       }
     }
   }
@@ -68,7 +60,8 @@ function BottomNav() {
               key={to}
               to={to}
               className={clsx(
-                'flex flex-col items-center gap-0.5 py-2 px-3 rounded-xl transition-all tap-target',
+                'flex flex-col items-center gap-0.5 py-2 px-3 rounded-xl transition-all',
+                'min-w-[52px] min-h-[48px] justify-center',
                 active ? 'text-gold-400' : 'text-dark-500'
               )}
               onClick={() =>
@@ -93,23 +86,27 @@ function AppInner() {
 
   useEffect(() => {
     const tg = window.Telegram?.WebApp
+
     if (tg) {
-      // Telegram WebApp ni to'liq ekranga yoyish
       tg.expand()
       tg.ready()
       tg.setBackgroundColor('#0a0a0a')
       tg.setHeaderColor('#0a0a0a')
 
-      // Auto-login
       if (tg.initData && !isAuthenticated) {
         authApi.telegramLogin(tg.initData)
-          .then((res) => setAuth(res.data.access_token, res.data.user))
-          .catch(() => {})
+          .then((res) => {
+            setAuth(res.data.access_token, res.data.user)
+          })
+          .catch((err) => {
+            console.warn('Auto-login failed:', err)
+          })
           .finally(() => setLoading(false))
       } else {
         setLoading(false)
       }
     } else {
+      // Telegram WebApp yuklanmagan (browser da ochilgan)
       setLoading(false)
     }
   }, [])
@@ -122,6 +119,7 @@ function AppInner() {
             <Zap className="w-7 h-7 text-dark-950" fill="currentColor" />
           </div>
           <span className="font-display text-3xl tracking-widest text-white">MIDAS</span>
+          <div className="w-6 h-6 border-2 border-gold-500 border-t-transparent rounded-full animate-spin" />
         </div>
       </div>
     )
@@ -129,7 +127,7 @@ function AppInner() {
 
   return (
     <BrowserRouter>
-      <div className="w-full min-h-screen min-h-dvh bg-dark-950 pb-20">
+      <div className="w-full min-h-screen bg-dark-950 pb-20">
         <Routes>
           <Route path="/" element={<MiniHomePage />} />
           <Route path="/explore" element={<MiniExplorePage />} />
@@ -148,7 +146,6 @@ function AppInner() {
             border: '1px solid #262626',
             borderRadius: '12px',
             fontSize: '14px',
-            maxWidth: '320px',
           },
         }}
       />
