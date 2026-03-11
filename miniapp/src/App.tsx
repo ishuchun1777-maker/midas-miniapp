@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'react'
-import { BrowserRouter, Routes, Route, Link, useLocation } from 'react-router-dom'
+import { HashRouter as BrowserRouter, Routes, Route, Link, useLocation } from 'react-router-dom'
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query'
 import { Toaster } from 'react-hot-toast'
 import { Home, Compass, Megaphone, MessageSquare, User, Zap } from 'lucide-react'
@@ -93,7 +93,8 @@ function AppInner() {
       tg.setBackgroundColor('#0a0a0a')
       tg.setHeaderColor('#0a0a0a')
 
-      if (tg.initData && !isAuthenticated) {
+      if (tg.initData) {
+        // Har doim fresh token olamiz — eski token expire bo'lgan bo'lishi mumkin
         authApi.telegramLogin(tg.initData)
           .then((res) => {
             setAuth(res.data.access_token, res.data.user)

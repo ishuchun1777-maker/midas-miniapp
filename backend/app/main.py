@@ -16,22 +16,25 @@ logger = logging.getLogger(__name__)
 async def run_bot():
     token = os.getenv("TELEGRAM_BOT_TOKEN", "")
     if not token:
-        logger.error("TELEGRAM_BOT_TOKEN not set")
+        logger.warning("TELEGRAM_BOT_TOKEN not set — bot ishga tushmadi")
         return
-    logger.info(f"Starting bot...")
+    logger.info("Starting bot...")
     try:
         from aiogram import Bot, Dispatcher
         from aiogram.enums import ParseMode
         from aiogram.client.default import DefaultBotProperties
         from aiogram.fsm.storage.memory import MemoryStorage
         from app.bot.handlers.start import router as start_router
+        from app.bot.handlers.notifications import router as notif_router
         from app.bot.middlewares.auth import AuthMiddleware
+
         bot = Bot(token=token, default=DefaultBotProperties(parse_mode=ParseMode.HTML))
         dp = Dispatcher(storage=MemoryStorage())
         dp.message.middleware(AuthMiddleware())
         dp.include_router(start_router)
+        dp.include_router(notif_router)
         logger.info("Bot polling started!")
-        await dp.start_polling(bot, allowed_updates=["message", "callback_query"])
+        await dp.start_polling(bot, allowed_updates=dp.resolve_used_update_types())
     except Exception as e:
         logger.error(f"Bot error: {e}", exc_info=True)
 
@@ -55,6 +58,7 @@ app = FastAPI(title="MIDAS API", version="1.0.0", lifespan=lifespan)
 app.add_middleware(
     CORSMiddleware,
     allow_origins=settings.ALLOWED_ORIGINS,
+    allow_origin_regex=r"https://.*\.onrender\.com",
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],

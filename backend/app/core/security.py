@@ -4,6 +4,7 @@ import json
 import time
 from datetime import datetime, timedelta, timezone
 from typing import Optional, Dict, Any
+from urllib.parse import unquote
 import jwt
 from fastapi import HTTPException, status, Depends
 from fastapi.security import HTTPBearer, HTTPAuthorizationCredentials
@@ -18,17 +19,21 @@ security = HTTPBearer(auto_error=False)
 def verify_telegram_init_data(init_data: str) -> Optional[Dict[str, Any]]:
     """Verify Telegram Mini App initData"""
     try:
-        parsed = {}
+        # 1. URL-decode qilmasdan parse — hash verification uchun raw value kerak
+        raw_parsed: Dict[str, str] = {}
         for item in init_data.split("&"):
+            if "=" not in item:
+                continue
             key, _, value = item.partition("=")
-            parsed[key] = value
+            raw_parsed[key] = value
 
-        hash_value = parsed.pop("hash", None)
+        hash_value = raw_parsed.pop("hash", None)
         if not hash_value:
             return None
 
+        # 2. data_check_string — raw (URL-encoded) valuelar bilan
         data_check_string = "\n".join(
-            f"{k}={v}" for k, v in sorted(parsed.items())
+            f"{k}={v}" for k, v in sorted(raw_parsed.items())
         )
 
         secret_key = hmac.new(
@@ -46,11 +51,14 @@ def verify_telegram_init_data(init_data: str) -> Optional[Dict[str, Any]]:
         if not hmac.compare_digest(computed_hash, hash_value):
             return None
 
-        auth_date = int(parsed.get("auth_date", 0))
+        # 3. auth_date tekshirish — 24 soat ichida bo'lishi kerak
+        auth_date = int(raw_parsed.get("auth_date", 0))
         if time.time() - auth_date > 86400:
             return None
 
-        user_data = json.loads(parsed.get("user", "{}"))
+        # 4. user fieldini URL-decode qilib JSON parse
+        user_raw = raw_parsed.get("user", "{}")
+        user_data = json.loads(unquote(user_raw))
         return user_data
 
     except Exception:

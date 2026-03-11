@@ -17,8 +17,13 @@ api.interceptors.response.use(
   (res) => res,
   (err) => {
     if (err.response?.status === 401) {
+      // Token eskirgan — localStorage tozalab, Telegram orqali qayta auth
       localStorage.removeItem('midas_token')
-      window.location.href = '/login'
+      const tg = (window as typeof window & { Telegram?: { WebApp: { initData: string } } }).Telegram?.WebApp
+      if (tg?.initData) {
+        // Sahifani reload qilsak App.tsx qayta auth qiladi
+        window.location.reload()
+      }
     }
     return Promise.reject(err)
   }

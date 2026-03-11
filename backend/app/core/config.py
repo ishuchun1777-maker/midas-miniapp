@@ -31,7 +31,6 @@ class Settings(BaseSettings):
         "https://midas.uz",
         "https://app.midas.uz",
         "https://t.me",
-        "*",
     ]
 
     # Click Payment
