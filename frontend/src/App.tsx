@@ -1,13 +1,16 @@
 import { BrowserRouter, Routes, Route } from 'react-router-dom'
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query'
-import { Suspense } from 'react'
-import '../i18n'
-import { Layout } from '@/components/layout/Layout'
-import HomePage from '@/pages/HomePage'
-import ExplorePage from '@/pages/ExplorePage'
-import CampaignsPage from '@/pages/CampaignsPage'
-import ChatPage from '@/pages/ChatPage'
-import LoginPage from '@/pages/LoginPage'
+import { Suspense, lazy } from 'react'
+import './i18n'
+import './styles/globals.css'
+import { Layout } from './components/layout/Layout'
+
+const HomePage = lazy(() => import('./pages/HomePage'))
+const ExplorePage = lazy(() => import('./pages/ExplorePage'))
+const CampaignsPage = lazy(() => import('./pages/CampaignsPage'))
+const ChatPage = lazy(() => import('./pages/ChatPage'))
+const DealsPage = lazy(() => import('./pages/DealsPage'))
+const LoginPage = lazy(() => import('./pages/LoginPage'))
 
 const queryClient = new QueryClient({
   defaultOptions: {
