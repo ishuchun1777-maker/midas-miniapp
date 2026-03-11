@@ -1,7 +1,11 @@
 import axios from 'axios'
 
+const BASE_URL = (typeof window !== 'undefined' && (window as any).__API_URL__)
+  || (typeof process !== 'undefined' && (process as any).env?.VITE_API_URL)
+  || '/api/v1'
+
 export const api = axios.create({
-  baseURL: import.meta.env.VITE_API_URL || '/api/v1',
+  baseURL: BASE_URL,
   headers: { 'Content-Type': 'application/json' },
 })
 
@@ -21,8 +25,6 @@ api.interceptors.response.use(
     return Promise.reject(err)
   }
 )
-
-// ─── TYPES ───────────────────────────────────────────────────────────────────
 
 export interface User {
   id: number
@@ -158,8 +160,6 @@ export interface PaginatedResponse<T> {
   pages: number
 }
 
-// ─── API FUNCTIONS ────────────────────────────────────────────────────────────
-
 export const authApi = {
   telegramLogin: (initData: string) =>
     api.post('/auth/telegram', { init_data: initData }),
@@ -194,9 +194,7 @@ export const chatApi = {
       params: { recipient_id: recipientId, listing_id: listingId },
     }),
   messages: (convId: number, page = 1) =>
-    api.get<Message[]>(`/chat/conversations/${convId}/messages`, {
-      params: { page },
-    }),
+    api.get<Message[]>(`/chat/conversations/${convId}/messages`, { params: { page } }),
   sendMessage: (convId: number, data: unknown) =>
     api.post<Message>(`/chat/conversations/${convId}/messages`, data),
   unreadCount: () => api.get<{ unread_count: number }>('/chat/unread-count'),

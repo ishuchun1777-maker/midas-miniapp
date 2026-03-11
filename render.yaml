@@ -1,10 +1,11 @@
 services:
   - type: web
-    name: midas-api
+    name: midas-backend
     env: python
+    rootDir: backend
+    pythonVersion: "3.11.9"
     buildCommand: pip install -r requirements.txt
     startCommand: uvicorn app.main:app --host 0.0.0.0 --port $PORT
-    rootDir: backend
     envVars:
       - key: DATABASE_URL
         value: sqlite+aiosqlite:///./midas.db
@@ -18,3 +19,26 @@ services:
         sync: false
       - key: DEBUG
         value: "false"
+
+  - type: web
+    name: midas-frontend
+    env: node
+    rootDir: frontend
+    buildCommand: npm install && npm run build
+    staticPublishPath: dist
+    envVars:
+      - key: VITE_API_URL
+        sync: false
+
+  - type: worker
+    name: midas-bot
+    env: python
+    rootDir: bot
+    pythonVersion: "3.11.9"
+    buildCommand: pip install -r requirements.txt
+    startCommand: python main.py
+    envVars:
+      - key: TELEGRAM_BOT_TOKEN
+        sync: false
+      - key: TELEGRAM_MINI_APP_URL
+        sync: false
