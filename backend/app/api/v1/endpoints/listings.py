@@ -13,6 +13,50 @@ from app.services.listing_service import (
 )
 from app.core.config import settings
 
+
+def serialize_listing(l) -> dict:
+    """Listing modelini dict ga aylantiramiz — None fieldlar xato bermasligi uchun"""
+    owner = l.owner
+    return {
+        "id": l.id,
+        "title": l.title,
+        "description": l.description,
+        "category": l.category.value if hasattr(l.category, 'value') else l.category,
+        "status": l.status.value if hasattr(l.status, 'value') else (l.status or "active"),
+        "pricing_type": l.pricing_type.value if hasattr(l.pricing_type, 'value') else (l.pricing_type or "negotiable"),
+        "price_from": l.price_from,
+        "price_to": l.price_to,
+        "currency": l.currency or "UZS",
+        "city": l.city,
+        "telegram_channel_url": l.telegram_channel_url,
+        "subscriber_count": l.subscriber_count,
+        "avg_views": l.avg_views,
+        "engagement_rate": l.engagement_rate,
+        "ad_formats": l.ad_formats or [],
+        "cover_image": l.cover_image,
+        "images": l.images or [],
+        "view_count": l.view_count or 0,
+        "save_count": l.save_count or 0,
+        "lead_count": l.lead_count or 0,
+        "verified": l.verified or False,
+        "featured": l.featured or False,
+        "rating": l.rating or 0.0,
+        "review_count": l.review_count or 0,
+        "tags": l.tags or [],
+        "created_at": l.created_at.isoformat() if l.created_at else None,
+        "owner": {
+            "id": owner.id,
+            "telegram_id": owner.telegram_id,
+            "telegram_username": owner.telegram_username,
+            "first_name": owner.first_name,
+            "last_name": owner.last_name,
+            "photo_url": owner.photo_url,
+            "language_code": owner.language_code or "uz",
+            "is_verified": owner.is_verified or False,
+            "created_at": owner.created_at.isoformat() if owner.created_at else None,
+        } if owner else None,
+    }
+
 router = APIRouter()
 
 
@@ -48,13 +92,14 @@ async def list_listings(
     )
 
 
-@router.post("/", response_model=ListingPublic, status_code=status.HTTP_201_CREATED)
+@router.post("/", status_code=status.HTTP_201_CREATED)
 async def create_new_listing(
     data: ListingCreate,
     db: AsyncSession = Depends(get_db),
     current_user: User = Depends(get_current_user),
 ):
-    return await create_listing(db, current_user.id, data)
+    listing = await create_listing(db, current_user.id, data)
+    return serialize_listing(listing)
 
 
 @router.get("/{listing_id}", response_model=ListingPublic)

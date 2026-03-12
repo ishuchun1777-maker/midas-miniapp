@@ -18,6 +18,43 @@ from app.services.campaign_service import (
 router = APIRouter()
 
 
+def serialize_campaign(c) -> dict:
+    """Campaign modelini dict ga — None fieldlar xato bermasligi uchun"""
+    buyer = c.buyer
+    return {
+        "id": c.id,
+        "title": c.title,
+        "description": c.description,
+        "business_type": c.business_type,
+        "goal": c.goal,
+        "target_audience": c.target_audience,
+        "city": c.city,
+        "budget_min": c.budget_min,
+        "budget_max": c.budget_max,
+        "currency": c.currency or "UZS",
+        "duration_days": c.duration_days,
+        "target_platforms": c.target_platforms or [],
+        "needs_creative": c.needs_creative or False,
+        "needs_management": c.needs_management or False,
+        "status": c.status.value if hasattr(c.status, 'value') else (c.status or "open"),
+        "view_count": c.view_count or 0,
+        "proposal_count": c.proposal_count or 0,
+        "deadline": c.deadline.isoformat() if c.deadline else None,
+        "created_at": c.created_at.isoformat() if c.created_at else None,
+        "buyer": {
+            "id": buyer.id,
+            "telegram_id": buyer.telegram_id,
+            "telegram_username": buyer.telegram_username,
+            "first_name": buyer.first_name,
+            "last_name": buyer.last_name,
+            "photo_url": buyer.photo_url,
+            "language_code": buyer.language_code or "uz",
+            "is_verified": buyer.is_verified or False,
+            "created_at": buyer.created_at.isoformat() if buyer.created_at else None,
+        } if buyer else None,
+    }
+
+
 @router.get("/", response_model=PaginatedResponse)
 async def list_campaigns(
     city: Optional[str] = None,
@@ -34,13 +71,14 @@ async def list_campaigns(
     )
 
 
-@router.post("/", response_model=CampaignPublic, status_code=status.HTTP_201_CREATED)
+@router.post("/", status_code=status.HTTP_201_CREATED)
 async def create_new_campaign(
     data: CampaignCreate,
     db: AsyncSession = Depends(get_db),
     current_user: User = Depends(get_current_user),
 ):
-    return await create_campaign(db, current_user.id, data)
+    campaign = await create_campaign(db, current_user.id, data)
+    return serialize_campaign(campaign)
 
 
 @router.get("/mine", response_model=List[CampaignPublic])
