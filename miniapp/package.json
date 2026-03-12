@@ -4,7 +4,7 @@
   "private": true,
   "scripts": {
     "dev": "vite --port 5174",
-    "build": "tsc && vite build",
+    "build": "vite build",
     "preview": "vite preview --port 5174"
   },
   "dependencies": {
@@ -17,8 +17,6 @@
     "react-hot-toast": "^2.4.1",
     "lucide-react": "^0.454.0",
     "framer-motion": "^11.11.9",
-    "i18next": "^23.16.4",
-    "react-i18next": "^15.1.0",
     "date-fns": "^4.1.0",
     "clsx": "^2.1.1"
   },
