@@ -65,6 +65,23 @@ async def lifespan(app: FastAPI):
 
 app = FastAPI(title="MIDAS API", version="1.0.0", lifespan=lifespan)
 
+@app.exception_handler(RequestValidationError)
+async def validation_exception_handler(request: Request, exc: RequestValidationError):
+    errors = exc.errors()
+    logger.error(f"422 Validation error on {request.method} {request.url.path}")
+    logger.error(f"Errors: {errors}")
+    # Body ni ham log ga chiqaramiz
+    try:
+        body = await request.json()
+        logger.error(f"Request body: {body}")
+    except Exception:
+        pass
+    return JSONResponse(
+        status_code=422,
+        content={"detail": errors}
+    )
+
+
 app.add_middleware(
     CORSMiddleware,
     allow_origins=["*"],

@@ -134,12 +134,19 @@ function CreateCampaignModal({ onClose }: { onClose: () => void }) {
       onClose()
     },
     onError: (e: unknown) => {
-      const err = e as { response?: { data?: { detail?: unknown } } }
+      const err = e as { response?: { data?: { detail?: unknown }; status?: number } }
       const msg = err?.response?.data?.detail
+      const status = err?.response?.status
       if (Array.isArray(msg)) {
-        toast.error((msg as Record<string,unknown>[]).map(m => String(m.msg)).join(', '))
+        const details = (msg as Record<string,unknown>[])
+          .map(m => {
+            const loc = Array.isArray(m.loc) ? (m.loc as string[]).slice(1).join('.') : ''
+            return loc ? `${loc}: ${m.msg}` : String(m.msg)
+          }).join(' | ')
+        toast.error(details, { duration: 6000 })
+        console.error('Validation errors:', msg)
       } else {
-        toast.error(String(msg || 'Server bilan ulanishda xatolik'))
+        toast.error(`${status ?? ''} ${String(msg || 'Server xatosi')}`, { duration: 5000 })
       }
     },
   })
