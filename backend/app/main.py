@@ -3,7 +3,6 @@ from fastapi.middleware.cors import CORSMiddleware
 from contextlib import asynccontextmanager
 import logging
 import asyncio
-import os
 
 from app.core.config import settings
 from app.db.database import engine, Base
@@ -43,17 +42,25 @@ async def run_bot():
 @asynccontextmanager
 async def lifespan(app: FastAPI):
     logger.info("Starting MIDAS API...")
+
+    # DB yaratish
     async with engine.begin() as conn:
         await conn.run_sync(Base.metadata.create_all)
     logger.info("Database tables created/verified")
+
+    # Bot task boshlash
     logger.info("Launching bot task...")
     bot_task = asyncio.create_task(run_bot())
+    logger.info("Bot task created!")
+
     yield
+
+    # Shutdown
     bot_task.cancel()
     try:
         await bot_task
     except asyncio.CancelledError:
-        pass
+        logger.info("Bot task stopped.")
 
 
 app = FastAPI(title="MIDAS API", version="1.0.0", lifespan=lifespan)
