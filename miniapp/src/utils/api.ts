@@ -83,7 +83,7 @@ export interface PaginatedResponse<T> {
 
 export const authApi = {
   telegramLogin: (initData: string) =>
-    api.post('/auth/telegram', { init_data: initData }),
+    api.post('/auth/telegram/', { init_data: initData }),
   getMe: () => api.get('/auth/me'),
 }
 export const listingsApi = {
@@ -91,46 +91,46 @@ export const listingsApi = {
     api.get<PaginatedResponse<Listing>>('/listings', { params }),
   featured: () => api.get<Listing[]>('/listings/featured'),
   get: (id: number) => api.get<Listing>(`/listings/${id}`),
-  create: (data: unknown) => api.post<Listing>('/listings', data),
-  update: (id: number, data: unknown) => api.patch<Listing>(`/listings/${id}`, data),
-  toggleFavorite: (id: number) => api.post(`/listings/${id}/favorite`),
+  create: (data: unknown) => api.post<Listing>('/listings/', data),
+  update: (id: number, data: unknown) => api.patch<Listing>(`/listings/${id}/`, data),
+  toggleFavorite: (id: number) => api.post(`/listings/${id}/favorite/`),
   favorites: () => api.get<Listing[]>('/listings/me/favorites'),
 }
 export const campaignsApi = {
   list: (params?: Record<string, unknown>) =>
     api.get<PaginatedResponse<Campaign>>('/campaigns', { params }),
   get: (id: number) => api.get<Campaign>(`/campaigns/${id}`),
-  create: (data: unknown) => api.post<Campaign>('/campaigns', data),
+  create: (data: unknown) => api.post<Campaign>('/campaigns/', data),
   mine: () => api.get<Campaign[]>('/campaigns/mine'),
   submitProposal: (id: number, data: unknown) =>
-    api.post(`/campaigns/${id}/proposals`, data),
+    api.post(`/campaigns/${id}/proposals/`, data),
 }
 export const chatApi = {
   conversations: () => api.get<Conversation[]>('/chat/conversations'),
   startConversation: (recipientId: number, listingId?: number) =>
-    api.post('/chat/conversations/start', null, {
+    api.post('/chat/conversations/start/', null, {
       params: { recipient_id: recipientId, listing_id: listingId },
     }),
   messages: (convId: number, page = 1) =>
     api.get<Message[]>(`/chat/conversations/${convId}/messages`, { params: { page } }),
   sendMessage: (convId: number, data: unknown) =>
-    api.post<Message>(`/chat/conversations/${convId}/messages`, data),
+    api.post<Message>(`/chat/conversations/${convId}/messages/`, data),
   unreadCount: () => api.get<{ unread_count: number }>('/chat/unread-count'),
 }
 export const dealsApi = {
   list: () => api.get<Deal[]>('/deals'),
-  create: (data: unknown) => api.post<Deal>('/deals', data),
-  update: (id: number, data: unknown) => api.patch<Deal>(`/deals/${id}`, data),
+  create: (data: unknown) => api.post<Deal>('/deals/', data),
+  update: (id: number, data: unknown) => api.patch<Deal>(`/deals/${id}/`, data),
 }
 export const notificationsApi = {
   list: () => api.get<Notification[]>('/notifications'),
-  markRead: () => api.post('/notifications/mark-read'),
+  markRead: () => api.post('/notifications/mark-read/'),
 }
 export const usersApi = {
   getProfile: (userId: number) => api.get<UserProfile>(`/users/${userId}`),
   myProfiles: () => api.get<UserProfile[]>('/users/me/profiles'),
-  createProfile: (data: unknown) => api.post<UserProfile>('/users/me/profiles', data),
+  createProfile: (data: unknown) => api.post<UserProfile>('/users/me/profiles/', data),
 }
 export const paymentsApi = {
-  initiate: (data: unknown) => api.post('/payments/initiate', data),
+  initiate: (data: unknown) => api.post('/payments/initiate/', data),
 }
