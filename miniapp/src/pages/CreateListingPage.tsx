@@ -2,7 +2,7 @@ import { useState } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { motion, AnimatePresence } from 'framer-motion'
 import {
-  TelegramLogo, YoutubeLogo, InstagramLogo, Desktop, MapPin,
+  TelegramLogo, YoutubeLogo, InstagramLogo, Monitor, MapPin,
   ChartLineUp, Users, PaintBrush, Video, Pen,
   CaretLeft, CaretRight, CheckCircle, Lightning, X, CurrencyDollar
 } from '@phosphor-icons/react'
@@ -24,7 +24,7 @@ const CATEGORIES = [
     group: "Tashqi reklama",
     items: [
       { id: 'billboard', icon: MapPin, label: 'Billboard', color: '#a78bfa' },
-      { id: 'led_screen', icon: Desktop, label: 'LED ekran', color: '#c8a84b' },
+      { id: 'led_screen', icon: Monitor, label: 'LED ekran', color: '#c8a84b' },
       { id: 'transport', icon: ChartLineUp, label: 'Transport', color: '#34d399' },
     ]
   },

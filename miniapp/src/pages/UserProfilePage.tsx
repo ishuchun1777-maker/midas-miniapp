@@ -2,7 +2,7 @@ import { useParams, useNavigate } from 'react-router-dom'
 import { useQuery } from '@tanstack/react-query'
 import { motion } from 'framer-motion'
 import {
-  ArrowLeft, Star, Handshake, BadgeCheck, User, MapPin,
+  ArrowLeft, Star, Handshake, Seal, User, MapPin,
   Link as LinkIcon, ChatCircle, Warning
 } from '@phosphor-icons/react'
 import { usersApi, listingsApi, chatApi } from '../utils/api'
@@ -90,7 +90,7 @@ export default function UserProfilePage() {
             {u.is_verified && (
               <div className="absolute -bottom-1 -right-1 w-6 h-6 rounded-full flex items-center justify-center"
                 style={{ background: '#c8a84b' }}>
-                <BadgeCheck size={14} color="#060809" weight="fill" />
+                <Seal size={14} color="#060809" weight="fill" />
               </div>
             )}
           </div>
@@ -109,7 +109,7 @@ export default function UserProfilePage() {
           {profile.verified_badge && (
             <span className="flex items-center gap-1 px-3 py-1 rounded-full text-xs font-bold"
               style={{ background: 'rgba(200,168,75,0.1)', color: '#c8a84b', border: '1px solid rgba(200,168,75,0.2)' }}>
-              <BadgeCheck size={10} weight="fill" /> Verified
+              <Seal size={10} weight="fill" /> Verified
             </span>
           )}
         </div>

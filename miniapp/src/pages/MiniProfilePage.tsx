@@ -3,9 +3,9 @@ import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
 import { motion, AnimatePresence } from 'framer-motion'
 import { useNavigate } from 'react-router-dom'
 import {
-  Lightning, User, BadgeCheck, Star, Handshake, Plus,
+  Lightning, User, Seal, Star, Handshake, Plus,
   SignOut, CaretRight, X, CheckCircle, Circle,
-  Megaphone, Target, Heart, ChartLine, ShieldCheck, TelegramLogo
+  Megaphone, Target, Heart, ChartLineUp, ShieldCheck, TelegramLogo
 } from '@phosphor-icons/react'
 import { usersApi, dealsApi, authApi, listingsApi } from '../utils/api'
 import { useAuthStore } from '../store/authStore'
@@ -140,7 +140,7 @@ export default function MiniProfilePage() {
     { label: 'Kampaniyalarim', icon: Target,       to: '/campaigns',      badge: undefined,                                              authRequired: true },
     { label: 'Saqlangan',      icon: Heart,        to: '/favorites',      badge: undefined,                                              authRequired: true },
     { label: 'Bitimlar',       icon: Handshake,    to: '/deals',          badge: activeDeals > 0 ? String(activeDeals) : undefined,      authRequired: true },
-    { label: 'Tahlil',         icon: ChartLine,    to: '/analytics',      badge: undefined,                                              authRequired: true },
+    { label: 'Tahlil',         icon: ChartLineUp,    to: '/analytics',      badge: undefined,                                              authRequired: true },
     { label: 'Verifikatsiya',  icon: ShieldCheck,  to: '/verification',   badge: undefined,                                              authRequired: true },
   ]
 
@@ -175,7 +175,7 @@ export default function MiniProfilePage() {
               {user?.is_verified && (
                 <div className="absolute -bottom-1 -right-1 w-5 h-5 rounded-full flex items-center justify-center"
                   style={{ background: '#c8a84b' }}>
-                  <BadgeCheck size={12} color="#060809" weight="fill" />
+                  <Seal size={12} color="#060809" weight="fill" />
                 </div>
               )}
             </div>
@@ -257,7 +257,7 @@ export default function MiniProfilePage() {
                           </div>
                         )}
                       </div>
-                      {p.verified_badge && <BadgeCheck size={16} color="#c8a84b" weight="fill" />}
+                      {p.verified_badge && <Seal size={16} color="#c8a84b" weight="fill" />}
                     </div>
                   )
                 })}
