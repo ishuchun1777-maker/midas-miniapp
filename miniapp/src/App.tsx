@@ -236,6 +236,7 @@ function AppInner() {
         {/* Public */}
         <Route path="/"                        element={<MiniHomePage />} />
         <Route path="/explore"                 element={<MiniExplorePage />} />
+        <Route path="/listing/create"          element={<AuthGuard><CreateListingPage /></AuthGuard>} />
         <Route path="/listing/:id"             element={<ListingDetailPage />} />
         <Route path="/campaign/:id"            element={<CampaignDetailPage />} />
         <Route path="/user/:id"                element={<UserProfilePage />} />
@@ -244,7 +245,6 @@ function AppInner() {
         <Route path="/campaigns"               element={<AuthGuard><MiniCampaignsPage /></AuthGuard>} />
         <Route path="/messages"                element={<AuthGuard><MiniChatPage /></AuthGuard>} />
         <Route path="/profile"                 element={<MiniProfilePage />} />
-        <Route path="/listing/create"          element={<AuthGuard><CreateListingPage /></AuthGuard>} />
         <Route path="/notifications"           element={<AuthGuard><NotificationsPage /></AuthGuard>} />
         <Route path="/deals"                   element={<AuthGuard><DealsPage /></AuthGuard>} />
         <Route path="/favorites"               element={<AuthGuard><FavoritesPage /></AuthGuard>} />

@@ -28,7 +28,7 @@ services:
     staticPublishPath: dist
     envVars:
       - key: VITE_API_URL
-        sync: false
+        value: https://midas-backend-6zth.onrender.com/api/v1
 
   - type: web
     name: midas-frontend
@@ -38,4 +38,4 @@ services:
     staticPublishPath: dist
     envVars:
       - key: VITE_API_URL
-        sync: false
+        value: https://midas-backend.onrender.com/api/v1

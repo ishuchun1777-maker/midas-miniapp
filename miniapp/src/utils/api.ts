@@ -1,10 +1,12 @@
 import axios from 'axios'
 
-const BASE_URL = import.meta.env.VITE_API_URL || '/api/v1'
+// VITE_API_URL env o'rnatilmagan bo'lsa backend URL fallback
+const BASE_URL = import.meta.env.VITE_API_URL || 'https://midas-backend-6zth.onrender.com/api/v1'
 
 export const api = axios.create({
   baseURL: BASE_URL,
   headers: { 'Content-Type': 'application/json' },
+  timeout: 15000, // 15 sekund timeout
 })
 
 api.interceptors.request.use((config) => {
@@ -17,11 +19,9 @@ api.interceptors.response.use(
   (res) => res,
   (err) => {
     if (err.response?.status === 401) {
-      // Token eskirgan — localStorage tozalab, Telegram orqali qayta auth
       localStorage.removeItem('midas_token')
       const tg = (window as typeof window & { Telegram?: { WebApp: { initData: string } } }).Telegram?.WebApp
       if (tg?.initData) {
-        // Sahifani reload qilsak App.tsx qayta auth qiladi
         window.location.reload()
       }
     }
@@ -74,6 +74,7 @@ export interface Listing {
   subscriber_count?: number
   avg_views?: number
   engagement_rate?: number
+  daily_traffic?: number
   ad_formats: string[]
   cover_image?: string
   images: string[]

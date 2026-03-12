@@ -10,7 +10,7 @@ class Settings(BaseSettings):
     SECRET_KEY: str = "midas-super-secret-key-change-in-production"
     DEBUG: bool = False
 
-    # Database — default SQLite (Render uchun), ixtiyoriy PostgreSQL
+    # Database
     DATABASE_URL: str = "sqlite+aiosqlite:///./midas.db"
 
     # Telegram
@@ -23,7 +23,7 @@ class Settings(BaseSettings):
     JWT_ALGORITHM: str = "HS256"
     JWT_EXPIRE_MINUTES: int = 60 * 24 * 30  # 30 days
 
-    # CORS — Render URL ham qo'shilgan
+    # CORS — barcha kerakli URLlar
     ALLOWED_ORIGINS: List[str] = [
         "http://localhost:3000",
         "http://localhost:5173",
@@ -31,6 +31,12 @@ class Settings(BaseSettings):
         "https://midas.uz",
         "https://app.midas.uz",
         "https://t.me",
+        # Render URLs
+        "https://midas-miniapp.onrender.com",
+        "https://midas-frontend.onrender.com",
+        "https://midas-backend.onrender.com",
+        # Telegram WebApp (wildcard uchun)
+        "null",
     ]
 
     # Click Payment
