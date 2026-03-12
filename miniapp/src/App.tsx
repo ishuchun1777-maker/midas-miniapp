@@ -170,7 +170,7 @@ function LoadingScreen() {
 
 // ── App Inner ────────────────────────────────────────────────────────────────
 function AppInner() {
-  const { setAuth, isAuthenticated } = useAuthStore()
+  const { setAuth, logout, isAuthenticated } = useAuthStore()
   const navigate = useNavigate()
   const [loading, setLoading]               = useState(true)
   const [showWelcome, setShowWelcome]       = useState(false)
@@ -181,30 +181,44 @@ function AppInner() {
     if (authCalled.current) return
     authCalled.current = true
 
+    // 10 soniya ichida auth bo'lmasa loading ni yopish (xavfsizlik)
+    const safetyTimer = setTimeout(() => setLoading(false), 10000)
+
     const tg = window.Telegram?.WebApp
     if (tg) {
       tg.expand()
       tg.ready()
-      tg.setBackgroundColor('#060809')
-      tg.setHeaderColor('#060809')
+      try { tg.setBackgroundColor('#060809') } catch {}
+      try { tg.setHeaderColor('#060809') } catch {}
 
-      if (tg.initData && !isAuthenticated) {
+      if (tg.initData) {
+        // Har doim yangi token olish (eski token invalid bo'lishi mumkin)
         authApi.telegramLogin(tg.initData)
           .then(res => {
             setAuth(res.data.access_token, res.data.user)
-            if (res.data.is_new_user) {
-              setShowWelcome(true)
-            }
+            if (res.data.is_new_user) setShowWelcome(true)
           })
-          .catch(err => console.warn('Auth failed:', err))
-          .finally(() => setLoading(false))
+          .catch(err => {
+            console.warn('Telegram auth failed:', err)
+            // Token eski bo'lsa o'chirib tashlaymiz
+            logout()
+          })
+          .finally(() => {
+            clearTimeout(safetyTimer)
+            setLoading(false)
+          })
       } else {
+        // initData yo'q — brauzerda yoki xato
+        clearTimeout(safetyTimer)
         setLoading(false)
       }
     } else {
-      // Dev mode
+      // Telegram WebApp mavjud emas (dev/brauzer)
+      clearTimeout(safetyTimer)
       setLoading(false)
     }
+
+    return () => clearTimeout(safetyTimer)
   }, [])
 
   if (loading) return <LoadingScreen />
