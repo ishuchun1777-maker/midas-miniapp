@@ -49,12 +49,19 @@ async def get_listings(
     verified_only: bool = False,
     page: int = 1,
     per_page: int = 20,
+    owner_id: Optional[int] = None,
 ) -> Tuple[List[Listing], int]:
     query = (
         select(Listing)
-        .where((Listing.status == ListingStatus.ACTIVE) | (Listing.status == None))
         .options(selectinload(Listing.owner))
     )
+    # owner_id filter bo'lsa — status filtrsiz (o'z e'lonlari draft ham ko'rinsin)
+    if owner_id:
+        query = query.where(Listing.owner_id == owner_id)
+    else:
+        query = query.where(
+            (Listing.status == ListingStatus.ACTIVE) | (Listing.status == None)
+        )
 
     if category:
         query = query.where(Listing.category == category)

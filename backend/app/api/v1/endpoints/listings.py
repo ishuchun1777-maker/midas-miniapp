@@ -72,6 +72,22 @@ async def featured_listings(db: AsyncSession = Depends(get_db)):
     return [sl(l) for l in items]
 
 
+@router.get("/mine")
+async def my_listings(
+    db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+):
+    """Faqat shu foydalanuvchining e'lonlari"""
+    items, total = await get_listings(db, owner_id=current_user.id, per_page=100)
+    return {
+        "items": [sl(l) for l in items],
+        "total": total,
+        "page": 1,
+        "per_page": 100,
+        "pages": 1,
+    }
+
+
 @router.get("/")
 async def list_listings(
     category: Optional[ListingCategory] = None,

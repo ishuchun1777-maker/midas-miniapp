@@ -1,6 +1,6 @@
 import axios from 'axios'
 
-const BASE_URL = import.meta.env.VITE_API_URL || 'https://midas-backend-6zth.onrender.com/api/v1'
+const BASE_URL = import.meta.env.VITE_API_URL || 'https://midas-backend.onrender.com/api/v1'
 
 export const api = axios.create({
   baseURL: BASE_URL,
@@ -88,13 +88,14 @@ export const authApi = {
 }
 export const listingsApi = {
   list: (params?: Record<string, unknown>) =>
-    api.get<PaginatedResponse<Listing>>('/listings', { params }),
-  featured: () => api.get<Listing[]>('/listings/featured'),
-  get: (id: number) => api.get<Listing>(`/listings/${id}`),
+    api.get<PaginatedResponse<Listing>>('/listings/', { params }),
+  mine: () => api.get<PaginatedResponse<Listing>>('/listings/mine/'),
+  featured: () => api.get<Listing[]>('/listings/featured/'),
+  get: (id: number) => api.get<Listing>(`/listings/${id}/`),
   create: (data: unknown) => api.post<Listing>('/listings/', data),
   update: (id: number, data: unknown) => api.patch<Listing>(`/listings/${id}/`, data),
   toggleFavorite: (id: number) => api.post(`/listings/${id}/favorite/`),
-  favorites: () => api.get<Listing[]>('/listings/me/favorites'),
+  favorites: () => api.get<Listing[]>('/listings/me/favorites/'),
 }
 export const campaignsApi = {
   list: (params?: Record<string, unknown>) =>

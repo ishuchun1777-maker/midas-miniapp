@@ -110,7 +110,7 @@ export default function MiniProfilePage() {
 
   const { data: myListings } = useQuery({
     queryKey: ['my-listings'],
-    queryFn: () => listingsApi.list({ owner: 'me', per_page: 50 }).then(r => r.data),
+    queryFn: () => listingsApi.mine().then(r => r.data),
     enabled: isAuthenticated,
   })
 
@@ -136,7 +136,7 @@ export default function MiniProfilePage() {
   }
 
   const menuItems = [
-    { label: "E'lonlarim",     icon: Megaphone,    to: '/listing/create', badge: listingsCount > 0 ? String(listingsCount) : undefined, authRequired: true },
+    { label: "E'lonlarim",     icon: Megaphone,    to: '/listings/mine', badge: listingsCount > 0 ? String(listingsCount) : undefined, authRequired: true },
     { label: 'Kampaniyalarim', icon: Target,       to: '/campaigns',      badge: undefined,                                              authRequired: true },
     { label: 'Saqlangan',      icon: Heart,        to: '/favorites',      badge: undefined,                                              authRequired: true },
     { label: 'Bitimlar',       icon: Handshake,    to: '/deals',          badge: activeDeals > 0 ? String(activeDeals) : undefined,      authRequired: true },

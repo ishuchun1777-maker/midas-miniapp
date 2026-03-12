@@ -16,6 +16,7 @@ import MiniChatPage        from './pages/MiniChatPage'
 import MiniProfilePage     from './pages/MiniProfilePage'
 import WelcomePage         from './pages/WelcomePage'
 import OnboardingPage      from './pages/OnboardingPage'
+import MyListingsPage from './pages/MyListingsPage'
 import CreateListingPage   from './pages/CreateListingPage'
 import ListingDetailPage   from './pages/ListingDetailPage'
 import CampaignDetailPage  from './pages/CampaignDetailPage'
@@ -262,6 +263,7 @@ function AppInner() {
         {/* Public */}
         <Route path="/"                        element={<MiniHomePage />} />
         <Route path="/explore"                 element={<MiniExplorePage />} />
+        <Route path="/listings/mine"          element={<AuthGuard><MyListingsPage /></AuthGuard>} />
         <Route path="/listing/create"          element={<AuthGuard><CreateListingPage /></AuthGuard>} />
         <Route path="/listing/:id"             element={<ListingDetailPage />} />
         <Route path="/campaign/:id"            element={<CampaignDetailPage />} />
