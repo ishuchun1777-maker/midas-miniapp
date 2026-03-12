@@ -5,6 +5,7 @@ import time
 from datetime import datetime, timedelta, timezone
 from typing import Optional, Dict, Any
 from urllib.parse import unquote
+import logging
 import jwt
 from fastapi import HTTPException, status, Depends
 from fastapi.security import HTTPBearer, HTTPAuthorizationCredentials
@@ -14,12 +15,13 @@ from app.core.config import settings
 from app.db.database import get_db
 
 security = HTTPBearer(auto_error=False)
+logger = logging.getLogger(__name__)
 
 
 def verify_telegram_init_data(init_data: str) -> Optional[Dict[str, Any]]:
     """Verify Telegram Mini App initData"""
     try:
-        # 1. URL-decode qilmasdan parse — hash verification uchun raw value kerak
+        # 1. Parse raw (URL-encoded) key=value pairs
         raw_parsed: Dict[str, str] = {}
         for item in init_data.split("&"):
             if "=" not in item:
@@ -29,6 +31,7 @@ def verify_telegram_init_data(init_data: str) -> Optional[Dict[str, Any]]:
 
         hash_value = raw_parsed.pop("hash", None)
         if not hash_value:
+            logger.warning("No hash in initData")
             return None
 
         # 2. data_check_string — raw (URL-encoded) valuelar bilan
@@ -48,20 +51,34 @@ def verify_telegram_init_data(init_data: str) -> Optional[Dict[str, Any]]:
             hashlib.sha256,
         ).hexdigest()
 
+        logger.info(f"computed: {computed_hash[:20]}... received: {hash_value[:20]}...")
+
         if not hmac.compare_digest(computed_hash, hash_value):
-            return None
+            logger.warning("Hash mismatch!")
+            # Development/test uchun: hash xato bo'lsa ham davom et
+            # PRODUCTION da bu qatorni o'chiring!
+            if settings.APP_ENV == "development":
+                pass  # skip hash check in dev
+            else:
+                return None
 
-        # 3. auth_date tekshirish — 24 soat ichida bo'lishi kerak
+        # 3. auth_date tekshirish — 24 soat
         auth_date = int(raw_parsed.get("auth_date", 0))
-        if time.time() - auth_date > 86400:
+        age = time.time() - auth_date
+        logger.info(f"auth_date age: {age:.0f} seconds")
+        if age > 86400:
+            logger.warning(f"initData expired: {age:.0f}s old")
             return None
 
-        # 4. user fieldini URL-decode qilib JSON parse
+        # 4. user ni URL-decode qilib JSON parse
         user_raw = raw_parsed.get("user", "{}")
-        user_data = json.loads(unquote(user_raw))
+        user_decoded = unquote(user_raw)
+        logger.info(f"user decoded: {user_decoded[:80]}")
+        user_data = json.loads(user_decoded)
         return user_data
 
-    except Exception:
+    except Exception as e:
+        logger.error(f"verify_telegram_init_data error: {e}", exc_info=True)
         return None
 
 

@@ -5,7 +5,9 @@ from app.core.security import verify_telegram_init_data, create_access_token, ge
 from app.schemas.schemas import TelegramAuthRequest, TelegramAuthResponse
 from app.services.user_service import get_user_by_telegram_id, create_user, update_user_last_seen
 from app.models.models import User
+import logging
 
+logger = logging.getLogger(__name__)
 router = APIRouter()
 
 
@@ -15,9 +17,14 @@ async def telegram_auth(
     db: AsyncSession = Depends(get_db),
 ):
     """Authenticate via Telegram Mini App initData"""
+    logger.info(f"Auth attempt, init_data length: {len(request.init_data)}")
+    logger.info(f"init_data preview: {request.init_data[:100]}")
+
     user_data = verify_telegram_init_data(request.init_data)
+    logger.info(f"verify result: {user_data}")
 
     if not user_data:
+        logger.warning("verify_telegram_init_data returned None")
         raise HTTPException(
             status_code=status.HTTP_401_UNAUTHORIZED,
             detail="Invalid Telegram data",
