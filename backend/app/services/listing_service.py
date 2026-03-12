@@ -14,8 +14,13 @@ async def create_listing(
     listing = Listing(owner_id=owner_id, **data.model_dump())
     db.add(listing)
     await db.flush()
-    await db.refresh(listing)
-    return listing
+    # owner relationshipni yuklash — serializer uchun zarur
+    result = await db.execute(
+        select(Listing)
+        .where(Listing.id == listing.id)
+        .options(selectinload(Listing.owner))
+    )
+    return result.scalar_one()
 
 
 async def get_listing(db: AsyncSession, listing_id: int) -> Optional[Listing]:

@@ -14,8 +14,16 @@ async def create_campaign(
     campaign = Campaign(buyer_id=buyer_id, **data.model_dump())
     db.add(campaign)
     await db.flush()
-    await db.refresh(campaign)
-    return campaign
+    # buyer relationshipni yuklash — serializer uchun zarur
+    result = await db.execute(
+        select(Campaign)
+        .where(Campaign.id == campaign.id)
+        .options(
+            selectinload(Campaign.buyer),
+            selectinload(Campaign.proposals),
+        )
+    )
+    return result.scalar_one()
 
 
 async def get_campaign(db: AsyncSession, campaign_id: int) -> Optional[Campaign]:
