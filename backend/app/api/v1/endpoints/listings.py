@@ -60,14 +60,15 @@ def serialize_listing(l) -> dict:
 router = APIRouter()
 
 
-@router.get("/featured", response_model=List[ListingPublic])
+@router.get("/featured")
 async def featured_listings(
     db: AsyncSession = Depends(get_db),
 ):
-    return await get_featured_listings(db)
+    items = await get_featured_listings(db)
+    return [serialize_listing(l) for l in items]
 
 
-@router.get("/", response_model=PaginatedResponse)
+@router.get("/")
 async def list_listings(
     category: Optional[ListingCategory] = None,
     city: Optional[str] = None,
@@ -83,13 +84,13 @@ async def list_listings(
     items, total = await get_listings(
         db, category, city, search, min_price, max_price, verified_only, page, per_page
     )
-    return PaginatedResponse(
-        items=items,
-        total=total,
-        page=page,
-        per_page=per_page,
-        pages=math.ceil(total / per_page),
-    )
+    return {
+        "items": [serialize_listing(l) for l in items],
+        "total": total,
+        "page": page,
+        "per_page": per_page,
+        "pages": math.ceil(total / per_page),
+    }
 
 
 @router.post("/", status_code=status.HTTP_201_CREATED)
@@ -102,7 +103,7 @@ async def create_new_listing(
     return serialize_listing(listing)
 
 
-@router.get("/{listing_id}", response_model=ListingPublic)
+@router.get("/{listing_id}")
 async def get_listing_detail(
     listing_id: int,
     db: AsyncSession = Depends(get_db),
@@ -110,10 +111,10 @@ async def get_listing_detail(
     listing = await get_listing(db, listing_id)
     if not listing:
         raise HTTPException(status_code=404, detail="Listing not found")
-    return listing
+    return serialize_listing(listing)
 
 
-@router.patch("/{listing_id}", response_model=ListingPublic)
+@router.patch("/{listing_id}")
 async def update_listing_endpoint(
     listing_id: int,
     data: ListingUpdate,
@@ -123,7 +124,7 @@ async def update_listing_endpoint(
     listing = await update_listing(db, listing_id, current_user.id, data)
     if not listing:
         raise HTTPException(status_code=404, detail="Listing not found or not authorized")
-    return listing
+    return serialize_listing(listing)
 
 
 @router.post("/{listing_id}/favorite")
@@ -136,12 +137,13 @@ async def toggle_listing_favorite(
     return {"favorited": is_favorited}
 
 
-@router.get("/me/favorites", response_model=List[ListingPublic])
+@router.get("/me/favorites")
 async def my_favorites(
     db: AsyncSession = Depends(get_db),
     current_user: User = Depends(get_current_user),
 ):
-    return await get_user_favorites(db, current_user.id)
+    favs = await get_user_favorites(db, current_user.id)
+    return [serialize_listing(l) for l in favs]
 
 
 @router.post("/{listing_id}/upload-image")

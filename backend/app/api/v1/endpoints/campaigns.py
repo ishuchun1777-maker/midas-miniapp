@@ -55,7 +55,7 @@ def serialize_campaign(c) -> dict:
     }
 
 
-@router.get("/", response_model=PaginatedResponse)
+@router.get("/")
 async def list_campaigns(
     city: Optional[str] = None,
     search: Optional[str] = None,
@@ -65,10 +65,11 @@ async def list_campaigns(
     db: AsyncSession = Depends(get_db),
 ):
     items, total = await get_campaigns(db, city, search, needs_creative, page, per_page)
-    return PaginatedResponse(
-        items=items, total=total, page=page, per_page=per_page,
-        pages=math.ceil(total / per_page),
-    )
+    return {
+        "items": [serialize_campaign(c) for c in items],
+        "total": total, "page": page, "per_page": per_page,
+        "pages": math.ceil(total / per_page),
+    }
 
 
 @router.post("/", status_code=status.HTTP_201_CREATED)
@@ -81,15 +82,16 @@ async def create_new_campaign(
     return serialize_campaign(campaign)
 
 
-@router.get("/mine", response_model=List[CampaignPublic])
+@router.get("/mine")
 async def my_campaigns(
     db: AsyncSession = Depends(get_db),
     current_user: User = Depends(get_current_user),
 ):
-    return await get_user_campaigns(db, current_user.id)
+    items = await get_user_campaigns(db, current_user.id)
+    return [serialize_campaign(c) for c in items]
 
 
-@router.get("/{campaign_id}", response_model=CampaignPublic)
+@router.get("/{campaign_id}")
 async def get_campaign_detail(
     campaign_id: int,
     db: AsyncSession = Depends(get_db),
@@ -97,10 +99,10 @@ async def get_campaign_detail(
     campaign = await get_campaign(db, campaign_id)
     if not campaign:
         raise HTTPException(status_code=404, detail="Campaign not found")
-    return campaign
+    return serialize_campaign(campaign)
 
 
-@router.post("/{campaign_id}/proposals", response_model=ProposalPublic, status_code=201)
+@router.post("/{campaign_id}/proposals", status_code=201)
 async def submit_proposal(
     campaign_id: int,
     data: ProposalCreate,
