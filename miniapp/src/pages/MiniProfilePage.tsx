@@ -1,17 +1,16 @@
 import { useQuery } from '@tanstack/react-query'
-import { Link } from 'react-router-dom'
 import { motion } from 'framer-motion'
 import {
-  Star, Handshake, BadgeCheck, Settings, ChevronRight,
-  Plus, LogOut, User, Send
+  BadgeCheck, Settings, ChevronRight,
+  LogOut, User, Zap
 } from 'lucide-react'
-import { usersApi, dealsApi } from '../utils/api'
+import { usersApi, dealsApi, authApi } from '../utils/api'
 import { useAuthStore } from '../store/authStore'
+import toast from 'react-hot-toast'
 
 export default function MiniProfilePage() {
-  const { user, isAuthenticated, logout } = useAuthStore()
+  const { user, isAuthenticated, logout, setAuth } = useAuthStore()
 
-  // Telegram dan to'g'ridan-to'g'ri user ma'lumotlarini olish (fallback)
   const tgUser = window.Telegram?.WebApp?.initDataUnsafe?.user as {
     first_name?: string
     last_name?: string
@@ -31,7 +30,6 @@ export default function MiniProfilePage() {
     enabled: isAuthenticated,
   })
 
-  // Agar login bo'lmagan bo'lsa, Telegram ma'lumotlarini ko'rsatamiz
   const displayName = user?.first_name || tgUser?.first_name || 'Foydalanuvchi'
   const displayUsername = user?.telegram_username || tgUser?.username
   const displayPhoto = user?.photo_url || tgUser?.photo_url
@@ -40,14 +38,43 @@ export default function MiniProfilePage() {
   const activeDeals = deals?.filter((d) => ['in_progress', 'agreed'].includes(d.status)).length || 0
   const primaryProfile = profiles?.[0]
 
+  const handleActivate = () => {
+    const tg = window.Telegram?.WebApp
+    if (tg?.initData) {
+      toast.loading("Kirilmoqda...")
+      authApi.telegramLogin(tg.initData)
+        .then((res) => {
+          setAuth(res.data.access_token, res.data.user)
+          toast.dismiss()
+          toast.success("Muvaffaqiyatli faollashtirildi!")
+        })
+        .catch(() => {
+          toast.dismiss()
+          toast.error("Xatolik yuz berdi. Qayta urinib ko'ring.")
+        })
+    } else {
+      toast.error("Telegram orqali oching")
+    }
+  }
+
+  const handleMenuClick = (label: string) => {
+    if (!isAuthenticated) {
+      toast.error(`${label} uchun avval kirish kerak`, { icon: '🔒' })
+      return false
+    }
+    return true
+  }
+
   return (
     <div>
       {/* Header */}
       <div className="sticky top-0 z-20 glass border-b border-dark-800 px-4 py-3 flex items-center justify-between">
         <h1 className="font-semibold text-white">Profil</h1>
-        <Link to="/settings" className="w-8 h-8 rounded-xl bg-dark-800 flex items-center justify-center">
-          <Settings className="w-4 h-4 text-dark-400" />
-        </Link>
+        {isAuthenticated && (
+          <button className="w-8 h-8 rounded-xl bg-dark-800 flex items-center justify-center">
+            <Settings className="w-4 h-4 text-dark-400" />
+          </button>
+        )}
       </div>
 
       <div className="px-4 pt-5">
@@ -79,7 +106,7 @@ export default function MiniProfilePage() {
             )}
             {!isAuthenticated && (
               <span className="text-[11px] text-gold-400 mt-0.5 block">
-                Telegram orqali ulangan
+                ⚠️ Faollashtirilmagan
               </span>
             )}
           </div>
@@ -88,10 +115,10 @@ export default function MiniProfilePage() {
         {/* Stats */}
         <div className="grid grid-cols-3 gap-2 mb-5">
           {[
-            { val: primaryProfile?.rating?.toFixed(1) || '—', label: 'Reyting', color: '#f59e0b' },
-            { val: completedDeals, label: 'Bitim', color: '#34d399' },
-            { val: activeDeals, label: 'Faol', color: '#29b6f6' },
-          ].map(({ val, label, color }) => (
+            { val: primaryProfile?.rating?.toFixed(1) || '—', label: 'Reyting' },
+            { val: completedDeals, label: 'Bitim' },
+            { val: activeDeals, label: 'Faol' },
+          ].map(({ val, label }) => (
             <div key={label} className="bg-dark-900 border border-dark-800 rounded-xl p-3 text-center">
               <div className="text-white font-bold text-lg">{val}</div>
               <div className="text-[10px] text-dark-500">{label}</div>
@@ -99,26 +126,18 @@ export default function MiniProfilePage() {
           ))}
         </div>
 
-        {/* Agar login bo'lmagan bo'lsa — to'liq kirish tugmasi */}
+        {/* Faollashtirish */}
         {!isAuthenticated && (
-          <div className="bg-dark-900 border border-gold-500/20 rounded-xl p-4 mb-5">
-            <p className="text-sm text-dark-300 mb-3 text-center">
-              To'liq imkoniyatlar uchun akkauntni faollashtiring
+          <div className="bg-dark-900 border border-gold-500/30 rounded-xl p-4 mb-5">
+            <div className="flex items-center gap-2 mb-2">
+              <Zap className="w-4 h-4 text-gold-400" />
+              <p className="text-sm text-white font-medium">Akkauntni faollashtiring</p>
+            </div>
+            <p className="text-xs text-dark-400 mb-3">
+              To'liq imkoniyatlar: e'lon joylash, chat, kampaniyalar va ko'proq
             </p>
-            <button
-              onClick={() => {
-                const tg = window.Telegram?.WebApp
-                if (tg?.initData) {
-                  import('../utils/api').then(({ authApi }) => {
-                    authApi.telegramLogin(tg.initData).then((res) => {
-                      useAuthStore.getState().setAuth(res.data.access_token, res.data.user)
-                    })
-                  })
-                }
-              }}
-              className="btn-primary w-full"
-            >
-              Faollashtirish
+            <button onClick={handleActivate} className="btn-primary w-full">
+              Telegram orqali kirish
             </button>
           </div>
         )}
@@ -126,26 +145,34 @@ export default function MiniProfilePage() {
         {/* Menu */}
         <div className="space-y-1.5 mb-6">
           {[
-            { label: "E'lonlarim", to: '/my-listings' },
-            { label: 'Kampaniyalarim', to: '/my-campaigns' },
-            { label: 'Saqlangan', to: '/favorites' },
-            { label: 'Bitimlar', to: '/deals' },
-          ].map(({ label, to }) => (
-            <Link
-              key={to}
-              to={to}
-              className="flex items-center justify-between px-4 py-3 bg-dark-900 border border-dark-800 rounded-xl active:scale-98 transition-all"
+            { label: "E'lonlarim", to: '/my-listings', authRequired: true },
+            { label: 'Kampaniyalarim', to: '/my-campaigns', authRequired: true },
+            { label: 'Saqlangan', to: '/favorites', authRequired: true },
+            { label: 'Bitimlar', to: '/deals', authRequired: true },
+          ].map(({ label, authRequired }) => (
+            <button
+              key={label}
+              onClick={() => handleMenuClick(label)}
+              className="w-full flex items-center justify-between px-4 py-3 bg-dark-900 border border-dark-800 rounded-xl active:scale-98 transition-all"
             >
               <span className="text-sm text-white">{label}</span>
-              <ChevronRight className="w-4 h-4 text-dark-500" />
-            </Link>
+              <div className="flex items-center gap-2">
+                {authRequired && !isAuthenticated && (
+                  <span className="text-[10px] text-dark-500">🔒</span>
+                )}
+                <ChevronRight className="w-4 h-4 text-dark-500" />
+              </div>
+            </button>
           ))}
         </div>
 
-        {/* Logout — faqat login bo'lgan bo'lsa */}
+        {/* Logout */}
         {isAuthenticated && (
           <button
-            onClick={logout}
+            onClick={() => {
+              logout()
+              toast.success("Chiqildi")
+            }}
             className="w-full flex items-center justify-center gap-2 py-3 text-red-400 text-sm font-medium border border-red-500/20 rounded-xl bg-red-500/5 active:bg-red-500/10 transition-all mb-8"
           >
             <LogOut className="w-4 h-4" />

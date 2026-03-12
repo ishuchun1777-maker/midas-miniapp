@@ -1,7 +1,7 @@
 import { useEffect, useState } from 'react'
-import { HashRouter as BrowserRouter, Routes, Route, Link, useLocation } from 'react-router-dom'
+import { HashRouter, Routes, Route, Link, useLocation, useNavigate } from 'react-router-dom'
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query'
-import { Toaster } from 'react-hot-toast'
+import { Toaster, toast } from 'react-hot-toast'
 import { Home, Compass, Megaphone, MessageSquare, User, Zap } from 'lucide-react'
 import clsx from 'clsx'
 import { useAuthStore } from './store/authStore'
@@ -35,6 +35,57 @@ declare global {
       }
     }
   }
+}
+
+// Ro'yxatdan o'tmagan foydalanuvchini himoya qiluvchi wrapper
+export function AuthGuard({ children }: { children: React.ReactNode }) {
+  const { isAuthenticated } = useAuthStore()
+  const navigate = useNavigate()
+
+  if (!isAuthenticated) {
+    return (
+      <div className="flex flex-col items-center justify-center min-h-[60vh] px-6 text-center">
+        <div className="w-16 h-16 rounded-2xl bg-gold-500/10 border border-gold-500/20 flex items-center justify-center mb-4">
+          <Zap className="w-7 h-7 text-gold-400" />
+        </div>
+        <h2 className="text-white font-bold text-lg mb-2">Kirish talab etiladi</h2>
+        <p className="text-dark-400 text-sm mb-5">
+          Bu bo'limdan foydalanish uchun avval ro'yxatdan o'ting
+        </p>
+        <button
+          onClick={() => {
+            const tg = window.Telegram?.WebApp
+            if (tg?.initData) {
+              toast.loading("Kirilmoqda...")
+              authApi.telegramLogin(tg.initData)
+                .then((res) => {
+                  useAuthStore.getState().setAuth(res.data.access_token, res.data.user)
+                  toast.dismiss()
+                  toast.success("Muvaffaqiyatli kirildi!")
+                })
+                .catch(() => {
+                  toast.dismiss()
+                  toast.error("Xatolik yuz berdi")
+                })
+            } else {
+              toast.error("Telegram orqali oching")
+            }
+          }}
+          className="btn-primary w-full max-w-xs"
+        >
+          Telegram orqali kirish
+        </button>
+        <button
+          onClick={() => navigate('/')}
+          className="mt-3 text-dark-400 text-sm underline"
+        >
+          Bosh sahifaga qaytish
+        </button>
+      </div>
+    )
+  }
+
+  return <>{children}</>
 }
 
 function BottomNav() {
@@ -80,9 +131,39 @@ function BottomNav() {
   )
 }
 
+function AppRoutes() {
+  return (
+    <>
+      <div className="w-full min-h-screen bg-dark-950 pb-20">
+        <Routes>
+          <Route path="/" element={<MiniHomePage />} />
+          <Route path="/explore" element={<MiniExplorePage />} />
+          <Route path="/campaigns" element={<MiniCampaignsPage />} />
+          <Route path="/messages" element={<AuthGuard><MiniChatPage /></AuthGuard>} />
+          <Route path="/profile" element={<MiniProfilePage />} />
+        </Routes>
+        <BottomNav />
+      </div>
+      <Toaster
+        position="top-center"
+        toastOptions={{
+          style: {
+            background: '#1a1a1a',
+            color: '#f5f5f5',
+            border: '1px solid #262626',
+            borderRadius: '12px',
+            fontSize: '14px',
+          },
+        }}
+      />
+    </>
+  )
+}
+
 function AppInner() {
-  const { setAuth, isAuthenticated } = useAuthStore()
+  const { setAuth } = useAuthStore()
   const [loading, setLoading] = useState(true)
+  const [authError, setAuthError] = useState(false)
 
   useEffect(() => {
     const tg = window.Telegram?.WebApp
@@ -94,20 +175,21 @@ function AppInner() {
       tg.setHeaderColor('#0a0a0a')
 
       if (tg.initData) {
-        // Har doim fresh token olamiz — eski token expire bo'lgan bo'lishi mumkin
         authApi.telegramLogin(tg.initData)
           .then((res) => {
             setAuth(res.data.access_token, res.data.user)
+            setAuthError(false)
           })
           .catch((err) => {
             console.warn('Auto-login failed:', err)
+            setAuthError(true)
           })
           .finally(() => setLoading(false))
       } else {
         setLoading(false)
+        setAuthError(true)
       }
     } else {
-      // Telegram WebApp yuklanmagan (browser da ochilgan)
       setLoading(false)
     }
   }, [])
@@ -126,38 +208,31 @@ function AppInner() {
     )
   }
 
-  return (
-    <BrowserRouter>
-      <div className="w-full min-h-screen bg-dark-950 pb-20">
-        <Routes>
-          <Route path="/" element={<MiniHomePage />} />
-          <Route path="/explore" element={<MiniExplorePage />} />
-          <Route path="/campaigns" element={<MiniCampaignsPage />} />
-          <Route path="/messages" element={<MiniChatPage />} />
-          <Route path="/profile" element={<MiniProfilePage />} />
-        </Routes>
-        <BottomNav />
+  if (authError && !window.Telegram?.WebApp?.initData) {
+    return (
+      <div className="fixed inset-0 bg-dark-950 flex items-center justify-center px-6">
+        <div className="text-center">
+          <div className="w-16 h-16 rounded-2xl bg-gold-500 flex items-center justify-center mx-auto mb-4">
+            <Zap className="w-8 h-8 text-dark-950" fill="currentColor" />
+          </div>
+          <h1 className="font-display text-3xl text-white mb-2">MIDAS</h1>
+          <p className="text-dark-400 text-sm">
+            Telegram botdan oching
+          </p>
+        </div>
       </div>
-      <Toaster
-        position="top-center"
-        toastOptions={{
-          style: {
-            background: '#1a1a1a',
-            color: '#f5f5f5',
-            border: '1px solid #262626',
-            borderRadius: '12px',
-            fontSize: '14px',
-          },
-        }}
-      />
-    </BrowserRouter>
-  )
+    )
+  }
+
+  return <AppRoutes />
 }
 
 export default function App() {
   return (
     <QueryClientProvider client={queryClient}>
-      <AppInner />
+      <HashRouter>
+        <AppInner />
+      </HashRouter>
     </QueryClientProvider>
   )
 }
