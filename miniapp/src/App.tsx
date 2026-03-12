@@ -36,6 +36,8 @@ declare global {
   }
 }
 
+// ─── Auth Guard ───────────────────────────────────────────────────────────────
+// Faqat explore va home ochiq — qolganlar login talab qiladi
 export function AuthGuard({ children }: { children: React.ReactNode }) {
   const { isAuthenticated } = useAuthStore()
   const navigate = useNavigate()
@@ -48,7 +50,7 @@ export function AuthGuard({ children }: { children: React.ReactNode }) {
         </div>
         <h2 className="text-white font-bold text-lg mb-2">Kirish talab etiladi</h2>
         <p className="text-dark-400 text-sm mb-6 leading-relaxed">
-          Bu bo'limdan foydalanish uchun avval Telegram orqali kiring
+          Bu bo'limdan foydalanish uchun avval ro'yxatdan o'ting
         </p>
         <button
           onClick={() => {
@@ -70,7 +72,7 @@ export function AuthGuard({ children }: { children: React.ReactNode }) {
         >
           Telegram orqali kirish
         </button>
-        <button onClick={() => navigate('/')} className="text-dark-500 text-sm">
+        <button onClick={() => navigate('/')} className="text-dark-500 text-sm py-2">
           Bosh sahifaga qaytish
         </button>
       </div>
@@ -79,6 +81,7 @@ export function AuthGuard({ children }: { children: React.ReactNode }) {
   return <>{children}</>
 }
 
+// ─── Bottom Nav ───────────────────────────────────────────────────────────────
 function BottomNav() {
   const location = useLocation()
   const items = [
@@ -118,8 +121,9 @@ function BottomNav() {
   )
 }
 
+// ─── App Inner ────────────────────────────────────────────────────────────────
 function AppInner() {
-  const { setAuth, isAuthenticated, user } = useAuthStore()
+  const { setAuth, isAuthenticated } = useAuthStore()
   const [loading, setLoading] = useState(true)
   const [showOnboarding, setShowOnboarding] = useState(false)
   const authCalled = useRef(false)
@@ -135,11 +139,10 @@ function AppInner() {
       tg.setBackgroundColor('#0a0a0a')
       tg.setHeaderColor('#0a0a0a')
 
-      if (tg.initData) {
+      if (tg.initData && !isAuthenticated) {
         authApi.telegramLogin(tg.initData)
           .then((res) => {
             setAuth(res.data.access_token, res.data.user)
-            // Yangi user bo'lsa onboarding ko'rsat
             if (res.data.is_new_user) {
               setShowOnboarding(true)
             }
@@ -168,16 +171,20 @@ function AppInner() {
     )
   }
 
-  if (showOnboarding) {
+  // Yangi foydalanuvchi — onboarding ko'rsatish
+  if (showOnboarding && isAuthenticated) {
     return <OnboardingPage onDone={() => setShowOnboarding(false)} />
   }
 
   return (
     <div className="w-full min-h-screen bg-dark-950 pb-20">
       <Routes>
+        {/* Ochiq sahifalar — login talab qilmaydi */}
         <Route path="/" element={<MiniHomePage />} />
         <Route path="/explore" element={<MiniExplorePage />} />
-        <Route path="/campaigns" element={<MiniCampaignsPage />} />
+
+        {/* Yopiq sahifalar — login kerak */}
+        <Route path="/campaigns" element={<AuthGuard><MiniCampaignsPage /></AuthGuard>} />
         <Route path="/messages" element={<AuthGuard><MiniChatPage /></AuthGuard>} />
         <Route path="/profile" element={<MiniProfilePage />} />
       </Routes>
