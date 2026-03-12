@@ -14,6 +14,7 @@ import MiniCampaignsPage from './pages/MiniCampaignsPage'
 import MiniChatPage from './pages/MiniChatPage'
 import MiniProfilePage from './pages/MiniProfilePage'
 import OnboardingPage from './pages/OnboardingPage'
+import CreateListingPage from './pages/CreateListingPage'
 
 const queryClient = new QueryClient({
   defaultOptions: { queries: { staleTime: 30_000, retry: 1 } },
@@ -187,6 +188,7 @@ function AppInner() {
         <Route path="/campaigns" element={<AuthGuard><MiniCampaignsPage /></AuthGuard>} />
         <Route path="/messages" element={<AuthGuard><MiniChatPage /></AuthGuard>} />
         <Route path="/profile" element={<MiniProfilePage />} />
+        <Route path="/listing/create" element={<AuthGuard><CreateListingPage /></AuthGuard>} />
       </Routes>
       <BottomNav />
       <Toaster

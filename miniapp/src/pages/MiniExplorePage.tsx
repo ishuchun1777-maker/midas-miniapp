@@ -1,7 +1,8 @@
 import { useState } from 'react'
 import { useQuery } from '@tanstack/react-query'
 import { motion, AnimatePresence } from 'framer-motion'
-import { Search, X, MessageSquare, Heart, Star, Users, Eye, ChevronRight } from 'lucide-react'
+import { Search, X, MessageSquare, Heart, Star, Users, Eye, ChevronRight, Plus } from 'lucide-react'
+import { Link } from 'react-router-dom'
 import { listingsApi, chatApi } from '../utils/api'
 import { useAuthStore } from '../store/authStore'
 import { formatPrice } from '../utils/format'
@@ -159,7 +160,8 @@ export default function MiniExplorePage() {
     <div>
       {/* Sticky header */}
       <div className="sticky top-0 z-20 glass border-b border-dark-800 px-4 py-3">
-        <div className="relative mb-3">
+        <div className="flex items-center gap-2 mb-3">
+          <div className="relative flex-1">
           <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-dark-400" />
           <input
             className="input pl-10 text-sm py-2.5 w-full"
@@ -172,6 +174,13 @@ export default function MiniExplorePage() {
               <X className="w-4 h-4 text-dark-400" />
             </button>
           )}
+          </div>
+          <Link
+            to="/listing/create"
+            className="w-10 h-10 rounded-xl bg-gold-500 flex items-center justify-center flex-shrink-0 active:scale-90 transition-all"
+          >
+            <Plus className="w-4 h-4 text-dark-950" strokeWidth={2.5} />
+          </Link>
         </div>
         <div className="flex gap-2 overflow-x-auto scrollbar-hide pb-0.5">
           {CATS.map(({ v, l }) => (
