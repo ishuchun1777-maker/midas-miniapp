@@ -1,12 +1,16 @@
 import { useQuery } from '@tanstack/react-query'
-import { Link } from 'react-router-dom'
+import { Link, useNavigate } from 'react-router-dom'
 import { motion } from 'framer-motion'
-import { Send, TrendingUp, Monitor, Users, Zap, Bell, ChevronRight, Megaphone } from 'lucide-react'
-import { listingsApi, notificationsApi } from '../utils/api'
-import { ListingMiniCard } from '../components/ListingMiniCard'
+import {
+  Send, TrendingUp, Monitor, Users, Zap, Bell,
+  ChevronRight, Megaphone, Search, Plus
+} from 'lucide-react'
+import { listingsApi, notificationsApi, campaignsApi } from '../utils/api'
 import { useAuthStore } from '../store/authStore'
+import { formatPrice } from '../utils/format'
+import toast from 'react-hot-toast'
 
-const CATEGORIES = [
+const CATS = [
   { icon: Send, label: 'Telegram', to: '/explore?cat=telegram_channel', color: '#29b6f6' },
   { icon: TrendingUp, label: 'Media Buyer', to: '/explore?cat=media_buyer', color: '#f59e0b' },
   { icon: Monitor, label: 'LED/Billboard', to: '/explore?cat=led_screen', color: '#a78bfa' },
@@ -15,10 +19,16 @@ const CATEGORIES = [
 
 export default function MiniHomePage() {
   const { user, isAuthenticated } = useAuthStore()
+  const navigate = useNavigate()
 
   const { data: featured } = useQuery({
     queryKey: ['featured'],
     queryFn: () => listingsApi.featured().then((r) => r.data),
+  })
+
+  const { data: campaigns } = useQuery({
+    queryKey: ['campaigns-home'],
+    queryFn: () => campaignsApi.list({ per_page: 3, status: 'open' }).then((r) => r.data),
   })
 
   const { data: notifs } = useQuery({
@@ -27,7 +37,15 @@ export default function MiniHomePage() {
     enabled: isAuthenticated,
   })
 
-  const unreadCount = notifs?.filter((n) => !n.is_read).length || 0
+  const unread = notifs?.filter((n) => !n.is_read).length || 0
+
+  const handleNewCampaign = () => {
+    if (!isAuthenticated) {
+      toast.error('Kampaniya yaratish uchun kirish kerak', { icon: '🔒' })
+      return
+    }
+    navigate('/campaigns')
+  }
 
   return (
     <div className="min-h-screen">
@@ -41,29 +59,36 @@ export default function MiniHomePage() {
         </div>
         <div className="flex items-center gap-2">
           {isAuthenticated && (
-            <Link to="/notifications" className="relative w-9 h-9 rounded-xl bg-dark-800 flex items-center justify-center">
+            <button className="relative w-9 h-9 rounded-xl bg-dark-800 flex items-center justify-center">
               <Bell className="w-4 h-4 text-dark-300" />
-              {unreadCount > 0 && (
+              {unread > 0 && (
                 <span className="absolute -top-0.5 -right-0.5 w-4 h-4 bg-gold-500 rounded-full text-[9px] font-bold text-dark-950 flex items-center justify-center">
-                  {unreadCount}
+                  {unread}
                 </span>
               )}
-            </Link>
+            </button>
           )}
           {user?.photo_url ? (
-            <img src={user.photo_url} alt="" className="w-9 h-9 rounded-xl object-cover" />
+            <img
+              src={user.photo_url}
+              alt=""
+              className="w-9 h-9 rounded-xl object-cover cursor-pointer"
+              onClick={() => navigate('/profile')}
+            />
           ) : (
-            <div className="w-9 h-9 rounded-xl bg-dark-800 flex items-center justify-center">
+            <button
+              onClick={() => navigate('/profile')}
+              className="w-9 h-9 rounded-xl bg-dark-800 flex items-center justify-center"
+            >
               <Users className="w-4 h-4 text-dark-400" />
-            </div>
+            </button>
           )}
         </div>
       </div>
 
       {/* Hero */}
-      <div className="px-4 pt-5 pb-4 relative overflow-hidden">
-        <div className="absolute top-0 right-0 w-40 h-40 bg-gold-500/5 rounded-full blur-3xl pointer-events-none" />
-        <motion.div initial={{ opacity: 0, y: 15 }} animate={{ opacity: 1, y: 0 }}>
+      <div className="px-4 pt-5 pb-4">
+        <motion.div initial={{ opacity: 0, y: 12 }} animate={{ opacity: 1, y: 0 }}>
           {isAuthenticated && user ? (
             <div>
               <p className="text-dark-400 text-sm">Xush kelibsiz,</p>
@@ -75,11 +100,14 @@ export default function MiniHomePage() {
                 Reklama bozori<br />
                 <span className="gold-gradient">professional tarzda</span>
               </h1>
+              <p className="text-dark-400 text-sm mt-2">
+                Telegram, billboard, media buyer — hammasi bir joyda
+              </p>
             </div>
           )}
         </motion.div>
 
-        {/* Quick stats */}
+        {/* Stats */}
         <div className="grid grid-cols-3 gap-2 mt-4">
           {[
             { val: '1,200+', label: 'Kanal' },
@@ -94,7 +122,7 @@ export default function MiniHomePage() {
         </div>
       </div>
 
-      {/* Quick Actions */}
+      {/* Quick actions */}
       <div className="px-4 mb-5">
         <div className="grid grid-cols-2 gap-2">
           <Link
@@ -102,29 +130,27 @@ export default function MiniHomePage() {
             className="bg-gold-500 hover:bg-gold-400 rounded-xl p-4 flex items-center gap-3 transition-all active:scale-95"
           >
             <div className="w-8 h-8 rounded-lg bg-dark-950/20 flex items-center justify-center flex-shrink-0">
-              <TrendingUp className="w-4 h-4 text-dark-950" />
+              <Search className="w-4 h-4 text-dark-950" />
             </div>
             <span className="text-dark-950 font-semibold text-sm">Reklama topish</span>
           </Link>
-          <Link
-            to="/campaigns"
+          <button
+            onClick={handleNewCampaign}
             className="bg-dark-800 hover:bg-dark-700 border border-dark-700 rounded-xl p-4 flex items-center gap-3 transition-all active:scale-95"
           >
             <div className="w-8 h-8 rounded-lg bg-dark-700 flex items-center justify-center flex-shrink-0">
-              <Megaphone className="w-4 h-4 text-gold-400" />
+              <Plus className="w-4 h-4 text-gold-400" />
             </div>
             <span className="text-white font-semibold text-sm">Kampaniya</span>
-          </Link>
+          </button>
         </div>
       </div>
 
       {/* Categories */}
       <div className="px-4 mb-5">
-        <div className="flex items-center justify-between mb-3">
-          <span className="text-xs font-medium text-dark-400 uppercase tracking-widest">Kategoriyalar</span>
-        </div>
+        <p className="text-xs font-medium text-dark-400 uppercase tracking-widest mb-3">Kategoriyalar</p>
         <div className="grid grid-cols-4 gap-2">
-          {CATEGORIES.map(({ icon: Icon, label, to, color }) => (
+          {CATS.map(({ icon: Icon, label, to, color }) => (
             <Link
               key={label}
               to={to}
@@ -139,11 +165,11 @@ export default function MiniHomePage() {
         </div>
       </div>
 
-      {/* Featured */}
+      {/* Featured listings */}
       {featured && featured.length > 0 && (
         <div className="mb-5">
           <div className="flex items-center justify-between px-4 mb-3">
-            <span className="text-xs font-medium text-dark-400 uppercase tracking-widest">Tanlangan</span>
+            <p className="text-xs font-medium text-dark-400 uppercase tracking-widest">Tanlangan</p>
             <Link to="/explore" className="text-gold-400 text-xs flex items-center gap-0.5">
               Hammasi <ChevronRight className="w-3 h-3" />
             </Link>
@@ -155,10 +181,58 @@ export default function MiniHomePage() {
                 initial={{ opacity: 0, x: 20 }}
                 animate={{ opacity: 1, x: 0 }}
                 transition={{ delay: i * 0.07 }}
-                className="flex-shrink-0 w-56"
+                className="flex-shrink-0 w-52"
               >
-                <ListingMiniCard listing={listing} />
+                <div className="bg-dark-900 border border-dark-800 rounded-2xl overflow-hidden">
+                  {listing.cover_image ? (
+                    <img src={listing.cover_image} alt="" className="w-full h-28 object-cover" />
+                  ) : (
+                    <div className="w-full h-28 bg-dark-800 flex items-center justify-center">
+                      <Megaphone className="w-8 h-8 text-dark-600" />
+                    </div>
+                  )}
+                  <div className="p-3">
+                    <div className="text-white text-xs font-semibold truncate mb-1">{listing.title}</div>
+                    <div className="text-dark-500 text-[10px] mb-2">{listing.city || 'O\'zbekiston'}</div>
+                    <div className="text-gold-400 text-xs font-bold">
+                      {listing.price_from ? formatPrice(listing.price_from, listing.currency) : 'Narx kelishiladi'}
+                    </div>
+                  </div>
+                </div>
               </motion.div>
+            ))}
+          </div>
+        </div>
+      )}
+
+      {/* Open campaigns */}
+      {campaigns && campaigns.items && campaigns.items.length > 0 && (
+        <div className="px-4 mb-8">
+          <div className="flex items-center justify-between mb-3">
+            <p className="text-xs font-medium text-dark-400 uppercase tracking-widest">Ochiq kampaniyalar</p>
+            <Link to="/campaigns" className="text-gold-400 text-xs flex items-center gap-0.5">
+              Hammasi <ChevronRight className="w-3 h-3" />
+            </Link>
+          </div>
+          <div className="space-y-2">
+            {campaigns.items.map((c) => (
+              <Link
+                key={c.id}
+                to="/campaigns"
+                className="flex items-center gap-3 p-3 bg-dark-900 border border-dark-800 rounded-xl active:scale-98 transition-all"
+              >
+                <div className="w-9 h-9 rounded-xl bg-gold-500/10 flex items-center justify-center flex-shrink-0">
+                  <Megaphone className="w-4 h-4 text-gold-400" />
+                </div>
+                <div className="flex-1 min-w-0">
+                  <div className="text-white text-xs font-medium truncate">{c.title}</div>
+                  <div className="text-dark-500 text-[10px] mt-0.5">
+                    {c.budget_min ? `${formatPrice(c.budget_min, c.currency)} dan` : 'Budjet kelishiladi'}
+                    {' · '}{c.proposal_count} taklif
+                  </div>
+                </div>
+                <ChevronRight className="w-4 h-4 text-dark-600 flex-shrink-0" />
+              </Link>
             ))}
           </div>
         </div>
