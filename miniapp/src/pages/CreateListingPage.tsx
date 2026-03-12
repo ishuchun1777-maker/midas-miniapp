@@ -2,156 +2,113 @@ import { useState } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { motion, AnimatePresence } from 'framer-motion'
 import {
-  Send, Youtube, Instagram, Monitor, MapPin,
-  TrendingUp, Users, Palette, Video, PenTool,
-  ChevronLeft, ChevronRight, Check, Zap, X
-} from 'lucide-react'
+  TelegramLogo, YoutubeLogo, InstagramLogo, Desktop, MapPin,
+  ChartLineUp, Users, PaintBrush, Video, Pen,
+  CaretLeft, CaretRight, CheckCircle, Lightning, X, CurrencyDollar
+} from '@phosphor-icons/react'
 import clsx from 'clsx'
 import { listingsApi } from '../utils/api'
 import toast from 'react-hot-toast'
 
-// ─── Kategoriyalar ────────────────────────────────────────────────────────────
 const CATEGORIES = [
   {
-    group: "📱 Ijtimoiy tarmoqlar",
+    group: "Ijtimoiy tarmoqlar",
     items: [
-      { id: 'telegram_channel', icon: Send, label: 'Telegram kanal', color: '#29b6f6' },
-      { id: 'youtube_creator', icon: Youtube, label: 'YouTube', color: '#ef4444' },
-      { id: 'instagram', icon: Instagram, label: 'Instagram', color: '#e1306c' },
+      { id: 'telegram_channel', icon: TelegramLogo, label: 'Telegram kanal', color: '#2dd4bf' },
+      { id: 'youtube_creator', icon: YoutubeLogo, label: 'YouTube', color: '#ef4444' },
+      { id: 'instagram', icon: InstagramLogo, label: 'Instagram', color: '#e1306c' },
       { id: 'tiktok', icon: Video, label: 'TikTok', color: '#00f2ea' },
     ]
   },
   {
-    group: "🏙️ Tashqi reklama",
+    group: "Tashqi reklama",
     items: [
       { id: 'billboard', icon: MapPin, label: 'Billboard', color: '#a78bfa' },
-      { id: 'led_screen', icon: Monitor, label: 'LED ekran', color: '#f59e0b' },
-      { id: 'transport', icon: TrendingUp, label: 'Transport', color: '#34d399' },
+      { id: 'led_screen', icon: Desktop, label: 'LED ekran', color: '#c8a84b' },
+      { id: 'transport', icon: ChartLineUp, label: 'Transport', color: '#34d399' },
     ]
   },
   {
-    group: "📊 Marketing xizmatlar",
+    group: "Marketing xizmatlar",
     items: [
-      { id: 'media_buyer', icon: TrendingUp, label: 'Media Buyer', color: '#f59e0b' },
-      { id: 'targetologist', icon: TrendingUp, label: 'Targetolog', color: '#fb923c' },
+      { id: 'media_buyer', icon: ChartLineUp, label: 'Media Buyer', color: '#c8a84b' },
+      { id: 'targetologist', icon: ChartLineUp, label: 'Targetolog', color: '#fb923c' },
       { id: 'smm', icon: Users, label: 'SMM', color: '#34d399' },
       { id: 'marketing_agency', icon: Users, label: 'Agentlik', color: '#60a5fa' },
     ]
   },
   {
-    group: "🎨 Kreativ xizmatlar",
+    group: "Kreativ xizmatlar",
     items: [
-      { id: 'graphic_designer', icon: Palette, label: 'Dizayner', color: '#a78bfa' },
+      { id: 'graphic_designer', icon: PaintBrush, label: 'Dizayner', color: '#a78bfa' },
       { id: 'video_maker', icon: Video, label: 'Video maker', color: '#f43f5e' },
-      { id: 'copywriter', icon: PenTool, label: 'Copywriter', color: '#22d3ee' },
-      { id: 'motion_designer', icon: Zap, label: 'Motion dizayner', color: '#fbbf24' },
+      { id: 'copywriter', icon: Pen, label: 'Copywriter', color: '#22d3ee' },
+      { id: 'motion_designer', icon: Lightning, label: 'Motion dizayner', color: '#c8a84b' },
     ]
   },
 ]
 
-const ALL_CATEGORIES = CATEGORIES.flatMap(g => g.items)
+const AD_FORMATS = ['Post', 'Repost', 'Story', 'Reel', 'Banner', "Pre-roll", "Native"]
+const PRICING_TYPES = [
+  { id: 'fixed', label: 'Belgilangan' },
+  { id: 'negotiable', label: 'Kelishiladi' },
+  { id: 'proposal', label: 'Taklif asosida' },
+]
 
-// ─── Step komponenti ──────────────────────────────────────────────────────────
-function StepIndicator({ current, total }: { current: number; total: number }) {
-  return (
-    <div className="flex items-center gap-1.5 mb-6">
-      {Array.from({ length: total }).map((_, i) => (
-        <div
-          key={i}
-          className={clsx(
-            'h-1 rounded-full transition-all duration-300',
-            i < current ? 'bg-gold-500' : i === current ? 'bg-gold-500/60 flex-1' : 'bg-dark-700',
-            i === current ? 'flex-1' : 'w-6'
-          )}
-        />
-      ))}
-    </div>
-  )
+type Form = {
+  category: string
+  title: string
+  description: string
+  city: string
+  pricing_type: string
+  price_from: string
+  price_to: string
+  currency: string
+  telegram_channel_url: string
+  subscriber_count: string
+  avg_views: string
+  engagement_rate: string
+  ad_formats: string[]
+  tags: string
 }
 
-// ─── Main Component ───────────────────────────────────────────────────────────
+const INIT: Form = {
+  category: '', title: '', description: '', city: '',
+  pricing_type: 'fixed', price_from: '', price_to: '', currency: 'UZS',
+  telegram_channel_url: '', subscriber_count: '', avg_views: '', engagement_rate: '',
+  ad_formats: [], tags: '',
+}
+
 export default function CreateListingPage() {
   const navigate = useNavigate()
   const [step, setStep] = useState(0)
+  const [form, setForm] = useState<Form>(INIT)
   const [saving, setSaving] = useState(false)
 
-  const [form, setForm] = useState({
-    category: '',
-    title: '',
-    description: '',
-    city: '',
-    pricing_type: 'negotiable',
-    price_from: '',
-    price_to: '',
-    // Telegram/Social
-    telegram_channel_url: '',
-    subscriber_count: '',
-    avg_views: '',
-    engagement_rate: '',
-    // Billboard/LED
-    dimensions: '',
-    daily_traffic: '',
-    // Ad formats
-    ad_formats: [] as string[],
-  })
+  const STEPS = ["Kategoriya", "Asosiy", "Narx", "Qo'shimcha"]
 
-  const set = (key: string, val: unknown) => setForm(f => ({ ...f, [key]: val }))
+  const isTelegram = form.category === 'telegram_channel'
+  const isYoutube  = form.category === 'youtube_creator'
+  const isSocial   = isTelegram || isYoutube || form.category === 'instagram' || form.category === 'tiktok'
 
-  const selectedCat = ALL_CATEGORIES.find(c => c.id === form.category)
-  const isSocial = ['telegram_channel', 'youtube_creator', 'instagram', 'tiktok'].includes(form.category)
-  const isOutdoor = ['billboard', 'led_screen', 'transport'].includes(form.category)
-  const isService = ['media_buyer', 'targetologist', 'smm', 'marketing_agency',
-    'graphic_designer', 'video_maker', 'copywriter', 'motion_designer'].includes(form.category)
-
-  const AD_FORMATS = isSocial
-    ? ['Post', 'Story', 'Reels', 'Integration', 'Giveaway', 'Pin']
-    : isOutdoor
-    ? ['Statik banner', 'Animatsiyali', 'Kunlik', 'Haftalik', 'Oylik']
-    : ['Loyiha asosida', 'Soatlik', 'Kunlik', 'Paket']
-
-  const toggleFormat = (f: string) => {
-    set('ad_formats', form.ad_formats.includes(f)
-      ? form.ad_formats.filter(x => x !== f)
-      : [...form.ad_formats, f]
-    )
-  }
-
-  const canNext = () => {
-    if (step === 0) return !!form.category
-    if (step === 1) return form.title.length >= 3
-    if (step === 2) return true
-    if (step === 3) return true
-    return true
-  }
+  const toggleFormat = (f: string) =>
+    setForm(p => ({ ...p, ad_formats: p.ad_formats.includes(f) ? p.ad_formats.filter(x => x !== f) : [...p.ad_formats, f] }))
 
   const handleSubmit = async () => {
     setSaving(true)
     try {
-      const payload: Record<string, unknown> = {
-        title: form.title,
-        description: form.description || undefined,
-        category: form.category,
-        pricing_type: form.pricing_type,
+      await listingsApi.create({
+        ...form,
+        subscriber_count: form.subscriber_count ? Number(form.subscriber_count) : undefined,
+        avg_views: form.avg_views ? Number(form.avg_views) : undefined,
+        engagement_rate: form.engagement_rate ? Number(form.engagement_rate) : undefined,
         price_from: form.price_from ? Number(form.price_from) : undefined,
         price_to: form.price_to ? Number(form.price_to) : undefined,
-        city: form.city || undefined,
-        ad_formats: form.ad_formats,
-      }
-      if (isSocial) {
-        payload.telegram_channel_url = form.telegram_channel_url || undefined
-        payload.subscriber_count = form.subscriber_count ? Number(form.subscriber_count) : undefined
-        payload.avg_views = form.avg_views ? Number(form.avg_views) : undefined
-        payload.engagement_rate = form.engagement_rate ? Number(form.engagement_rate) : undefined
-      }
-      if (isOutdoor) {
-        payload.dimensions = form.dimensions || undefined
-        payload.daily_traffic = form.daily_traffic ? Number(form.daily_traffic) : undefined
-      }
-
-      await listingsApi.create(payload)
+        tags: form.tags ? form.tags.split(',').map(t => t.trim()).filter(Boolean) : [],
+      })
       window.Telegram?.WebApp.HapticFeedback?.impactOccurred('medium')
-      toast.success("E'lon muvaffaqiyatli qo'shildi! 🎉")
-      navigate('/explore')
+      toast.success("E'lon yaratildi!")
+      navigate('/profile')
     } catch (e: unknown) {
       const err = e as { response?: { data?: { detail?: string } } }
       toast.error(err?.response?.data?.detail || 'Xatolik yuz berdi')
@@ -160,331 +117,252 @@ export default function CreateListingPage() {
     }
   }
 
-  const steps = [
-    // Step 0 — Kategoriya
-    <div key="cat">
-      <h2 className="text-white font-bold text-lg mb-1">Kategoriya tanlang</h2>
-      <p className="text-dark-400 text-sm mb-5">Nima qo'shmoqchisiz?</p>
-      <div className="space-y-4">
-        {CATEGORIES.map(group => (
-          <div key={group.group}>
-            <p className="text-xs text-dark-500 mb-2">{group.group}</p>
-            <div className="grid grid-cols-2 gap-2">
-              {group.items.map(({ id, icon: Icon, label, color }) => (
-                <button
-                  key={id}
-                  onClick={() => set('category', id)}
-                  className={clsx(
-                    'flex items-center gap-3 p-3 rounded-xl border transition-all active:scale-95 text-left',
-                    form.category === id
-                      ? 'border-gold-500/50 bg-gold-500/10'
-                      : 'border-dark-800 bg-dark-900'
-                  )}
-                >
-                  <div className="w-8 h-8 rounded-lg flex items-center justify-center flex-shrink-0"
-                    style={{ background: `${color}18` }}>
-                    <Icon className="w-4 h-4" style={{ color }} />
-                  </div>
-                  <span className="text-white text-xs font-medium leading-tight">{label}</span>
-                  {form.category === id && (
-                    <Check className="w-3.5 h-3.5 text-gold-400 ml-auto flex-shrink-0" />
-                  )}
-                </button>
-              ))}
-            </div>
-          </div>
-        ))}
-      </div>
-    </div>,
-
-    // Step 1 — Asosiy ma'lumotlar
-    <div key="info" className="space-y-4">
-      <div>
-        <h2 className="text-white font-bold text-lg mb-1">Asosiy ma'lumotlar</h2>
-        <p className="text-dark-400 text-sm mb-5">
-          {selectedCat && (
-            <span className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full text-xs border border-dark-700 bg-dark-800">
-              <selectedCat.icon className="w-3 h-3" style={{ color: selectedCat.color }} />
-              {selectedCat.label}
-            </span>
-          )}
-        </p>
-      </div>
-      <div>
-        <label className="text-xs text-dark-400 mb-1.5 block">Sarlavha *</label>
-        <input
-          className="input"
-          placeholder={
-            isSocial ? "Masalan: Toshkent Yangiliklari kanali" :
-            isOutdoor ? "Masalan: Chilonzor ko'chasi billboard" :
-            "Masalan: Professional SMM xizmati"
-          }
-          value={form.title}
-          onChange={e => set('title', e.target.value)}
-          maxLength={100}
-        />
-        <p className="text-[10px] text-dark-600 mt-1 text-right">{form.title.length}/100</p>
-      </div>
-      <div>
-        <label className="text-xs text-dark-400 mb-1.5 block">Tavsif</label>
-        <textarea
-          className="input resize-none"
-          rows={4}
-          placeholder="Auditoriya haqida, reklama shartlari, qo'shimcha ma'lumotlar..."
-          value={form.description}
-          onChange={e => set('description', e.target.value)}
-        />
-      </div>
-      <div>
-        <label className="text-xs text-dark-400 mb-1.5 block">Shahar</label>
-        <input
-          className="input"
-          placeholder="Toshkent"
-          value={form.city}
-          onChange={e => set('city', e.target.value)}
-        />
-      </div>
-    </div>,
-
-    // Step 2 — Kategoriyaga qarab qo'shimcha
-    <div key="extra" className="space-y-4">
-      <h2 className="text-white font-bold text-lg mb-1">
-        {isSocial ? "Kanal / sahifa ma'lumotlari" :
-         isOutdoor ? "Reklama joyi ma'lumotlari" :
-         "Xizmat ma'lumotlari"}
-      </h2>
-      <p className="text-dark-400 text-sm mb-4">Qanchalik to'liq bo'lsa, shunchalik ko'p taklif keladi</p>
-
-      {isSocial && (
-        <>
-          <div>
-            <label className="text-xs text-dark-400 mb-1.5 block">
-              {form.category === 'telegram_channel' ? 'Kanal linki' : 'Sahifa linki'}
-            </label>
-            <input
-              className="input"
-              placeholder="https://t.me/kanalingiz"
-              value={form.telegram_channel_url}
-              onChange={e => set('telegram_channel_url', e.target.value)}
-            />
-          </div>
-          <div className="grid grid-cols-2 gap-3">
-            <div>
-              <label className="text-xs text-dark-400 mb-1.5 block">Obunachi soni</label>
-              <input
-                className="input"
-                type="number"
-                placeholder="50000"
-                value={form.subscriber_count}
-                onChange={e => set('subscriber_count', e.target.value)}
-              />
-            </div>
-            <div>
-              <label className="text-xs text-dark-400 mb-1.5 block">O'rtacha ko'rishlar</label>
-              <input
-                className="input"
-                type="number"
-                placeholder="15000"
-                value={form.avg_views}
-                onChange={e => set('avg_views', e.target.value)}
-              />
-            </div>
-          </div>
-          <div>
-            <label className="text-xs text-dark-400 mb-1.5 block">Engagement rate (%)</label>
-            <input
-              className="input"
-              type="number"
-              placeholder="5.2"
-              step="0.1"
-              value={form.engagement_rate}
-              onChange={e => set('engagement_rate', e.target.value)}
-            />
-          </div>
-        </>
-      )}
-
-      {isOutdoor && (
-        <>
-          <div>
-            <label className="text-xs text-dark-400 mb-1.5 block">O'lchamlari (m)</label>
-            <input
-              className="input"
-              placeholder="6x3"
-              value={form.dimensions}
-              onChange={e => set('dimensions', e.target.value)}
-            />
-          </div>
-          <div>
-            <label className="text-xs text-dark-400 mb-1.5 block">Kunlik o'tuvchilar soni</label>
-            <input
-              className="input"
-              type="number"
-              placeholder="10000"
-              value={form.daily_traffic}
-              onChange={e => set('daily_traffic', e.target.value)}
-            />
-          </div>
-        </>
-      )}
-
-      {isService && (
-        <div className="bg-dark-900 border border-dark-800 rounded-xl p-4">
-          <p className="text-sm text-dark-300 text-center">
-            Xizmat uchun asosiy ma'lumotlar yetarli.<br/>
-            Keyinroq portfolio va narxlarni qo'shishingiz mumkin.
-          </p>
-        </div>
-      )}
-
-      {/* Reklama formatlari */}
-      <div>
-        <label className="text-xs text-dark-400 mb-2 block">Reklama formatlari</label>
-        <div className="flex flex-wrap gap-2">
-          {AD_FORMATS.map(f => (
-            <button
-              key={f}
-              onClick={() => toggleFormat(f)}
-              className={clsx(
-                'px-3 py-1.5 rounded-lg text-xs font-medium border transition-all active:scale-95',
-                form.ad_formats.includes(f)
-                  ? 'bg-gold-500/10 border-gold-500/40 text-gold-400'
-                  : 'bg-dark-900 border-dark-700 text-dark-400'
-              )}
-            >
-              {f}
-            </button>
-          ))}
-        </div>
-      </div>
-    </div>,
-
-    // Step 3 — Narx
-    <div key="price" className="space-y-4">
-      <h2 className="text-white font-bold text-lg mb-1">Narx</h2>
-      <p className="text-dark-400 text-sm mb-4">Narx ko'rsatsangiz ko'proq taklif keladi</p>
-
-      <div>
-        <label className="text-xs text-dark-400 mb-2 block">Narxlash turi</label>
-        <div className="grid grid-cols-2 gap-2">
-          {[
-            { id: 'fixed', label: 'Belgilangan', desc: 'Aniq narx' },
-            { id: 'negotiable', label: 'Kelishiladi', desc: 'Muzokaraga ochiq' },
-            { id: 'from', label: 'Boshlang\'ich', desc: 'Narxdan boshlab' },
-            { id: 'proposal', label: 'Taklif asosida', desc: 'Takliflarni ko\'rib chiqing' },
-          ].map(({ id, label, desc }) => (
-            <button
-              key={id}
-              onClick={() => set('pricing_type', id)}
-              className={clsx(
-                'p-3 rounded-xl border transition-all text-left active:scale-95',
-                form.pricing_type === id
-                  ? 'border-gold-500/50 bg-gold-500/10'
-                  : 'border-dark-800 bg-dark-900'
-              )}
-            >
-              <div className="text-white text-xs font-semibold mb-0.5">{label}</div>
-              <div className="text-dark-500 text-[10px]">{desc}</div>
-            </button>
-          ))}
-        </div>
-      </div>
-
-      {['fixed', 'from', 'negotiable'].includes(form.pricing_type) && (
-        <div className="grid grid-cols-2 gap-3">
-          <div>
-            <label className="text-xs text-dark-400 mb-1.5 block">
-              {form.pricing_type === 'fixed' ? 'Narx' : 'Dan (so\'m)'}
-            </label>
-            <input
-              className="input"
-              type="number"
-              placeholder="500000"
-              value={form.price_from}
-              onChange={e => set('price_from', e.target.value)}
-            />
-          </div>
-          {form.pricing_type !== 'fixed' && (
-            <div>
-              <label className="text-xs text-dark-400 mb-1.5 block">Gacha (so'm)</label>
-              <input
-                className="input"
-                type="number"
-                placeholder="2000000"
-                value={form.price_to}
-                onChange={e => set('price_to', e.target.value)}
-              />
-            </div>
-          )}
-        </div>
-      )}
-    </div>,
-  ]
-
-  const TOTAL_STEPS = steps.length
+  const canNext = () => {
+    if (step === 0) return !!form.category
+    if (step === 1) return !!form.title.trim()
+    return true
+  }
 
   return (
-    <div className="min-h-screen bg-dark-950 flex flex-col">
+    <div className="fixed inset-0 bg-obs-900 flex flex-col">
       {/* Header */}
-      <div className="sticky top-0 z-20 glass border-b border-dark-800 px-4 py-3 flex items-center gap-3">
-        <button
-          onClick={() => step > 0 ? setStep(s => s - 1) : navigate(-1)}
-          className="w-8 h-8 rounded-xl bg-dark-800 flex items-center justify-center active:scale-90"
-        >
-          <ChevronLeft className="w-4 h-4 text-dark-300" />
+      <div className="flex items-center gap-3 px-4 py-3 border-b border-obs-700 glass flex-shrink-0">
+        <button onClick={() => step > 0 ? setStep(s => s - 1) : navigate(-1)}
+          className="w-9 h-9 rounded-xl bg-obs-800 flex items-center justify-center active:scale-90">
+          <CaretLeft size={18} color="#94a3b8" weight="bold" />
         </button>
         <div className="flex-1">
-          <h1 className="text-white font-semibold text-sm">E'lon qo'shish</h1>
-          <p className="text-dark-500 text-[10px]">{step + 1} / {TOTAL_STEPS} bosqich</p>
+          <h1 className="text-white font-bold text-sm">E'lon yaratish</h1>
+          <p className="text-obs-300 text-[10px]">{STEPS[step]}</p>
         </div>
-        <button onClick={() => navigate(-1)} className="w-8 h-8 rounded-xl bg-dark-800 flex items-center justify-center">
-          <X className="w-4 h-4 text-dark-400" />
+        <button onClick={() => navigate(-1)} className="w-9 h-9 rounded-xl bg-obs-800 flex items-center justify-center active:scale-90">
+          <X size={16} color="#64748b" weight="bold" />
         </button>
+      </div>
+
+      {/* Step indicator */}
+      <div className="flex gap-1.5 px-4 py-3 border-b border-obs-700 flex-shrink-0">
+        {STEPS.map((s, i) => (
+          <div key={s} className={clsx('flex-1 h-1 rounded-full transition-all', i <= step ? '' : 'bg-obs-700')}
+            style={i <= step ? { background: 'linear-gradient(90deg,#0d9488,#2dd4bf)' } : {}} />
+        ))}
       </div>
 
       {/* Content */}
-      <div className="flex-1 px-4 py-5 overflow-y-auto">
-        <StepIndicator current={step} total={TOTAL_STEPS} />
+      <div className="flex-1 overflow-y-auto px-4 py-4">
         <AnimatePresence mode="wait">
-          <motion.div
-            key={step}
-            initial={{ opacity: 0, x: 20 }}
-            animate={{ opacity: 1, x: 0 }}
-            exit={{ opacity: 0, x: -20 }}
-            transition={{ duration: 0.2 }}
-          >
-            {steps[step]}
-          </motion.div>
+          {/* Step 0 — Kategoriya */}
+          {step === 0 && (
+            <motion.div key="step0" initial={{ opacity: 0, x: 20 }} animate={{ opacity: 1, x: 0 }} exit={{ opacity: 0, x: -20 }}>
+              {CATEGORIES.map(({ group, items }) => (
+                <div key={group} className="mb-5">
+                  <p className="text-obs-400 text-[10px] font-bold uppercase tracking-widest mb-2">{group}</p>
+                  <div className="grid grid-cols-2 gap-2">
+                    {items.map(({ id, icon: Icon, label, color }) => {
+                      const sel = form.category === id
+                      return (
+                        <button key={id} onClick={() => setForm(f => ({ ...f, category: id }))}
+                          className="flex items-center gap-3 p-3.5 rounded-2xl border text-left active:scale-[0.97] transition-all"
+                          style={{ borderColor: sel ? 'rgba(13,148,136,0.5)' : '#1a2530', background: sel ? 'rgba(13,148,136,0.08)' : '#0f1419' }}>
+                          <div className="w-9 h-9 rounded-xl flex items-center justify-center flex-shrink-0" style={{ background: `${color}18` }}>
+                            <Icon size={18} style={{ color }} weight="bold" />
+                          </div>
+                          <div className="flex-1 min-w-0">
+                            <span className="text-white text-xs font-semibold truncate block">{label}</span>
+                          </div>
+                          {sel && <CheckCircle size={16} color="#0d9488" weight="fill" className="flex-shrink-0" />}
+                        </button>
+                      )
+                    })}
+                  </div>
+                </div>
+              ))}
+            </motion.div>
+          )}
+
+          {/* Step 1 — Asosiy */}
+          {step === 1 && (
+            <motion.div key="step1" initial={{ opacity: 0, x: 20 }} animate={{ opacity: 1, x: 0 }} exit={{ opacity: 0, x: -20 }}
+              className="space-y-4">
+              <div>
+                <label className="text-xs text-obs-300 font-medium mb-1.5 block">Sarlavha *</label>
+                <input className="input" placeholder="Masalan: Toshkent Yangiliklari kanali"
+                  value={form.title} onChange={e => setForm(f => ({ ...f, title: e.target.value }))} />
+              </div>
+              <div>
+                <label className="text-xs text-obs-300 font-medium mb-1.5 block">Tavsif</label>
+                <textarea className="input h-24 resize-none"
+                  placeholder="E'lon haqida batafsil ma'lumot..."
+                  value={form.description} onChange={e => setForm(f => ({ ...f, description: e.target.value }))} />
+              </div>
+              <div>
+                <label className="text-xs text-obs-300 font-medium mb-1.5 block">Shahar</label>
+                <div className="relative">
+                  <MapPin size={16} color="#64748b" className="absolute left-3 top-1/2 -translate-y-1/2" weight="bold" />
+                  <input className="input pl-9" placeholder="Toshkent"
+                    value={form.city} onChange={e => setForm(f => ({ ...f, city: e.target.value }))} />
+                </div>
+              </div>
+              {isTelegram && (
+                <div>
+                  <label className="text-xs text-obs-300 font-medium mb-1.5 block">Kanal URL</label>
+                  <div className="relative">
+                    <TelegramLogo size={16} color="#2dd4bf" className="absolute left-3 top-1/2 -translate-y-1/2" weight="fill" />
+                    <input className="input pl-9" placeholder="https://t.me/kanalingiz"
+                      value={form.telegram_channel_url} onChange={e => setForm(f => ({ ...f, telegram_channel_url: e.target.value }))} />
+                  </div>
+                </div>
+              )}
+              {isSocial && (
+                <div className="grid grid-cols-3 gap-2">
+                  <div>
+                    <label className="text-[10px] text-obs-400 font-medium mb-1 block">Obunachi</label>
+                    <input className="input py-2.5 text-sm" type="number" placeholder="120000"
+                      value={form.subscriber_count} onChange={e => setForm(f => ({ ...f, subscriber_count: e.target.value }))} />
+                  </div>
+                  <div>
+                    <label className="text-[10px] text-obs-400 font-medium mb-1 block">Avg views</label>
+                    <input className="input py-2.5 text-sm" type="number" placeholder="15000"
+                      value={form.avg_views} onChange={e => setForm(f => ({ ...f, avg_views: e.target.value }))} />
+                  </div>
+                  <div>
+                    <label className="text-[10px] text-obs-400 font-medium mb-1 block">ER %</label>
+                    <input className="input py-2.5 text-sm" type="number" placeholder="3.5"
+                      value={form.engagement_rate} onChange={e => setForm(f => ({ ...f, engagement_rate: e.target.value }))} />
+                  </div>
+                </div>
+              )}
+            </motion.div>
+          )}
+
+          {/* Step 2 — Narx */}
+          {step === 2 && (
+            <motion.div key="step2" initial={{ opacity: 0, x: 20 }} animate={{ opacity: 1, x: 0 }} exit={{ opacity: 0, x: -20 }}
+              className="space-y-4">
+              <div>
+                <label className="text-xs text-obs-300 font-medium mb-2 block">Narx turi</label>
+                <div className="grid grid-cols-3 gap-2">
+                  {PRICING_TYPES.map(({ id, label }) => (
+                    <button key={id} onClick={() => setForm(f => ({ ...f, pricing_type: id }))}
+                      className={clsx('py-2.5 rounded-xl text-xs font-bold border transition-all', form.pricing_type === id ? 'text-white' : 'bg-obs-800 border-obs-700 text-obs-300')}
+                      style={form.pricing_type === id ? { background: 'linear-gradient(135deg,#0d9488,#0f766e)', border: 'none' } : {}}>
+                      {label}
+                    </button>
+                  ))}
+                </div>
+              </div>
+
+              {form.pricing_type === 'fixed' && (
+                <>
+                  <div>
+                    <label className="text-xs text-obs-300 font-medium mb-1.5 block">Narx (dan) *</label>
+                    <div className="relative">
+                      <CurrencyDollar size={16} color="#64748b" className="absolute left-3 top-1/2 -translate-y-1/2" weight="bold" />
+                      <input className="input pl-9" type="number" placeholder="500000"
+                        value={form.price_from} onChange={e => setForm(f => ({ ...f, price_from: e.target.value }))} />
+                    </div>
+                  </div>
+                  <div>
+                    <label className="text-xs text-obs-300 font-medium mb-1.5 block">Narx (gacha)</label>
+                    <div className="relative">
+                      <CurrencyDollar size={16} color="#64748b" className="absolute left-3 top-1/2 -translate-y-1/2" weight="bold" />
+                      <input className="input pl-9" type="number" placeholder="1500000"
+                        value={form.price_to} onChange={e => setForm(f => ({ ...f, price_to: e.target.value }))} />
+                    </div>
+                  </div>
+                </>
+              )}
+
+              {form.pricing_type !== 'fixed' && (
+                <div className="p-4 rounded-2xl border" style={{ background: 'rgba(13,148,136,0.06)', borderColor: 'rgba(13,148,136,0.15)' }}>
+                  <p className="text-teal-400 text-xs leading-relaxed">
+                    💡 Mijozlar siz bilan bevosita muloqot qilib narx bo'yicha kelishib olishadi.
+                  </p>
+                </div>
+              )}
+
+              <div>
+                <label className="text-xs text-obs-300 font-medium mb-1.5 block">Valyuta</label>
+                <div className="flex gap-2">
+                  {['UZS', 'USD'].map(c => (
+                    <button key={c} onClick={() => setForm(f => ({ ...f, currency: c }))}
+                      className={clsx('px-5 py-2.5 rounded-xl text-xs font-bold transition-all', form.currency === c ? 'text-white' : 'bg-obs-800 border border-obs-700 text-obs-300')}
+                      style={form.currency === c ? { background: 'linear-gradient(135deg,#0d9488,#0f766e)' } : {}}>
+                      {c}
+                    </button>
+                  ))}
+                </div>
+              </div>
+            </motion.div>
+          )}
+
+          {/* Step 3 — Qo'shimcha */}
+          {step === 3 && (
+            <motion.div key="step3" initial={{ opacity: 0, x: 20 }} animate={{ opacity: 1, x: 0 }} exit={{ opacity: 0, x: -20 }}
+              className="space-y-4">
+              <div>
+                <label className="text-xs text-obs-300 font-medium mb-2 block">Reklama formatlari</label>
+                <div className="flex flex-wrap gap-2">
+                  {AD_FORMATS.map(f => {
+                    const sel = form.ad_formats.includes(f)
+                    return (
+                      <button key={f} onClick={() => toggleFormat(f)}
+                        className={clsx('px-3 py-1.5 rounded-xl text-xs font-bold transition-all', sel ? 'text-white' : 'bg-obs-800 border border-obs-700 text-obs-300')}
+                        style={sel ? { background: 'linear-gradient(135deg,#0d9488,#0f766e)' } : {}}>
+                        {f}
+                      </button>
+                    )
+                  })}
+                </div>
+              </div>
+              <div>
+                <label className="text-xs text-obs-300 font-medium mb-1.5 block">Teglar (vergul bilan)</label>
+                <input className="input" placeholder="reklama, kanal, marketing"
+                  value={form.tags} onChange={e => setForm(f => ({ ...f, tags: e.target.value }))} />
+              </div>
+
+              {/* Summary */}
+              <div className="p-4 bg-obs-800 border border-obs-700 rounded-2xl space-y-2">
+                <p className="text-obs-300 text-xs font-bold uppercase tracking-wider">Xulosa</p>
+                <div className="flex justify-between text-xs">
+                  <span className="text-obs-400">Kategoriya</span>
+                  <span className="text-white font-medium">{form.category.replace(/_/g, ' ')}</span>
+                </div>
+                <div className="flex justify-between text-xs">
+                  <span className="text-obs-400">Sarlavha</span>
+                  <span className="text-white font-medium truncate ml-4 text-right">{form.title}</span>
+                </div>
+                <div className="flex justify-between text-xs">
+                  <span className="text-obs-400">Narx</span>
+                  <span className="text-white font-medium">
+                    {form.pricing_type === 'negotiable' ? 'Kelishiladi'
+                      : form.pricing_type === 'proposal' ? 'Taklif asosida'
+                      : form.price_from ? `${Number(form.price_from).toLocaleString()} ${form.currency}`
+                      : 'Belgilanmagan'}
+                  </span>
+                </div>
+              </div>
+            </motion.div>
+          )}
         </AnimatePresence>
       </div>
 
-      {/* Footer */}
-      <div className="px-4 py-4 border-t border-dark-800 bg-dark-950">
-        {step < TOTAL_STEPS - 1 ? (
-          <button
-            onClick={() => canNext() && setStep(s => s + 1)}
+      {/* Footer nav */}
+      <div className="flex-shrink-0 px-4 pb-safe pt-3 border-t border-obs-700 bg-obs-900">
+        {step < 3 ? (
+          <button onClick={() => canNext() && setStep(s => s + 1)}
             disabled={!canNext()}
-            className={clsx(
-              'w-full py-3.5 rounded-2xl font-semibold text-sm flex items-center justify-center gap-2 transition-all',
-              canNext()
-                ? 'bg-gold-500 text-dark-950 active:bg-gold-400'
-                : 'bg-dark-800 text-dark-500 cursor-not-allowed'
-            )}
-          >
-            Keyingisi
-            <ChevronRight className="w-4 h-4" />
+            className="w-full py-3.5 rounded-2xl font-bold text-sm flex items-center justify-center gap-2 transition-all"
+            style={canNext() ? { background: 'linear-gradient(135deg,#0d9488,#0f766e)', color: '#fff' } : { background: '#1a2530', color: '#475569' }}>
+            Keyingi <CaretRight size={16} weight="bold" />
           </button>
         ) : (
-          <button
-            onClick={handleSubmit}
-            disabled={saving}
-            className="w-full py-3.5 rounded-2xl font-semibold text-sm flex items-center justify-center gap-2 bg-gold-500 text-dark-950 active:bg-gold-400"
-          >
-            {saving ? (
-              <div className="w-5 h-5 border-2 border-dark-950 border-t-transparent rounded-full animate-spin" />
-            ) : (
-              <>E'lonni chiqarish <Check className="w-4 h-4" /></>
-            )}
+          <button onClick={handleSubmit} disabled={saving}
+            className="w-full py-3.5 rounded-2xl font-bold text-sm flex items-center justify-center gap-2 text-white"
+            style={{ background: 'linear-gradient(135deg,#0d9488,#0f766e)' }}>
+            {saving
+              ? <div className="w-5 h-5 border-2 border-white border-t-transparent rounded-full animate-spin" />
+              : <><Lightning size={16} weight="fill" /> E'lon chiqarish</>}
           </button>
         )}
       </div>

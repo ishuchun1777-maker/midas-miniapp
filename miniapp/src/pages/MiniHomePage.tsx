@@ -2,19 +2,19 @@ import { useQuery } from '@tanstack/react-query'
 import { Link, useNavigate } from 'react-router-dom'
 import { motion } from 'framer-motion'
 import {
-  Send, TrendingUp, Monitor, Users, Zap, Bell,
-  ChevronRight, Megaphone, Search, Plus
-} from 'lucide-react'
+  TelegramLogo, Lightning, Buildings, ChartLineUp,
+  PaintBrush, Bell, User, MagnifyingGlass, Plus, CaretRight, Megaphone
+} from '@phosphor-icons/react'
 import { listingsApi, notificationsApi, campaignsApi } from '../utils/api'
 import { useAuthStore } from '../store/authStore'
 import { formatPrice } from '../utils/format'
 import toast from 'react-hot-toast'
 
 const CATS = [
-  { icon: Send, label: 'Telegram', to: '/explore?cat=telegram_channel', color: '#29b6f6' },
-  { icon: TrendingUp, label: 'Media Buyer', to: '/explore?cat=media_buyer', color: '#f59e0b' },
-  { icon: Monitor, label: 'LED/Billboard', to: '/explore?cat=led_screen', color: '#a78bfa' },
-  { icon: Users, label: 'Dizayner', to: '/explore?cat=graphic_designer', color: '#34d399' },
+  { icon: TelegramLogo, label: 'Telegram', to: '/explore?cat=telegram_channel', color: '#2dd4bf' },
+  { icon: ChartLineUp, label: 'Media Buyer', to: '/explore?cat=media_buyer', color: '#c8a84b' },
+  { icon: Buildings, label: 'Billboard', to: '/explore?cat=billboard', color: '#0d9488' },
+  { icon: PaintBrush, label: 'Dizayner', to: '/explore?cat=graphic_designer', color: '#c8a84b' },
 ]
 
 export default function MiniHomePage() {
@@ -23,66 +23,51 @@ export default function MiniHomePage() {
 
   const { data: featured } = useQuery({
     queryKey: ['featured'],
-    queryFn: () => listingsApi.featured().then((r) => r.data),
+    queryFn: () => listingsApi.featured().then(r => r.data),
   })
 
   const { data: campaigns } = useQuery({
     queryKey: ['campaigns-home'],
-    queryFn: () => campaignsApi.list({ per_page: 3, status: 'open' }).then((r) => r.data),
+    queryFn: () => campaignsApi.list({ per_page: 3, status: 'open' }).then(r => r.data),
   })
 
   const { data: notifs } = useQuery({
     queryKey: ['notifications'],
-    queryFn: () => notificationsApi.list().then((r) => r.data),
+    queryFn: () => notificationsApi.list().then(r => r.data),
     enabled: isAuthenticated,
   })
 
-  const unread = notifs?.filter((n) => !n.is_read).length || 0
-
-  const handleNewCampaign = () => {
-    if (!isAuthenticated) {
-      toast.error('Kampaniya yaratish uchun kirish kerak', { icon: '🔒' })
-      return
-    }
-    navigate('/campaigns')
-  }
+  const unread = notifs?.filter(n => !n.is_read).length || 0
 
   return (
-    <div className="min-h-screen">
+    <div className="min-h-screen bg-obs-900">
+      {/* Glow */}
+      <div className="pointer-events-none fixed top-0 right-0 w-48 h-48 rounded-full"
+        style={{ background: 'radial-gradient(circle, rgba(13,148,136,0.08) 0%, transparent 70%)' }} />
+
       {/* Header */}
-      <div className="sticky top-0 z-30 glass border-b border-dark-800 px-4 py-3 flex items-center justify-between">
+      <div className="sticky top-0 z-30 glass border-b border-obs-700 px-4 py-3 flex items-center justify-between">
         <div className="flex items-center gap-2">
-          <div className="w-7 h-7 rounded-lg bg-gold-500 flex items-center justify-center">
-            <Zap className="w-4 h-4 text-dark-950" fill="currentColor" />
+          <div className="w-7 h-7 rounded-lg flex items-center justify-center" style={{ background: 'linear-gradient(135deg,#0d9488,#0f766e)' }}>
+            <Lightning size={14} color="#fff" weight="fill" />
           </div>
-          <span className="font-display text-2xl tracking-widest text-white">MIDAS</span>
+          <span className="font-display text-2xl tracking-widest midas-gradient">MIDAS</span>
         </div>
         <div className="flex items-center gap-2">
           {isAuthenticated && (
-            <button className="relative w-9 h-9 rounded-xl bg-dark-800 flex items-center justify-center">
-              <Bell className="w-4 h-4 text-dark-300" />
+            <button onClick={() => navigate('/notifications')} className="relative w-9 h-9 rounded-xl bg-obs-800 border border-obs-700 flex items-center justify-center active:scale-90">
+              <Bell size={17} color="#94a3b8" weight="bold" />
               {unread > 0 && (
-                <span className="absolute -top-0.5 -right-0.5 w-4 h-4 bg-gold-500 rounded-full text-[9px] font-bold text-dark-950 flex items-center justify-center">
-                  {unread}
-                </span>
+                <span className="absolute -top-0.5 -right-0.5 w-4 h-4 rounded-full text-[9px] font-bold flex items-center justify-center text-obs-900"
+                  style={{ background: '#c8a84b' }}>{unread}</span>
               )}
             </button>
           )}
-          {user?.photo_url ? (
-            <img
-              src={user.photo_url}
-              alt=""
-              className="w-9 h-9 rounded-xl object-cover cursor-pointer"
-              onClick={() => navigate('/profile')}
-            />
-          ) : (
-            <button
-              onClick={() => navigate('/profile')}
-              className="w-9 h-9 rounded-xl bg-dark-800 flex items-center justify-center"
-            >
-              <Users className="w-4 h-4 text-dark-400" />
-            </button>
-          )}
+          {user?.photo_url
+            ? <img src={user.photo_url} alt="" className="w-9 h-9 rounded-xl object-cover cursor-pointer border border-obs-700" onClick={() => navigate('/profile')} />
+            : <button onClick={() => navigate('/profile')} className="w-9 h-9 rounded-xl bg-obs-800 border border-obs-700 flex items-center justify-center">
+                <User size={17} color="#64748b" weight="bold" />
+              </button>}
         </div>
       </div>
 
@@ -91,18 +76,16 @@ export default function MiniHomePage() {
         <motion.div initial={{ opacity: 0, y: 12 }} animate={{ opacity: 1, y: 0 }}>
           {isAuthenticated && user ? (
             <div>
-              <p className="text-dark-400 text-sm">Xush kelibsiz,</p>
-              <h1 className="font-display text-3xl text-white tracking-wide">{user.first_name}!</h1>
+              <p className="text-obs-300 text-sm">Xush kelibsiz,</p>
+              <h1 className="font-display text-3xl tracking-wide midas-gradient">{user.first_name}!</h1>
             </div>
           ) : (
             <div>
               <h1 className="font-display text-3xl text-white tracking-wide leading-tight">
                 Reklama bozori<br />
-                <span className="gold-gradient">professional tarzda</span>
+                <span className="teal-gradient">professional tarzda</span>
               </h1>
-              <p className="text-dark-400 text-sm mt-2">
-                Telegram, billboard, media buyer — hammasi bir joyda
-              </p>
+              <p className="text-obs-300 text-sm mt-2">Telegram, billboard, media buyer — hammasi bir joyda</p>
             </div>
           )}
         </motion.div>
@@ -110,13 +93,13 @@ export default function MiniHomePage() {
         {/* Stats */}
         <div className="grid grid-cols-3 gap-2 mt-4">
           {[
-            { val: '1,200+', label: 'Kanal' },
-            { val: '340+', label: 'Media Buyer' },
-            { val: '5,800+', label: 'Bitim' },
-          ].map(({ val, label }) => (
-            <div key={label} className="bg-dark-900 border border-dark-800 rounded-xl p-3 text-center">
-              <div className="font-display text-xl text-gold-400">{val}</div>
-              <div className="text-[10px] text-dark-500 mt-0.5">{label}</div>
+            { val: '1,200+', label: 'Kanal', color: '#2dd4bf' },
+            { val: '340+', label: 'Media Buyer', color: '#c8a84b' },
+            { val: '5,800+', label: 'Bitim', color: '#2dd4bf' },
+          ].map(({ val, label, color }) => (
+            <div key={label} className="bg-obs-800 border border-obs-700 rounded-xl p-3 text-center">
+              <div className="font-display text-xl" style={{ color }}>{val}</div>
+              <div className="text-[10px] text-obs-400 mt-0.5 font-medium">{label}</div>
             </div>
           ))}
         </div>
@@ -125,21 +108,21 @@ export default function MiniHomePage() {
       {/* Quick actions */}
       <div className="px-4 mb-5">
         <div className="grid grid-cols-2 gap-2">
-          <Link
-            to="/explore"
-            className="bg-gold-500 hover:bg-gold-400 rounded-xl p-4 flex items-center gap-3 transition-all active:scale-95"
-          >
-            <div className="w-8 h-8 rounded-lg bg-dark-950/20 flex items-center justify-center flex-shrink-0">
-              <Search className="w-4 h-4 text-dark-950" />
+          <Link to="/explore"
+            className="flex items-center gap-3 p-4 rounded-xl active:scale-95 transition-all"
+            style={{ background: 'linear-gradient(135deg,#0d9488,#0f766e)' }}>
+            <div className="w-8 h-8 rounded-lg bg-white/10 flex items-center justify-center flex-shrink-0">
+              <MagnifyingGlass size={16} color="#fff" weight="bold" />
             </div>
-            <span className="text-dark-950 font-semibold text-sm">Reklama topish</span>
+            <span className="text-white font-semibold text-sm">Reklama topish</span>
           </Link>
-          <button
-            onClick={handleNewCampaign}
-            className="bg-dark-800 hover:bg-dark-700 border border-dark-700 rounded-xl p-4 flex items-center gap-3 transition-all active:scale-95"
-          >
-            <div className="w-8 h-8 rounded-lg bg-dark-700 flex items-center justify-center flex-shrink-0">
-              <Plus className="w-4 h-4 text-gold-400" />
+          <button onClick={() => {
+            if (!isAuthenticated) { toast.error('Kirish talab etiladi'); return }
+            navigate('/campaigns')
+          }}
+            className="flex items-center gap-3 p-4 bg-obs-800 border border-obs-700 rounded-xl active:scale-95 transition-all">
+            <div className="w-8 h-8 rounded-lg bg-obs-700 flex items-center justify-center flex-shrink-0">
+              <Plus size={16} color="#c8a84b" weight="bold" />
             </div>
             <span className="text-white font-semibold text-sm">Kampaniya</span>
           </button>
@@ -148,18 +131,15 @@ export default function MiniHomePage() {
 
       {/* Categories */}
       <div className="px-4 mb-5">
-        <p className="text-xs font-medium text-dark-400 uppercase tracking-widest mb-3">Kategoriyalar</p>
+        <p className="text-xs font-bold text-obs-400 uppercase tracking-widest mb-3">Kategoriyalar</p>
         <div className="grid grid-cols-4 gap-2">
           {CATS.map(({ icon: Icon, label, to, color }) => (
-            <Link
-              key={label}
-              to={to}
-              className="flex flex-col items-center gap-2 p-3 bg-dark-900 border border-dark-800 rounded-xl active:scale-95 transition-all"
-            >
+            <Link key={label} to={to}
+              className="flex flex-col items-center gap-2 p-3 bg-obs-800 border border-obs-700 rounded-xl active:scale-95 transition-all">
               <div className="w-9 h-9 rounded-xl flex items-center justify-center" style={{ background: `${color}15` }}>
-                <Icon className="w-4 h-4" style={{ color }} />
+                <Icon size={18} style={{ color }} weight="bold" />
               </div>
-              <span className="text-[10px] text-dark-400 text-center leading-tight">{label}</span>
+              <span className="text-[10px] text-obs-300 text-center leading-tight font-medium">{label}</span>
             </Link>
           ))}
         </div>
@@ -169,69 +149,62 @@ export default function MiniHomePage() {
       {featured && featured.length > 0 && (
         <div className="mb-5">
           <div className="flex items-center justify-between px-4 mb-3">
-            <p className="text-xs font-medium text-dark-400 uppercase tracking-widest">Tanlangan</p>
-            <Link to="/explore" className="text-gold-400 text-xs flex items-center gap-0.5">
-              Hammasi <ChevronRight className="w-3 h-3" />
+            <p className="text-xs font-bold text-obs-400 uppercase tracking-widest">Tanlangan</p>
+            <Link to="/explore" className="text-teal-400 text-xs flex items-center gap-0.5 font-medium">
+              Hammasi <CaretRight size={12} weight="bold" />
             </Link>
           </div>
           <div className="flex gap-3 overflow-x-auto px-4 pb-2 scrollbar-hide">
             {featured.map((listing, i) => (
-              <motion.div
-                key={listing.id}
-                initial={{ opacity: 0, x: 20 }}
-                animate={{ opacity: 1, x: 0 }}
-                transition={{ delay: i * 0.07 }}
-                className="flex-shrink-0 w-52"
-              >
-                <div className="bg-dark-900 border border-dark-800 rounded-2xl overflow-hidden">
-                  {listing.cover_image ? (
-                    <img src={listing.cover_image} alt="" className="w-full h-28 object-cover" />
-                  ) : (
-                    <div className="w-full h-28 bg-dark-800 flex items-center justify-center">
-                      <Megaphone className="w-8 h-8 text-dark-600" />
-                    </div>
-                  )}
-                  <div className="p-3">
-                    <div className="text-white text-xs font-semibold truncate mb-1">{listing.title}</div>
-                    <div className="text-dark-500 text-[10px] mb-2">{listing.city || 'O\'zbekiston'}</div>
-                    <div className="text-gold-400 text-xs font-bold">
-                      {listing.price_from ? formatPrice(listing.price_from, listing.currency) : 'Narx kelishiladi'}
+              <motion.div key={listing.id} initial={{ opacity: 0, x: 20 }} animate={{ opacity: 1, x: 0 }} transition={{ delay: i * 0.07 }}
+                className="flex-shrink-0 w-52">
+                <Link to={`/listing/${listing.id}`}>
+                  <div className="bg-obs-800 border border-obs-700 rounded-2xl overflow-hidden">
+                    {listing.cover_image
+                      ? <img src={listing.cover_image} alt="" className="w-full h-28 object-cover" />
+                      : <div className="w-full h-28 bg-obs-700 flex items-center justify-center">
+                          <Megaphone size={28} color="#334155" weight="duotone" />
+                        </div>}
+                    <div className="p-3">
+                      <div className="text-white text-xs font-semibold truncate mb-1">{listing.title}</div>
+                      <div className="text-obs-400 text-[10px] mb-2">{listing.city || "O'zbekiston"}</div>
+                      <div className="font-bold text-xs" style={{ color: '#c8a84b' }}>
+                        {listing.price_from ? formatPrice(listing.price_from) + " so'm" : 'Kelishiladi'}
+                      </div>
                     </div>
                   </div>
-                </div>
+                </Link>
               </motion.div>
             ))}
           </div>
         </div>
       )}
 
-      {/* Open campaigns */}
-      {campaigns && campaigns.items && campaigns.items.length > 0 && (
+      {/* Campaigns */}
+      {campaigns?.items && campaigns.items.length > 0 && (
         <div className="px-4 mb-8">
           <div className="flex items-center justify-between mb-3">
-            <p className="text-xs font-medium text-dark-400 uppercase tracking-widest">Ochiq kampaniyalar</p>
-            <Link to="/campaigns" className="text-gold-400 text-xs flex items-center gap-0.5">
-              Hammasi <ChevronRight className="w-3 h-3" />
+            <p className="text-xs font-bold text-obs-400 uppercase tracking-widest">Ochiq kampaniyalar</p>
+            <Link to="/campaigns" className="text-teal-400 text-xs flex items-center gap-0.5 font-medium">
+              Hammasi <CaretRight size={12} weight="bold" />
             </Link>
           </div>
           <div className="space-y-2">
-            {campaigns.items.map((c) => (
-              <Link
-                key={c.id}
-                to="/campaigns"
-                className="flex items-center gap-3 p-3 bg-dark-900 border border-dark-800 rounded-xl active:scale-98 transition-all"
-              >
-                <div className="w-9 h-9 rounded-xl bg-gold-500/10 flex items-center justify-center flex-shrink-0">
-                  <Megaphone className="w-4 h-4 text-gold-400" />
+            {campaigns.items.map(c => (
+              <Link key={c.id} to={`/campaign/${c.id}`}
+                className="flex items-center gap-3 p-3 bg-obs-800 border border-obs-700 rounded-xl active:scale-98 transition-all">
+                <div className="w-9 h-9 rounded-xl flex items-center justify-center flex-shrink-0"
+                  style={{ background: 'rgba(13,148,136,0.12)' }}>
+                  <Megaphone size={16} color="#2dd4bf" weight="bold" />
                 </div>
                 <div className="flex-1 min-w-0">
-                  <div className="text-white text-xs font-medium truncate">{c.title}</div>
-                  <div className="text-dark-500 text-[10px] mt-0.5">
-                    {c.budget_min ? `${formatPrice(c.budget_min, c.currency)} dan` : 'Budjet kelishiladi'}
+                  <div className="text-white text-xs font-semibold truncate">{c.title}</div>
+                  <div className="text-obs-400 text-[10px] mt-0.5">
+                    {c.budget_min ? `${formatPrice(c.budget_min)} so'mdan` : 'Budjet kelishiladi'}
                     {' · '}{c.proposal_count} taklif
                   </div>
                 </div>
-                <ChevronRight className="w-4 h-4 text-dark-600 flex-shrink-0" />
+                <CaretRight size={14} color="#334155" weight="bold" />
               </Link>
             ))}
           </div>
