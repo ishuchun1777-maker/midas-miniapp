@@ -1,12 +1,12 @@
 from fastapi import APIRouter, Depends, HTTPException, Query, status, UploadFile, File
 from sqlalchemy.ext.asyncio import AsyncSession
 from typing import Optional, List
-import math, os, uuid, aiofiles
+import math, os, uuid
 
 from app.db.database import get_db
 from app.core.security import get_current_user, get_optional_user
 from app.models.models import User, ListingCategory
-from app.schemas.schemas import ListingCreate, ListingUpdate, ListingPublic, PaginatedResponse
+from app.schemas.schemas import ListingCreate, ListingUpdate
 from app.services.listing_service import (
     create_listing, get_listing, get_listings, update_listing,
     toggle_favorite, get_user_favorites, get_featured_listings
@@ -14,16 +14,31 @@ from app.services.listing_service import (
 from app.core.config import settings
 
 
-def serialize_listing(l) -> dict:
-    """Listing modelini dict ga aylantiramiz — None fieldlar xato bermasligi uchun"""
-    owner = l.owner
+def _owner_dict(owner):
+    if not owner:
+        return {"id": 0, "telegram_id": 0, "first_name": "Unknown",
+                "language_code": "uz", "is_verified": False, "created_at": None}
+    return {
+        "id": owner.id,
+        "telegram_id": owner.telegram_id,
+        "telegram_username": owner.telegram_username,
+        "first_name": owner.first_name,
+        "last_name": owner.last_name,
+        "photo_url": owner.photo_url,
+        "language_code": owner.language_code or "uz",
+        "is_verified": bool(owner.is_verified),
+        "created_at": owner.created_at.isoformat() if owner.created_at else None,
+    }
+
+
+def sl(l) -> dict:
     return {
         "id": l.id,
         "title": l.title,
         "description": l.description,
-        "category": l.category.value if hasattr(l.category, 'value') else l.category,
-        "status": l.status.value if hasattr(l.status, 'value') else (l.status or "active"),
-        "pricing_type": l.pricing_type.value if hasattr(l.pricing_type, 'value') else (l.pricing_type or "negotiable"),
+        "category": l.category.value if hasattr(l.category, "value") else str(l.category),
+        "status": l.status.value if hasattr(l.status, "value") else (l.status or "active"),
+        "pricing_type": l.pricing_type.value if hasattr(l.pricing_type, "value") else (l.pricing_type or "negotiable"),
         "price_from": l.price_from,
         "price_to": l.price_to,
         "currency": l.currency or "UZS",
@@ -38,34 +53,23 @@ def serialize_listing(l) -> dict:
         "view_count": l.view_count or 0,
         "save_count": l.save_count or 0,
         "lead_count": l.lead_count or 0,
-        "verified": l.verified or False,
-        "featured": l.featured or False,
-        "rating": l.rating or 0.0,
+        "verified": bool(l.verified),
+        "featured": bool(l.featured),
+        "rating": float(l.rating or 0),
         "review_count": l.review_count or 0,
         "tags": l.tags or [],
         "created_at": l.created_at.isoformat() if l.created_at else None,
-        "owner": {
-            "id": owner.id,
-            "telegram_id": owner.telegram_id,
-            "telegram_username": owner.telegram_username,
-            "first_name": owner.first_name,
-            "last_name": owner.last_name,
-            "photo_url": owner.photo_url,
-            "language_code": owner.language_code or "uz",
-            "is_verified": owner.is_verified or False,
-            "created_at": owner.created_at.isoformat() if owner.created_at else None,
-        } if owner else None,
+        "owner": _owner_dict(l.owner),
     }
+
 
 router = APIRouter()
 
 
 @router.get("/featured")
-async def featured_listings(
-    db: AsyncSession = Depends(get_db),
-):
+async def featured_listings(db: AsyncSession = Depends(get_db)):
     items = await get_featured_listings(db)
-    return [serialize_listing(l) for l in items]
+    return [sl(l) for l in items]
 
 
 @router.get("/")
@@ -85,11 +89,11 @@ async def list_listings(
         db, category, city, search, min_price, max_price, verified_only, page, per_page
     )
     return {
-        "items": [serialize_listing(l) for l in items],
+        "items": [sl(l) for l in items],
         "total": total,
         "page": page,
         "per_page": per_page,
-        "pages": math.ceil(total / per_page),
+        "pages": math.ceil(total / per_page) if total else 1,
     }
 
 
@@ -100,7 +104,16 @@ async def create_new_listing(
     current_user: User = Depends(get_current_user),
 ):
     listing = await create_listing(db, current_user.id, data)
-    return serialize_listing(listing)
+    return sl(listing)
+
+
+@router.get("/me/favorites")
+async def my_favorites(
+    db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+):
+    favs = await get_user_favorites(db, current_user.id)
+    return [sl(l) for l in favs]
 
 
 @router.get("/{listing_id}")
@@ -111,7 +124,7 @@ async def get_listing_detail(
     listing = await get_listing(db, listing_id)
     if not listing:
         raise HTTPException(status_code=404, detail="Listing not found")
-    return serialize_listing(listing)
+    return sl(listing)
 
 
 @router.patch("/{listing_id}")
@@ -124,7 +137,7 @@ async def update_listing_endpoint(
     listing = await update_listing(db, listing_id, current_user.id, data)
     if not listing:
         raise HTTPException(status_code=404, detail="Listing not found or not authorized")
-    return serialize_listing(listing)
+    return sl(listing)
 
 
 @router.post("/{listing_id}/favorite")
@@ -133,36 +146,5 @@ async def toggle_listing_favorite(
     db: AsyncSession = Depends(get_db),
     current_user: User = Depends(get_current_user),
 ):
-    is_favorited = await toggle_favorite(db, current_user.id, listing_id)
-    return {"favorited": is_favorited}
-
-
-@router.get("/me/favorites")
-async def my_favorites(
-    db: AsyncSession = Depends(get_db),
-    current_user: User = Depends(get_current_user),
-):
-    favs = await get_user_favorites(db, current_user.id)
-    return [serialize_listing(l) for l in favs]
-
-
-@router.post("/{listing_id}/upload-image")
-async def upload_listing_image(
-    listing_id: int,
-    file: UploadFile = File(...),
-    db: AsyncSession = Depends(get_db),
-    current_user: User = Depends(get_current_user),
-):
-    if not file.content_type.startswith("image/"):
-        raise HTTPException(status_code=400, detail="Only images are allowed")
-
-    ext = file.filename.split(".")[-1]
-    filename = f"{uuid.uuid4()}.{ext}"
-    upload_path = os.path.join(settings.UPLOAD_DIR, "listings", filename)
-    os.makedirs(os.path.dirname(upload_path), exist_ok=True)
-
-    async with aiofiles.open(upload_path, "wb") as f:
-        content = await file.read()
-        await f.write(content)
-
-    return {"url": f"/uploads/listings/{filename}"}
+    result = await toggle_favorite(db, current_user.id, listing_id)
+    return {"saved": result}
