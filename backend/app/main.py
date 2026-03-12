@@ -5,6 +5,13 @@ from fastapi.middleware.cors import CORSMiddleware
 from contextlib import asynccontextmanager
 import logging
 import asyncio
+import sys
+import traceback
+
+def handle_exception(exc_type, exc_value, exc_tb):
+    logging.error("STARTUP ERROR:")
+    logging.error("".join(traceback.format_exception(exc_type, exc_value, exc_tb)))
+sys.excepthook = handle_exception
 
 from app.core.config import settings
 from app.db.database import engine, Base
@@ -43,6 +50,7 @@ async def run_bot():
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
+    logger.info("=== MIDAS API starting up ===")
     logger.info("Starting MIDAS API...")
 
     # DB yaratish
@@ -87,7 +95,6 @@ async def validation_exception_handler(request: Request, exc: RequestValidationE
 app.add_middleware(
     CORSMiddleware,
     allow_origins=["*"],
-    allow_origin_regex=r"https://.*\.onrender\.com",
     allow_credentials=False,
     allow_methods=["*"],
     allow_headers=["*"],

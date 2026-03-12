@@ -9,7 +9,7 @@ from app.models.models import User
 from app.schemas.schemas import CampaignCreate, CampaignUpdate, ProposalCreate
 from app.services.campaign_service import (
     create_campaign, get_campaign, get_campaigns,
-    get_user_campaigns, submit_proposal
+    get_user_campaigns, create_proposal
 )
 
 
@@ -119,7 +119,7 @@ async def submit_campaign_proposal(
         raise HTTPException(status_code=404, detail="Campaign not found")
     if campaign.buyer_id == current_user.id:
         raise HTTPException(status_code=400, detail="Cannot propose on your own campaign")
-    proposal = await submit_proposal(db, campaign_id, current_user.id, data)
+    proposal = await create_proposal(db, campaign_id, current_user.id, data)
     p = proposal
     return {
         "id": p.id,
