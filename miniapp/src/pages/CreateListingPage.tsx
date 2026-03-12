@@ -124,7 +124,7 @@ export default function CreateListingPage() {
   }
 
   return (
-    <div className="fixed inset-0 bg-obs-900 flex flex-col">
+    <div className="min-h-screen bg-obs-900 flex flex-col">
       {/* Header */}
       <div className="flex items-center gap-3 px-4 py-3 border-b border-obs-700 glass flex-shrink-0">
         <button onClick={() => step > 0 ? setStep(s => s - 1) : navigate(-1)}
@@ -149,7 +149,7 @@ export default function CreateListingPage() {
       </div>
 
       {/* Content */}
-      <div className="flex-1 overflow-y-auto px-4 py-4">
+      <div className="flex-1 overflow-y-auto px-4 py-4 pb-32">
         <AnimatePresence mode="wait">
           {/* Step 0 — Kategoriya */}
           {step === 0 && (
@@ -348,7 +348,7 @@ export default function CreateListingPage() {
       </div>
 
       {/* Footer nav */}
-      <div className="flex-shrink-0 px-4 pb-safe pt-3 border-t border-obs-700 bg-obs-900">
+      <div className="fixed bottom-0 left-0 right-0 z-[55] px-4 pb-safe pt-3 border-t border-obs-700" style={{ background: '#060809' }}>
         {step < 3 ? (
           <button onClick={() => canNext() && setStep(s => s + 1)}
             disabled={!canNext()}

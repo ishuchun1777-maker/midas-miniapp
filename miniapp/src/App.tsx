@@ -24,6 +24,8 @@ import NotificationsPage   from './pages/NotificationsPage'
 import DealsPage           from './pages/DealsPage'
 import UserProfilePage     from './pages/UserProfilePage'
 import FavoritesPage       from './pages/FavoritesPage'
+import AnalyticsPage       from './pages/AnalyticsPage'
+import VerificationPage    from './pages/VerificationPage'
 
 const queryClient = new QueryClient({
   defaultOptions: { queries: { staleTime: 30_000, retry: 1 } },
@@ -92,21 +94,36 @@ export function AuthGuard({ children }: { children: React.ReactNode }) {
 }
 
 // ── Bottom Nav ──────────────────────────────────────────────────────────────
+// Sahifalar ro'yxati — bottom nav YASHIRINADIGAN
+const HIDE_NAV_PATHS = [
+  '/listing/create',
+  '/listing/',      // detail
+  '/proposal/',
+  '/notifications',
+  '/deals',
+  '/favorites',
+  '/user/',
+  '/campaign/',
+  '/analytics',
+  '/verification',
+]
+
 function BottomNav() {
   const location = useLocation()
 
-  const items = [
-    { to: '/',          icon: House,      label: 'Bosh'     },
-    { to: '/explore',   icon: Compass,    label: 'Bozor'    },
-    { to: '/campaigns', icon: Megaphone,  label: 'Kampaniya'},
-    { to: '/messages',  icon: ChatCircle, label: 'Chat'     },
-    { to: '/profile',   icon: User,       label: 'Profil'   },
-  ]
-
-  // Ichki sahifalarda nav ko'rsatmaymiz
-  const hideNavPaths = ['/listing/create', '/proposal', '/notifications', '/deals', '/favorites', '/user', '/campaign/']
-  const shouldHide = hideNavPaths.some(p => location.pathname.startsWith(p))
+  const shouldHide = HIDE_NAV_PATHS.some(p => {
+    if (p.endsWith('/')) return location.pathname.startsWith(p)
+    return location.pathname === p || location.pathname.startsWith(p + '/')
+  })
   if (shouldHide) return null
+
+  const items = [
+    { to: '/',          icon: House,      label: 'Bosh'      },
+    { to: '/explore',   icon: Compass,    label: 'Bozor'     },
+    { to: '/campaigns', icon: Megaphone,  label: 'Kampaniya' },
+    { to: '/messages',  icon: ChatCircle, label: 'Chat'      },
+    { to: '/profile',   icon: User,       label: 'Profil'    },
+  ]
 
   const isActive = (to: string) =>
     to === '/' ? location.pathname === '/' : location.pathname.startsWith(to)
@@ -119,14 +136,12 @@ function BottomNav() {
           return (
             <Link key={to} to={to}
               className={clsx(
-                'flex flex-col items-center gap-0.5 py-2 px-3 rounded-xl transition-all min-w-[52px] min-h-[48px] justify-center',
-                active ? '' : 'text-obs-500'
+                'flex flex-col items-center gap-0.5 py-2 px-3 rounded-xl transition-all min-w-[52px] min-h-[48px] justify-center'
               )}
               onClick={() => window.Telegram?.WebApp.HapticFeedback?.impactOccurred('light')}
-              style={active ? { color: '#2dd4bf' } : {}}>
+              style={{ color: active ? '#2dd4bf' : '#64748b' }}>
               <Icon size={22} weight={active ? 'fill' : 'regular'} />
-              <span className={clsx('text-[10px] font-semibold', active ? '' : 'text-obs-500')}
-                style={active ? { color: '#2dd4bf' } : {}}>
+              <span className="text-[10px] font-semibold" style={{ color: active ? '#2dd4bf' : '#64748b' }}>
                 {label}
               </span>
             </Link>
@@ -140,8 +155,7 @@ function BottomNav() {
 // ── Loading Screen ───────────────────────────────────────────────────────────
 function LoadingScreen() {
   return (
-    <div className="fixed inset-0 flex items-center justify-center"
-      style={{ background: '#060809' }}>
+    <div className="fixed inset-0 flex items-center justify-center" style={{ background: '#060809' }}>
       <div className="flex flex-col items-center gap-4">
         <div className="w-16 h-16 rounded-2xl flex items-center justify-center"
           style={{ background: 'linear-gradient(135deg,#0d9488,#0f766e)', boxShadow: '0 12px 32px rgba(13,148,136,0.4)' }}>
@@ -157,6 +171,7 @@ function LoadingScreen() {
 // ── App Inner ────────────────────────────────────────────────────────────────
 function AppInner() {
   const { setAuth, isAuthenticated } = useAuthStore()
+  const navigate = useNavigate()
   const [loading, setLoading]               = useState(true)
   const [showWelcome, setShowWelcome]       = useState(false)
   const [showOnboarding, setShowOnboarding] = useState(false)
@@ -178,7 +193,7 @@ function AppInner() {
           .then(res => {
             setAuth(res.data.access_token, res.data.user)
             if (res.data.is_new_user) {
-              setShowWelcome(true)   // avval WelcomePage ko'rsatamiz
+              setShowWelcome(true)
             }
           })
           .catch(err => console.warn('Auth failed:', err))
@@ -187,14 +202,14 @@ function AppInner() {
         setLoading(false)
       }
     } else {
-      // Dev mode — Telegram bo'lmasa ham ishlaydi
+      // Dev mode
       setLoading(false)
     }
   }, [])
 
   if (loading) return <LoadingScreen />
 
-  // Yangi foydalanuvchi — Welcome screen
+  // 1. Yangi foydalanuvchi — Welcome screen
   if (showWelcome) {
     return (
       <WelcomePage onEnter={() => {
@@ -204,15 +219,21 @@ function AppInner() {
     )
   }
 
-  // Onboarding
+  // 2. Onboarding — tugagach /explore ga yo'naltir
   if (showOnboarding && isAuthenticated) {
-    return <OnboardingPage onDone={() => setShowOnboarding(false)} />
+    return (
+      <OnboardingPage onDone={() => {
+        setShowOnboarding(false)
+        navigate('/explore')
+      }} />
+    )
   }
 
   return (
+    // pb-20 — BottomNav balandligi
     <div className="w-full min-h-screen pb-20" style={{ background: '#060809' }}>
       <Routes>
-        {/* Public — login kerak emas */}
+        {/* Public */}
         <Route path="/"                        element={<MiniHomePage />} />
         <Route path="/explore"                 element={<MiniExplorePage />} />
         <Route path="/listing/:id"             element={<ListingDetailPage />} />
@@ -227,6 +248,8 @@ function AppInner() {
         <Route path="/notifications"           element={<AuthGuard><NotificationsPage /></AuthGuard>} />
         <Route path="/deals"                   element={<AuthGuard><DealsPage /></AuthGuard>} />
         <Route path="/favorites"               element={<AuthGuard><FavoritesPage /></AuthGuard>} />
+        <Route path="/analytics"               element={<AuthGuard><AnalyticsPage /></AuthGuard>} />
+        <Route path="/verification"            element={<AuthGuard><VerificationPage /></AuthGuard>} />
         <Route path="/proposal/listing/:id"    element={<AuthGuard><ProposalPage type="listing" /></AuthGuard>} />
         <Route path="/proposal/campaign/:id"   element={<AuthGuard><ProposalPage type="campaign" /></AuthGuard>} />
       </Routes>

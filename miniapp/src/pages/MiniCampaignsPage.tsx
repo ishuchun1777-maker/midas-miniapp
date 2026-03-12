@@ -125,7 +125,7 @@ function CreateCampaignModal({ onClose }: { onClose: () => void }) {
         <div className="flex justify-center pt-3 pb-1">
           <div className="w-10 h-1 bg-obs-600 rounded-full" />
         </div>
-        <div className="px-4 pb-8">
+        <div className="px-4 pb-28">
           <div className="flex items-center justify-between mb-5">
             <h2 className="text-white font-bold text-lg">Yangi kampaniya</h2>
             <button onClick={onClose} className="w-9 h-9 rounded-xl bg-obs-800 flex items-center justify-center">
