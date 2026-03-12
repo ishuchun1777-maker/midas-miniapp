@@ -1,6 +1,6 @@
 import { useNavigate } from 'react-router-dom'
 import { useQuery } from '@tanstack/react-query'
-import { ArrowLeft, Plus, Eye, Heart, TrendingUp } from '@phosphor-icons/react'
+import { ArrowLeft, Plus, Eye, Heart, ChartLineUp } from '@phosphor-icons/react'
 import { listingsApi, Listing } from '../utils/api'
 import { formatPrice } from '../utils/format'
 
@@ -42,7 +42,7 @@ export default function MyListingsPage() {
         {!isLoading && listings.length === 0 && (
           <div className="flex flex-col items-center justify-center py-20 text-center">
             <div className="w-16 h-16 rounded-2xl bg-obs-800 flex items-center justify-center mb-4">
-              <TrendingUp size={32} color="#334155" weight="duotone" />
+              <ChartLineUp size={32} color="#334155" weight="duotone" />
             </div>
             <p className="text-obs-300 font-semibold mb-1">Hali e'lon yo'q</p>
             <p className="text-obs-400 text-sm mb-5">Birinchi e'loningizni yarating</p>
