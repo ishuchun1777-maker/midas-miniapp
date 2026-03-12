@@ -14,7 +14,8 @@ logger = logging.getLogger(__name__)
 
 
 async def run_bot():
-    token = os.getenv("TELEGRAM_BOT_TOKEN", "")
+    token = settings.TELEGRAM_BOT_TOKEN
+    logger.info(f"BOT TOKEN CHECK: {'SET' if token else 'EMPTY'}")
     if not token:
         logger.warning("TELEGRAM_BOT_TOKEN not set — bot ishga tushmadi")
         return
@@ -41,9 +42,11 @@ async def run_bot():
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
+    logger.info("Starting MIDAS API...")
     async with engine.begin() as conn:
         await conn.run_sync(Base.metadata.create_all)
-    logger.info("Database ready")
+    logger.info("Database tables created/verified")
+    logger.info("Launching bot task...")
     bot_task = asyncio.create_task(run_bot())
     yield
     bot_task.cancel()
