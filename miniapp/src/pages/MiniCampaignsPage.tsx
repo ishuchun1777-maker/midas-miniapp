@@ -97,20 +97,37 @@ function CreateCampaignModal({ onClose }: { onClose: () => void }) {
   })
 
   const mutation = useMutation({
-    mutationFn: () => campaignsApi.create({
-      ...form,
-      budget_min: form.budget_min ? Number(form.budget_min) : undefined,
-      budget_max: form.budget_max ? Number(form.budget_max) : undefined,
-      duration_days: form.duration_days ? Number(form.duration_days) : undefined,
-      currency: 'UZS',
-    }),
+    mutationFn: () => {
+      // Backend kutgan fieldlar aniq yuboriladi
+      const payload: Record<string, unknown> = {
+        title: form.title.trim(),
+        target_platforms: form.target_platforms,
+        needs_creative: form.needs_creative,
+        needs_management: form.needs_management,
+        currency: 'UZS',
+      }
+      if (form.description.trim()) payload.description = form.description.trim()
+      if (form.city.trim()) payload.city = form.city.trim()
+      if (form.budget_min) payload.budget_min = Number(form.budget_min)
+      if (form.budget_max) payload.budget_max = Number(form.budget_max)
+      if (form.duration_days) payload.duration_days = Number(form.duration_days)
+      return campaignsApi.create(payload)
+    },
     onSuccess: () => {
       qc.invalidateQueries({ queryKey: ['campaigns'] })
       qc.invalidateQueries({ queryKey: ['campaigns-home'] })
-      toast.success("Kampaniya yaratildi!")
+      toast.success("Kampaniya muvaffaqiyatli yaratildi!")
       onClose()
     },
-    onError: () => toast.error("Xatolik yuz berdi"),
+    onError: (e: unknown) => {
+      const err = e as { response?: { data?: { detail?: unknown } } }
+      const msg = err?.response?.data?.detail
+      if (Array.isArray(msg)) {
+        toast.error((msg as Record<string,unknown>[]).map(m => String(m.msg)).join(', '))
+      } else {
+        toast.error(String(msg || 'Server bilan ulanishda xatolik'))
+      }
+    },
   })
 
   const togglePlatform = (v: string) =>

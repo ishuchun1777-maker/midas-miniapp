@@ -97,21 +97,36 @@ export default function CreateListingPage() {
   const handleSubmit = async () => {
     setSaving(true)
     try {
-      await listingsApi.create({
-        ...form,
-        subscriber_count: form.subscriber_count ? Number(form.subscriber_count) : undefined,
-        avg_views: form.avg_views ? Number(form.avg_views) : undefined,
-        engagement_rate: form.engagement_rate ? Number(form.engagement_rate) : undefined,
-        price_from: form.price_from ? Number(form.price_from) : undefined,
-        price_to: form.price_to ? Number(form.price_to) : undefined,
-        tags: form.tags ? form.tags.split(',').map(t => t.trim()).filter(Boolean) : [],
-      })
+      // Backend kutgan fieldlar aniq yuboriladi
+      const payload: Record<string, unknown> = {
+        title: form.title.trim(),
+        category: form.category,
+        pricing_type: form.pricing_type,
+        currency: form.currency,
+        ad_formats: form.ad_formats,
+        tags: form.tags ? form.tags.split(',').map((t: string) => t.trim()).filter(Boolean) : [],
+      }
+      if (form.description.trim()) payload.description = form.description.trim()
+      if (form.city.trim()) payload.city = form.city.trim()
+      if (form.telegram_channel_url.trim()) payload.telegram_channel_url = form.telegram_channel_url.trim()
+      if (form.subscriber_count) payload.subscriber_count = Number(form.subscriber_count)
+      if (form.avg_views) payload.avg_views = Number(form.avg_views)
+      if (form.engagement_rate) payload.engagement_rate = Number(form.engagement_rate)
+      if (form.price_from) payload.price_from = Number(form.price_from)
+      if (form.price_to) payload.price_to = Number(form.price_to)
+
+      await listingsApi.create(payload)
       window.Telegram?.WebApp.HapticFeedback?.impactOccurred('medium')
-      toast.success("E'lon yaratildi!")
-      navigate('/profile')
+      toast.success("E'lon muvaffaqiyatli joylandi!")
+      navigate('/explore')
     } catch (e: unknown) {
       const err = e as { response?: { data?: { detail?: string } } }
-      toast.error(err?.response?.data?.detail || 'Xatolik yuz berdi')
+      const msg = err?.response?.data?.detail
+      if (Array.isArray(msg)) {
+        toast.error(msg.map((m: Record<string,unknown>) => m.msg).join(', '))
+      } else {
+        toast.error(String(msg || 'Server bilan ulanishda xatolik'))
+      }
     } finally {
       setSaving(false)
     }
