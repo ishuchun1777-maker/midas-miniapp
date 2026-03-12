@@ -95,6 +95,20 @@ function CreateCampaignModal({ onClose }: { onClose: () => void }) {
     target_platforms: [] as string[],
     needs_creative: false, needs_management: false,
   })
+  const [errors, setErrors] = useState<Record<string, string>>({})
+
+  const validate = () => {
+    const e: Record<string, string> = {}
+    if (!form.title.trim()) e.title = "Kampaniya nomi majburiy"
+    else if (form.title.trim().length < 3) e.title = "Nom kamida 3 ta harf bo'lsin"
+    return e
+  }
+
+  const handleSubmit = () => {
+    const e = validate()
+    setErrors(e)
+    if (Object.keys(e).length === 0) mutation.mutate()
+  }
 
   const mutation = useMutation({
     mutationFn: () => {
@@ -152,9 +166,20 @@ function CreateCampaignModal({ onClose }: { onClose: () => void }) {
 
           <div className="space-y-4">
             <div>
-              <label className="text-xs text-obs-300 font-medium mb-1.5 block">Kampaniya nomi *</label>
-              <input className="input" placeholder="Masalan: Restoran ochilish kampaniyasi"
-                value={form.title} onChange={e => setForm({ ...form, title: e.target.value })} />
+              <label className="text-xs font-medium mb-1.5 block"
+                style={{color: errors.title ? '#ef4444' : '#94a3b8'}}>
+                Kampaniya nomi <span style={{color:'#ef4444'}}>*</span>
+              </label>
+              <input
+                className="input"
+                style={errors.title ? {borderColor:'#ef4444'} : {}}
+                placeholder="Masalan: Restoran ochilish kampaniyasi"
+                value={form.title}
+                onChange={e => {
+                  setForm({ ...form, title: e.target.value })
+                  if (errors.title) setErrors(p => ({ ...p, title: '' }))
+                }} />
+              {errors.title && <p className="text-xs mt-1" style={{color:'#ef4444'}}>{errors.title}</p>}
             </div>
             <div>
               <label className="text-xs text-obs-300 font-medium mb-1.5 block">Maqsad / tavsif</label>
@@ -212,9 +237,9 @@ function CreateCampaignModal({ onClose }: { onClose: () => void }) {
                 <Target size={12} weight="bold" /> Boshqaruv kerak
               </button>
             </div>
-            <button onClick={() => mutation.mutate()} disabled={!form.title || mutation.isPending}
+            <button onClick={handleSubmit} disabled={mutation.isPending}
               className="w-full py-3.5 rounded-2xl font-bold text-sm text-white flex items-center justify-center transition-all"
-              style={form.title ? { background: 'linear-gradient(135deg,#0d9488,#0f766e)' } : { background: '#1a2530', color: '#475569' }}>
+              style={{ background: 'linear-gradient(135deg,#0d9488,#0f766e)' }}>
               {mutation.isPending
                 ? <div className="w-5 h-5 border-2 border-white border-t-transparent rounded-full animate-spin" />
                 : 'Kampaniya yaratish'}

@@ -84,6 +84,7 @@ export default function CreateListingPage() {
   const [step, setStep] = useState(0)
   const [form, setForm] = useState<Form>(INIT)
   const [saving, setSaving] = useState(false)
+  const [errors, setErrors] = useState<Record<string, string>>({})
 
   const STEPS = ["Kategoriya", "Asosiy", "Narx", "Qo'shimcha"]
 
@@ -95,6 +96,16 @@ export default function CreateListingPage() {
     setForm(p => ({ ...p, ad_formats: p.ad_formats.includes(f) ? p.ad_formats.filter(x => x !== f) : [...p.ad_formats, f] }))
 
   const handleSubmit = async () => {
+    // Step 1 va 2 ni qayta tekshirish
+    const e1 = validate(1)
+    const e2 = validate(2)
+    const allErrors = { ...e1, ...e2 }
+    if (Object.keys(allErrors).length > 0) {
+      setErrors(allErrors)
+      const msgs = Object.values(allErrors)
+      toast.error(msgs[0])
+      return
+    }
     setSaving(true)
     try {
       // Backend kutgan fieldlar aniq yuboriladi
@@ -132,10 +143,32 @@ export default function CreateListingPage() {
     }
   }
 
+  const validate = (s: number): Record<string, string> => {
+    const e: Record<string, string> = {}
+    if (s === 0) {
+      if (!form.category) e.category = "Kategoriyani tanlang"
+    }
+    if (s === 1) {
+      if (!form.title.trim()) e.title = "Sarlavha majburiy (kamida 3 harf)"
+      else if (form.title.trim().length < 3) e.title = "Sarlavha kamida 3 ta harf bo'lsin"
+      if (isSocial && !form.subscriber_count) e.subscriber_count = "Obunachi soni kiriting"
+    }
+    if (s === 2) {
+      if (form.pricing_type === 'fixed' && !form.price_from) e.price_from = "Narxni kiriting"
+    }
+    return e
+  }
+
   const canNext = () => {
     if (step === 0) return !!form.category
-    if (step === 1) return !!form.title.trim()
+    if (step === 1) return !!form.title.trim() && form.title.trim().length >= 3
     return true
+  }
+
+  const handleNext = () => {
+    const e = validate(step)
+    setErrors(e)
+    if (Object.keys(e).length === 0) setStep(s => s + 1)
   }
 
   return (
@@ -200,9 +233,19 @@ export default function CreateListingPage() {
             <motion.div key="step1" initial={{ opacity: 0, x: 20 }} animate={{ opacity: 1, x: 0 }} exit={{ opacity: 0, x: -20 }}
               className="space-y-4">
               <div>
-                <label className="text-xs text-obs-300 font-medium mb-1.5 block">Sarlavha *</label>
-                <input className="input" placeholder="Masalan: Toshkent Yangiliklari kanali"
-                  value={form.title} onChange={e => setForm(f => ({ ...f, title: e.target.value }))} />
+                <label className="text-xs text-obs-300 font-medium mb-1.5 block">
+                  Sarlavha <span style={{color:'#ef4444'}}>*</span>
+                </label>
+                <input
+                  className={`input ${errors.title ? 'border-red-500' : ''}`}
+                  style={errors.title ? {borderColor:'#ef4444'} : {}}
+                  placeholder="Masalan: Toshkent Yangiliklari kanali"
+                  value={form.title}
+                  onChange={e => {
+                    setForm(f => ({ ...f, title: e.target.value }))
+                    if (errors.title) setErrors(p => ({ ...p, title: '' }))
+                  }} />
+                {errors.title && <p className="text-xs mt-1" style={{color:'#ef4444'}}>{errors.title}</p>}
               </div>
               <div>
                 <label className="text-xs text-obs-300 font-medium mb-1.5 block">Tavsif</label>
@@ -231,9 +274,20 @@ export default function CreateListingPage() {
               {isSocial && (
                 <div className="grid grid-cols-3 gap-2">
                   <div>
-                    <label className="text-[10px] text-obs-400 font-medium mb-1 block">Obunachi</label>
-                    <input className="input py-2.5 text-sm" type="number" placeholder="120000"
-                      value={form.subscriber_count} onChange={e => setForm(f => ({ ...f, subscriber_count: e.target.value }))} />
+                    <label className="text-[10px] font-medium mb-1 block"
+                      style={{color: errors.subscriber_count ? '#ef4444' : '#94a3b8'}}>
+                      Obunachi {isSocial ? '*' : ''}
+                    </label>
+                    <input
+                      className="input py-2.5 text-sm"
+                      style={errors.subscriber_count ? {borderColor:'#ef4444'} : {}}
+                      type="number" placeholder="120000"
+                      value={form.subscriber_count}
+                      onChange={e => {
+                        setForm(f => ({ ...f, subscriber_count: e.target.value }))
+                        if (errors.subscriber_count) setErrors(p => ({ ...p, subscriber_count: '' }))
+                      }} />
+                    {errors.subscriber_count && <p className="text-[10px] mt-0.5" style={{color:'#ef4444'}}>{errors.subscriber_count}</p>}
                   </div>
                   <div>
                     <label className="text-[10px] text-obs-400 font-medium mb-1 block">Avg views</label>
@@ -270,12 +324,23 @@ export default function CreateListingPage() {
               {form.pricing_type === 'fixed' && (
                 <>
                   <div>
-                    <label className="text-xs text-obs-300 font-medium mb-1.5 block">Narx (dan) *</label>
+                    <label className="text-xs font-medium mb-1.5 block"
+                      style={{color: errors.price_from ? '#ef4444' : '#94a3b8'}}>
+                      Narx (dan) <span style={{color:'#ef4444'}}>*</span>
+                    </label>
                     <div className="relative">
                       <CurrencyDollar size={16} color="#64748b" className="absolute left-3 top-1/2 -translate-y-1/2" weight="bold" />
-                      <input className="input pl-9" type="number" placeholder="500000"
-                        value={form.price_from} onChange={e => setForm(f => ({ ...f, price_from: e.target.value }))} />
+                      <input
+                        className="input pl-9"
+                        style={errors.price_from ? {borderColor:'#ef4444'} : {}}
+                        type="number" placeholder="500000"
+                        value={form.price_from}
+                        onChange={e => {
+                          setForm(f => ({ ...f, price_from: e.target.value }))
+                          if (errors.price_from) setErrors(p => ({ ...p, price_from: '' }))
+                        }} />
                     </div>
+                    {errors.price_from && <p className="text-xs mt-1" style={{color:'#ef4444'}}>{errors.price_from}</p>}
                   </div>
                   <div>
                     <label className="text-xs text-obs-300 font-medium mb-1.5 block">Narx (gacha)</label>
@@ -365,10 +430,9 @@ export default function CreateListingPage() {
       {/* Footer nav */}
       <div className="fixed bottom-0 left-0 right-0 z-[55] px-4 pb-safe pt-3 border-t border-obs-700" style={{ background: '#060809' }}>
         {step < 3 ? (
-          <button onClick={() => canNext() && setStep(s => s + 1)}
-            disabled={!canNext()}
+          <button onClick={handleNext}
             className="w-full py-3.5 rounded-2xl font-bold text-sm flex items-center justify-center gap-2 transition-all"
-            style={canNext() ? { background: 'linear-gradient(135deg,#0d9488,#0f766e)', color: '#fff' } : { background: '#1a2530', color: '#475569' }}>
+            style={{ background: 'linear-gradient(135deg,#0d9488,#0f766e)', color: '#fff' }}>
             Keyingi <CaretRight size={16} weight="bold" />
           </button>
         ) : (

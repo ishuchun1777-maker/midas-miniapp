@@ -24,12 +24,12 @@ class TelegramAuthResponse(BaseModel):
 class UserPublic(BaseModel):
     id: int
     telegram_id: int
-    telegram_username: Optional[str]
+    telegram_username: Optional[str] = None
     first_name: str
-    last_name: Optional[str]
-    photo_url: Optional[str]
-    language_code: str
-    is_verified: bool
+    last_name: Optional[str] = None
+    photo_url: Optional[str] = None
+    language_code: str = "uz"
+    is_verified: bool = False
     created_at: datetime
 
     class Config:
@@ -121,29 +121,29 @@ class ListingUpdate(BaseModel):
 class ListingPublic(BaseModel):
     id: int
     title: str
-    description: Optional[str]
+    description: Optional[str] = None
     category: ListingCategory
-    status: ListingStatus
-    pricing_type: PricingType
-    price_from: Optional[float]
-    price_to: Optional[float]
-    currency: str
-    city: Optional[str]
-    telegram_channel_url: Optional[str]
-    subscriber_count: Optional[int]
-    avg_views: Optional[int]
-    engagement_rate: Optional[float]
-    ad_formats: List[str]
-    cover_image: Optional[str]
-    images: List[str]
-    view_count: int
-    save_count: int
-    lead_count: int
-    verified: bool
-    featured: bool
-    rating: float
-    review_count: int
-    tags: List[str]
+    status: ListingStatus = ListingStatus.ACTIVE
+    pricing_type: PricingType = PricingType.NEGOTIABLE
+    price_from: Optional[float] = None
+    price_to: Optional[float] = None
+    currency: str = "UZS"
+    city: Optional[str] = None
+    telegram_channel_url: Optional[str] = None
+    subscriber_count: Optional[int] = None
+    avg_views: Optional[int] = None
+    engagement_rate: Optional[float] = None
+    ad_formats: List[str] = []
+    cover_image: Optional[str] = None
+    images: List[str] = []
+    view_count: int = 0
+    save_count: int = 0
+    lead_count: int = 0
+    verified: bool = False
+    featured: bool = False
+    rating: float = 0.0
+    review_count: int = 0
+    tags: List[str] = []
     created_at: datetime
     owner: UserPublic
 
@@ -155,21 +155,21 @@ class ListingListItem(BaseModel):
     id: int
     title: str
     category: ListingCategory
-    pricing_type: PricingType
-    price_from: Optional[float]
-    price_to: Optional[float]
-    currency: str
-    city: Optional[str]
-    subscriber_count: Optional[int]
-    avg_views: Optional[int]
-    cover_image: Optional[str]
-    verified: bool
-    featured: bool
-    rating: float
-    review_count: int
-    view_count: int
-    owner_name: Optional[str]
-    owner_photo: Optional[str]
+    pricing_type: PricingType = PricingType.NEGOTIABLE
+    price_from: Optional[float] = None
+    price_to: Optional[float] = None
+    currency: str = "UZS"
+    city: Optional[str] = None
+    subscriber_count: Optional[int] = None
+    avg_views: Optional[int] = None
+    cover_image: Optional[str] = None
+    verified: bool = False
+    featured: bool = False
+    rating: float = 0.0
+    review_count: int = 0
+    view_count: int = 0
+    owner_name: Optional[str] = None
+    owner_photo: Optional[str] = None
 
     class Config:
         from_attributes = True
@@ -206,22 +206,22 @@ class CampaignUpdate(BaseModel):
 class CampaignPublic(BaseModel):
     id: int
     title: str
-    description: Optional[str]
-    business_type: Optional[str]
-    goal: Optional[str]
-    target_audience: Optional[str]
-    city: Optional[str]
-    budget_min: Optional[float]
-    budget_max: Optional[float]
-    currency: str
-    duration_days: Optional[int]
-    target_platforms: List[str]
-    needs_creative: bool
-    needs_management: bool
-    status: CampaignStatus
-    view_count: int
-    proposal_count: int
-    deadline: Optional[datetime]
+    description: Optional[str] = None
+    business_type: Optional[str] = None
+    goal: Optional[str] = None
+    target_audience: Optional[str] = None
+    city: Optional[str] = None
+    budget_min: Optional[float] = None
+    budget_max: Optional[float] = None
+    currency: str = "UZS"
+    duration_days: Optional[int] = None
+    target_platforms: List[str] = []
+    needs_creative: bool = False
+    needs_management: bool = False
+    status: CampaignStatus = CampaignStatus.OPEN
+    view_count: int = 0
+    proposal_count: int = 0
+    deadline: Optional[datetime] = None
     created_at: datetime
     buyer: UserPublic
 
