@@ -1,5 +1,5 @@
 import { useNavigate } from 'react-router-dom'
-import { ArrowLeft, ChartLineUp, Eye, Users, TrendingUp } from '@phosphor-icons/react'
+import { ArrowLeft, ChartLineUp, Eye, Users, ArrowUp } from '@phosphor-icons/react'
 import { useQuery } from '@tanstack/react-query'
 import { listingsApi, dealsApi } from '../utils/api'
 
@@ -24,7 +24,7 @@ export default function AnalyticsPage() {
   const stats = [
     { label: "Ko'rishlar", value: totalViews, icon: Eye, color: '#2dd4bf' },
     { label: 'Saqlangan', value: totalSaves, icon: Users, color: '#c8a84b' },
-    { label: 'Murojaat', value: totalLeads, icon: TrendingUp, color: '#0d9488' },
+    { label: 'Murojaat', value: totalLeads, icon: ArrowUp, color: '#0d9488' },
     { label: 'Bitim', value: completedDeals, icon: ChartLineUp, color: '#c8a84b' },
   ]
 
