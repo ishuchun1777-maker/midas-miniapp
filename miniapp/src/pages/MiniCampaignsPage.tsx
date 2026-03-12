@@ -265,7 +265,7 @@ export default function MiniCampaignsPage() {
 
   const { data: allCampaigns, isLoading } = useQuery({
     queryKey: ['campaigns', 'all'],
-    queryFn: () => campaignsApi.list({ status: 'open', per_page: 20 }).then(r => r.data),
+    queryFn: () => campaignsApi.list({ per_page: 20 }).then(r => r.data),
   })
 
   const { data: myCampaigns } = useQuery({

@@ -11,7 +11,7 @@ async def create_campaign(
     buyer_id: int,
     data: CampaignCreate,
 ) -> Campaign:
-    campaign = Campaign(buyer_id=buyer_id, **data.model_dump())
+    campaign = Campaign(buyer_id=buyer_id, **data.model_dump(exclude_none=True))
     db.add(campaign)
     await db.flush()
     # buyer relationshipni yuklash — serializer uchun zarur
@@ -55,7 +55,7 @@ async def get_campaigns(
 ) -> Tuple[List[Campaign], int]:
     query = (
         select(Campaign)
-        .where(Campaign.status == CampaignStatus.OPEN)
+        
         .options(selectinload(Campaign.buyer))
     )
 

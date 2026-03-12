@@ -11,7 +11,7 @@ async def create_listing(
     owner_id: int,
     data: ListingCreate,
 ) -> Listing:
-    listing = Listing(owner_id=owner_id, **data.model_dump())
+    listing = Listing(owner_id=owner_id, **data.model_dump(exclude_none=True))
     db.add(listing)
     await db.flush()
     # owner relationshipni yuklash — serializer uchun zarur
@@ -52,7 +52,7 @@ async def get_listings(
 ) -> Tuple[List[Listing], int]:
     query = (
         select(Listing)
-        .where(Listing.status == ListingStatus.ACTIVE)
+        .where((Listing.status == ListingStatus.ACTIVE) | (Listing.status == None))
         .options(selectinload(Listing.owner))
     )
 
@@ -162,7 +162,7 @@ async def get_featured_listings(db: AsyncSession, limit: int = 6) -> List[Listin
     result = await db.execute(
         select(Listing)
         .where(
-            Listing.status == ListingStatus.ACTIVE,
+            ((Listing.status == ListingStatus.ACTIVE) | (Listing.status == None)),
             Listing.featured == True,
         )
         .options(selectinload(Listing.owner))
