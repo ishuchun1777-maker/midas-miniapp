@@ -2,7 +2,7 @@ import { useEffect, useState, useRef } from 'react'
 import { HashRouter, Routes, Route, Link, useLocation, useNavigate } from 'react-router-dom'
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query'
 import { Toaster, toast } from 'react-hot-toast'
-import { House, Compass, Megaphone, ChatCircle, User, Lightning } from '@phosphor-icons/react'
+import { House, Compass, Megaphone, ChatCircle, User, Lightning, TelegramLogo } from '@phosphor-icons/react'
 import clsx from 'clsx'
 import { useAuthStore } from './store/authStore'
 import { authApi } from './utils/api'
@@ -50,41 +50,53 @@ declare global {
 
 // ── Auth Guard ──────────────────────────────────────────────────────────────
 export function AuthGuard({ children }: { children: React.ReactNode }) {
-  const { isAuthenticated } = useAuthStore()
+  const { isAuthenticated, setAuth } = useAuthStore()
   const navigate = useNavigate()
+  const [loggingIn, setLoggingIn] = useState(false)
+
+  const handleLogin = async () => {
+    const tg = window.Telegram?.WebApp
+    if (!tg?.initData) {
+      toast.error("Telegram Mini App ichida oching")
+      return
+    }
+    setLoggingIn(true)
+    try {
+      const res = await authApi.telegramLogin(tg.initData)
+      setAuth(res.data.access_token, res.data.user)
+      toast.success("Muvaffaqiyatli kirildi!")
+    } catch (e: unknown) {
+      const err = e as { response?: { data?: { detail?: string }; status?: number } }
+      const detail = err?.response?.data?.detail || "Xatolik yuz berdi"
+      const status = err?.response?.status
+      toast.error(`${detail} (${status ?? "ulanmadi"})`)
+    } finally {
+      setLoggingIn(false)
+    }
+  }
 
   if (!isAuthenticated) {
     return (
       <div className="flex flex-col items-center justify-center min-h-[70vh] px-6 text-center">
         <div className="w-16 h-16 rounded-2xl flex items-center justify-center mb-4"
-          style={{ background: 'rgba(13,148,136,0.1)', border: '1px solid rgba(13,148,136,0.2)' }}>
+          style={{ background: "rgba(13,148,136,0.1)", border: "1px solid rgba(13,148,136,0.2)" }}>
           <Lightning size={28} color="#0d9488" weight="fill" />
         </div>
-        <h2 className="text-white font-bold text-lg mb-2">Kirish talab etiladi</h2>
+        <h2 className="text-white font-bold text-lg mb-2">Ro'yxatdan o'tish</h2>
         <p className="text-obs-300 text-sm mb-6 leading-relaxed">
-          Bu bo'limdan foydalanish uchun avval ro'yxatdan o'ting
+          Bu bo'limdan foydalanish uchun Telegram akkauntingiz bilan kiring
         </p>
         <button
-          onClick={() => {
-            const tg = window.Telegram?.WebApp
-            if (tg?.initData) {
-              const t = toast.loading('Kirilmoqda...')
-              authApi.telegramLogin(tg.initData)
-                .then(res => {
-                  useAuthStore.getState().setAuth(res.data.access_token, res.data.user)
-                  toast.dismiss(t)
-                  toast.success('Muvaffaqiyatli kirildi!')
-                })
-                .catch(() => { toast.dismiss(t); toast.error('Xatolik yuz berdi') })
-            } else {
-              toast.error('Telegram orqali oching')
-            }
-          }}
-          className="w-full max-w-xs py-3.5 rounded-2xl font-bold text-sm text-white flex items-center justify-center gap-2 mb-3"
-          style={{ background: 'linear-gradient(135deg,#0d9488,#0f766e)' }}>
-          Telegram orqali kirish
+          onClick={handleLogin}
+          disabled={loggingIn}
+          className="w-full max-w-xs py-3.5 rounded-2xl font-bold text-sm text-white flex items-center justify-center gap-2 mb-3 active:scale-95 transition-transform disabled:opacity-60"
+          style={{ background: "linear-gradient(135deg,#0d9488,#0f766e)" }}>
+          {loggingIn
+            ? <><div className="w-4 h-4 border-2 border-white border-t-transparent rounded-full animate-spin" /> Kirilmoqda...</>
+            : <><TelegramLogo size={18} weight="fill" /> Telegram orqali kirish</>
+          }
         </button>
-        <button onClick={() => navigate('/')} className="text-obs-400 text-sm py-2">
+        <button onClick={() => navigate("/")} className="text-obs-400 text-sm py-2">
           Bosh sahifaga qaytish
         </button>
       </div>
