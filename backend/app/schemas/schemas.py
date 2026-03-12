@@ -38,33 +38,33 @@ class UserPublic(BaseModel):
 
 class UserProfileCreate(BaseModel):
     role: UserRole
-    display_name: Optional[str]
-    bio: Optional[str]
-    phone: Optional[str]
-    city: Optional[str]
-    website: Optional[str]
+    display_name: Optional[str] = None
+    bio: Optional[str] = None
+    phone: Optional[str] = None
+    city: Optional[str] = None
+    website: Optional[str] = None
     specializations: List[str] = []
     social_links: Dict[str, str] = {}
 
 
 class UserProfileUpdate(BaseModel):
-    display_name: Optional[str]
-    bio: Optional[str]
-    phone: Optional[str]
-    city: Optional[str]
-    website: Optional[str]
-    specializations: Optional[List[str]]
-    social_links: Optional[Dict[str, str]]
+    display_name: Optional[str] = None
+    bio: Optional[str] = None
+    phone: Optional[str] = None
+    city: Optional[str] = None
+    website: Optional[str] = None
+    specializations: Optional[List[str]] = None
+    social_links: Optional[Dict[str, str]] = None
 
 
 class UserProfilePublic(BaseModel):
     id: int
     role: UserRole
-    display_name: Optional[str]
-    bio: Optional[str]
-    avatar_url: Optional[str]
-    city: Optional[str]
-    website: Optional[str]
+    display_name: Optional[str] = None
+    bio: Optional[str] = None
+    avatar_url: Optional[str] = None
+    city: Optional[str] = None
+    website: Optional[str] = None
     specializations: List[str]
     social_links: Dict[str, str]
     rating: float
@@ -84,38 +84,38 @@ class UserProfilePublic(BaseModel):
 
 class ListingCreate(BaseModel):
     title: str = Field(..., min_length=3, max_length=256)
-    description: Optional[str]
+    description: Optional[str] = None
     category: ListingCategory
     pricing_type: PricingType = PricingType.NEGOTIABLE
-    price_from: Optional[float]
-    price_to: Optional[float]
+    price_from: Optional[float] = None
+    price_to: Optional[float] = None
     currency: str = "UZS"
-    city: Optional[str]
-    region: Optional[str]
-    telegram_channel_url: Optional[str]
-    subscriber_count: Optional[int]
-    avg_views: Optional[int]
-    engagement_rate: Optional[float]
-    dimensions: Optional[str]
-    daily_traffic: Optional[int]
+    city: Optional[str] = None
+    region: Optional[str] = None
+    telegram_channel_url: Optional[str] = None
+    subscriber_count: Optional[int] = None
+    avg_views: Optional[int] = None
+    engagement_rate: Optional[float] = None
+    dimensions: Optional[str] = None
+    daily_traffic: Optional[int] = None
     ad_formats: List[str] = []
     tags: List[str] = []
     extra_data: Dict[str, Any] = {}
 
 
 class ListingUpdate(BaseModel):
-    title: Optional[str]
-    description: Optional[str]
-    pricing_type: Optional[PricingType]
-    price_from: Optional[float]
-    price_to: Optional[float]
-    city: Optional[str]
-    subscriber_count: Optional[int]
-    avg_views: Optional[int]
-    engagement_rate: Optional[float]
-    ad_formats: Optional[List[str]]
-    tags: Optional[List[str]]
-    status: Optional[ListingStatus]
+    title: Optional[str] = None
+    description: Optional[str] = None
+    pricing_type: Optional[PricingType] = None
+    price_from: Optional[float] = None
+    price_to: Optional[float] = None
+    city: Optional[str] = None
+    subscriber_count: Optional[int] = None
+    avg_views: Optional[int] = None
+    engagement_rate: Optional[float] = None
+    ad_formats: Optional[List[str]] = None
+    tags: Optional[List[str]] = None
+    status: Optional[ListingStatus] = None
 
 
 class ListingPublic(BaseModel):
@@ -179,28 +179,28 @@ class ListingListItem(BaseModel):
 
 class CampaignCreate(BaseModel):
     title: str = Field(..., min_length=3, max_length=256)
-    description: Optional[str]
-    business_type: Optional[str]
-    goal: Optional[str]
-    target_audience: Optional[str]
-    city: Optional[str]
-    budget_min: Optional[float]
-    budget_max: Optional[float]
+    description: Optional[str] = None
+    business_type: Optional[str] = None
+    goal: Optional[str] = None
+    target_audience: Optional[str] = None
+    city: Optional[str] = None
+    budget_min: Optional[float] = None
+    budget_max: Optional[float] = None
     currency: str = "UZS"
-    duration_days: Optional[int]
+    duration_days: Optional[int] = None
     target_platforms: List[str] = []
-    expected_result: Optional[str]
+    expected_result: Optional[str] = None
     needs_creative: bool = False
     needs_management: bool = False
-    deadline: Optional[datetime]
+    deadline: Optional[datetime] = None
 
 
 class CampaignUpdate(BaseModel):
-    title: Optional[str]
-    description: Optional[str]
-    status: Optional[CampaignStatus]
-    budget_min: Optional[float]
-    budget_max: Optional[float]
+    title: Optional[str] = None
+    description: Optional[str] = None
+    status: Optional[CampaignStatus] = None
+    budget_min: Optional[float] = None
+    budget_max: Optional[float] = None
 
 
 class CampaignPublic(BaseModel):
@@ -231,19 +231,19 @@ class CampaignPublic(BaseModel):
 
 class ProposalCreate(BaseModel):
     message: str = Field(..., min_length=10)
-    price: Optional[float]
+    price: Optional[float] = None
     currency: str = "UZS"
-    delivery_days: Optional[int]
-    listing_id: Optional[int]
+    delivery_days: Optional[int] = None
+    listing_id: Optional[int] = None
 
 
 class ProposalPublic(BaseModel):
     id: int
     campaign_id: int
     message: str
-    price: Optional[float]
+    price: Optional[float] = None
     currency: str
-    delivery_days: Optional[int]
+    delivery_days: Optional[int] = None
     status: str
     created_at: datetime
     provider: UserPublic
@@ -255,7 +255,7 @@ class ProposalPublic(BaseModel):
 # ─── MESSAGES ────────────────────────────────────────────────────────────────
 
 class MessageCreate(BaseModel):
-    content: Optional[str]
+    content: Optional[str] = None
     message_type: str = "text"
     meta_data: Dict[str, Any] = {}
 
@@ -264,10 +264,10 @@ class MessagePublic(BaseModel):
     id: int
     conversation_id: int
     sender_id: int
-    content: Optional[str]
+    content: Optional[str] = None
     message_type: str
-    file_url: Optional[str]
-    file_name: Optional[str]
+    file_url: Optional[str] = None
+    file_name: Optional[str] = None
     meta_data: Dict[str, Any]
     is_read: bool
     created_at: datetime
@@ -280,12 +280,12 @@ class ConversationPublic(BaseModel):
     id: int
     participant_1_id: int
     participant_2_id: int
-    listing_id: Optional[int]
-    campaign_id: Optional[int]
+    listing_id: Optional[int] = None
+    campaign_id: Optional[int] = None
     last_message_at: datetime
     created_at: datetime
-    other_user: Optional[UserPublic]
-    last_message: Optional[MessagePublic]
+    other_user: Optional[UserPublic] = None
+    last_message: Optional[MessagePublic] = None
     unread_count: int = 0
 
     class Config:
@@ -296,32 +296,32 @@ class ConversationPublic(BaseModel):
 
 class DealCreate(BaseModel):
     provider_id: int
-    listing_id: Optional[int]
-    campaign_id: Optional[int]
+    listing_id: Optional[int] = None
+    campaign_id: Optional[int] = None
     title: str
-    description: Optional[str]
+    description: Optional[str] = None
     price: float
     currency: str = "UZS"
-    deadline: Optional[datetime]
-    notes: Optional[str]
+    deadline: Optional[datetime] = None
+    notes: Optional[str] = None
 
 
 class DealUpdate(BaseModel):
-    status: Optional[DealStatus]
-    notes: Optional[str]
-    price: Optional[float]
+    status: Optional[DealStatus] = None
+    notes: Optional[str] = None
+    price: Optional[float] = None
 
 
 class DealPublic(BaseModel):
     id: int
     title: str
-    description: Optional[str]
+    description: Optional[str] = None
     price: float
     currency: str
     status: DealStatus
-    started_at: Optional[datetime]
-    completed_at: Optional[datetime]
-    deadline: Optional[datetime]
+    started_at: Optional[datetime] = None
+    completed_at: Optional[datetime] = None
+    deadline: Optional[datetime] = None
     created_at: datetime
     buyer: UserPublic
     provider: UserPublic
@@ -334,16 +334,16 @@ class DealPublic(BaseModel):
 
 class ReviewCreate(BaseModel):
     reviewee_id: int
-    listing_id: Optional[int]
-    deal_id: Optional[int]
+    listing_id: Optional[int] = None
+    deal_id: Optional[int] = None
     rating: int = Field(..., ge=1, le=5)
-    comment: Optional[str]
+    comment: Optional[str] = None
 
 
 class ReviewPublic(BaseModel):
     id: int
     rating: int
-    comment: Optional[str]
+    comment: Optional[str] = None
     created_at: datetime
     reviewer: UserPublic
 
@@ -357,7 +357,7 @@ class NotificationPublic(BaseModel):
     id: int
     type: NotificationType
     title: str
-    body: Optional[str]
+    body: Optional[str] = None
     data: Dict[str, Any]
     is_read: bool
     created_at: datetime
@@ -371,7 +371,7 @@ class NotificationPublic(BaseModel):
 class PaymentInitiate(BaseModel):
     deal_id: int
     provider: str = Field(..., pattern="^(click|payme)$")
-    return_url: Optional[str]
+    return_url: Optional[str] = None
 
 
 class PaymentPublic(BaseModel):
@@ -390,7 +390,7 @@ class PaymentPublic(BaseModel):
 
 class PackageCreate(BaseModel):
     title: str
-    description: Optional[str]
+    description: Optional[str] = None
     listing_ids: List[int]
     total_price: float
     currency: str = "UZS"
@@ -400,7 +400,7 @@ class PackageCreate(BaseModel):
 class PackagePublic(BaseModel):
     id: int
     title: str
-    description: Optional[str]
+    description: Optional[str] = None
     listing_ids: List[int]
     total_price: float
     currency: str
