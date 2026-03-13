@@ -11,6 +11,7 @@ const CampaignsPage = lazy(() => import('./pages/CampaignsPage'))
 const ChatPage = lazy(() => import('./pages/ChatPage'))
 const DealsPage = lazy(() => import('./pages/DealsPage'))
 const LoginPage = lazy(() => import('./pages/LoginPage'))
+const AdminPage = lazy(() => import('./pages/AdminPage'))
 
 const queryClient = new QueryClient({
   defaultOptions: {
@@ -44,6 +45,7 @@ export default function App() {
               <Route path="/campaigns" element={<CampaignsPage />} />
               <Route path="/messages" element={<ChatPage />} />
               <Route path="/deals" element={<DealsPage />} />
+              <Route path="/admin" element={<AdminPage />} />
             </Route>
           </Routes>
         </Suspense>

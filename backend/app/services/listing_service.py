@@ -23,14 +23,14 @@ async def create_listing(
     return result.scalar_one()
 
 
-async def get_listing(db: AsyncSession, listing_id: int) -> Optional[Listing]:
+async def get_listing(db: AsyncSession, listing_id: int, viewer_id: Optional[int] = None) -> Optional[Listing]:
     result = await db.execute(
         select(Listing)
         .where(Listing.id == listing_id)
         .options(selectinload(Listing.owner))
     )
     listing = result.scalar_one_or_none()
-    if listing:
+    if listing and (viewer_id is None or listing.owner_id != viewer_id):
         await db.execute(
             update(Listing)
             .where(Listing.id == listing_id)
@@ -75,9 +75,9 @@ async def get_listings(
             )
         )
     if min_price is not None:
-        query = query.where(Listing.price_from >= min_price)
+        query = query.where(Listing.price_to >= min_price)
     if max_price is not None:
-        query = query.where(Listing.price_to <= max_price)
+        query = query.where(Listing.price_from <= max_price)
     if verified_only:
         query = query.where(Listing.verified == True)
 
@@ -117,7 +117,13 @@ async def update_listing(
         setattr(listing, k, v)
 
     await db.flush()
-    return listing
+    # Reload with owner relationship for serialization
+    result = await db.execute(
+        select(Listing)
+        .where(Listing.id == listing_id)
+        .options(selectinload(Listing.owner))
+    )
+    return result.scalar_one()
 
 
 async def toggle_favorite(

@@ -167,8 +167,18 @@ async def handle_payme_request(
         amount = params.get("amount", 0)
         order_id = params.get("account", {}).get("order_id")
 
+        # Resolve user_id from deal
+        user_id = 0
+        if order_id:
+            deal_result = await db.execute(
+                select(Deal).where(Deal.id == int(order_id))
+            )
+            deal = deal_result.scalar_one_or_none()
+            if deal:
+                user_id = deal.buyer_id
+
         payment = Payment(
-            user_id=0,  # Will be resolved from order
+            user_id=user_id,
             amount=amount / 100,
             currency="UZS",
             provider="payme",
@@ -202,11 +212,30 @@ async def handle_payme_request(
                 "error": {"code": -31003, "message": "Transaction not found"},
             }
 
+        # Agar allaqachon bajarilgan bo'lsa (state 2)
+        if payment.status == PaymentStatus.PAID:
+             return {
+                "id": request_id,
+                "result": {
+                    "transaction": str(payment.id),
+                    "perform_time": int(payment.updated_at.timestamp() * 1000) if payment.updated_at else 0,
+                    "state": 2,
+                },
+            }
+
         await db.execute(
             update(Payment)
             .where(Payment.id == payment.id)
             .values(status=PaymentStatus.PAID)
         )
+        
+        # Deal holatini yangilash
+        if payment.deal_id:
+            await db.execute(
+                update(Deal)
+                .where(Deal.id == payment.deal_id)
+                .values(status=DealStatus.IN_PROGRESS)
+            )
 
         from datetime import datetime
         return {

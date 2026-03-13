@@ -5,7 +5,7 @@ import time
 import logging
 from typing import Optional, Dict, Any
 from urllib.parse import unquote
-from datetime import datetime, timedelta
+from datetime import datetime, timedelta, timezone
 
 import jwt
 from fastapi import Depends, HTTPException, status
@@ -20,7 +20,7 @@ security = HTTPBearer(auto_error=False)
 
 
 def verify_telegram_init_data(init_data: str) -> Optional[Dict[str, Any]]:
-    """Verify Telegram Mini App initData — hash xato bo'lsa ham user qaytaradi"""
+    """Verify Telegram Mini App initData — returns None on invalid data"""
     try:
         if not init_data or not init_data.strip():
             logger.warning("Empty initData")
@@ -60,28 +60,33 @@ def verify_telegram_init_data(init_data: str) -> Optional[Dict[str, Any]]:
             logger.warning("No user.id in initData")
             return None
 
-        # Hash tekshirish (TELEGRAM_BOT_TOKEN bo'lsa)
-        if settings.TELEGRAM_BOT_TOKEN and hash_value:
-            data_check_string = "\n".join(
-                f"{k}={v}" for k, v in sorted(raw_parsed.items())
-            )
-            secret_key = hmac_lib.new(
-                b"WebAppData",
-                settings.TELEGRAM_BOT_TOKEN.encode(),
-                hashlib.sha256,
-            ).digest()
-            computed = hmac_lib.new(
-                secret_key,
-                data_check_string.encode(),
-                hashlib.sha256,
-            ).hexdigest()
+        # Hash tekshirish
+        if not settings.TELEGRAM_BOT_TOKEN:
+            logger.error("TELEGRAM_BOT_TOKEN not set — cannot verify initData")
+            return None
+            
+        if not hash_value:
+            logger.warning("No hash in initData")
+            return None
 
-            if not hmac_lib.compare_digest(computed, hash_value):
-                logger.warning("Hash mismatch — still returning user (check BOT_TOKEN)")
-                # Hash xato bo'lsa ham user ma'lumotlari bor bo'lsa davom etamiz
-                # Bu xavfsizroq emas, lekin app ishlashi uchun
-        else:
-            logger.warning("No BOT_TOKEN or hash — skipping verification")
+        # Hash tekshirish
+        data_check_string = "\n".join(
+            f"{k}={v}" for k, v in sorted(raw_parsed.items())
+        )
+        secret_key = hmac_lib.new(
+            b"WebAppData",
+            settings.TELEGRAM_BOT_TOKEN.encode(),
+            hashlib.sha256,
+        ).digest()
+        computed = hmac_lib.new(
+            secret_key,
+            data_check_string.encode(),
+            hashlib.sha256,
+        ).hexdigest()
+
+        if not hmac_lib.compare_digest(computed, hash_value):
+            logger.warning("Hash mismatch — rejecting initData")
+            return None
 
         return user_data
 
@@ -91,12 +96,12 @@ def verify_telegram_init_data(init_data: str) -> Optional[Dict[str, Any]]:
 
 
 def create_access_token(user_id: int, telegram_id: int) -> str:
-    expire = datetime.utcnow() + timedelta(minutes=settings.JWT_EXPIRE_MINUTES)
+    expire = datetime.now(timezone.utc) + timedelta(minutes=settings.JWT_EXPIRE_MINUTES)
     payload = {
         "sub": str(user_id),
         "telegram_id": telegram_id,
         "exp": expire,
-        "iat": datetime.utcnow(),
+        "iat": datetime.now(timezone.utc),
     }
     return jwt.encode(payload, settings.JWT_SECRET, algorithm=settings.JWT_ALGORITHM)
 

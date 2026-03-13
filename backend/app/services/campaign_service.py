@@ -26,7 +26,7 @@ async def create_campaign(
     return result.scalar_one()
 
 
-async def get_campaign(db: AsyncSession, campaign_id: int) -> Optional[Campaign]:
+async def get_campaign(db: AsyncSession, campaign_id: int, viewer_id: Optional[int] = None) -> Optional[Campaign]:
     result = await db.execute(
         select(Campaign)
         .where(Campaign.id == campaign_id)
@@ -36,7 +36,7 @@ async def get_campaign(db: AsyncSession, campaign_id: int) -> Optional[Campaign]
         )
     )
     campaign = result.scalar_one_or_none()
-    if campaign:
+    if campaign and (viewer_id is None or campaign.buyer_id != viewer_id):
         await db.execute(
             update(Campaign)
             .where(Campaign.id == campaign_id)

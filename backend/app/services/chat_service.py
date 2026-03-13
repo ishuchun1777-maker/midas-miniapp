@@ -72,7 +72,8 @@ async def send_message(
 async def get_conversations(
     db: AsyncSession,
     user_id: int,
-) -> List[Conversation]:
+) -> List[dict]:
+    """Get conversations with last message and unread count efficiently."""
     result = await db.execute(
         select(Conversation)
         .where(
@@ -84,11 +85,47 @@ async def get_conversations(
         .options(
             selectinload(Conversation.participant_1),
             selectinload(Conversation.participant_2),
-            selectinload(Conversation.messages),
         )
         .order_by(Conversation.last_message_at.desc())
     )
-    return result.scalars().all()
+    conversations = result.scalars().all()
+
+    enriched = []
+    for conv in conversations:
+        # Get last message only
+        last_msg_result = await db.execute(
+            select(Message)
+            .where(Message.conversation_id == conv.id)
+            .order_by(Message.created_at.desc())
+            .limit(1)
+        )
+        last_msg = last_msg_result.scalar_one_or_none()
+
+        # Get unread count
+        unread_result = await db.execute(
+            select(func.count(Message.id))
+            .where(
+                Message.conversation_id == conv.id,
+                Message.sender_id != user_id,
+                Message.is_read == False,
+            )
+        )
+        unread = unread_result.scalar() or 0
+
+        other = conv.participant_2 if conv.participant_1_id == user_id else conv.participant_1
+        enriched.append({
+            "id": conv.id,
+            "participant_1_id": conv.participant_1_id,
+            "participant_2_id": conv.participant_2_id,
+            "listing_id": conv.listing_id,
+            "campaign_id": conv.campaign_id,
+            "last_message_at": conv.last_message_at,
+            "created_at": conv.created_at,
+            "other_user": other,
+            "last_message": last_msg,
+            "unread_count": unread,
+        })
+    return enriched
 
 
 async def get_messages(

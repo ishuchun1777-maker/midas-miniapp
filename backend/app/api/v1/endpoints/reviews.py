@@ -5,7 +5,7 @@ from sqlalchemy.orm import selectinload
 from typing import List
 from app.db.database import get_db
 from app.core.security import get_current_user
-from app.models.models import User, Review
+from app.models.models import User, Review, UserProfile
 from app.schemas.schemas import ReviewCreate, ReviewPublic
 
 router = APIRouter()
@@ -22,8 +22,12 @@ async def create_review(
     await db.flush()
 
     from app.services.user_service import update_profile_rating
-    from app.models.models import UserRole
-    await update_profile_rating(db, data.reviewee_id, UserRole.AUDIENCE_OWNER)
+    # Update rating for ALL profiles of the reviewee
+    profiles_result = await db.execute(
+        select(UserProfile).where(UserProfile.user_id == data.reviewee_id)
+    )
+    for profile in profiles_result.scalars().all():
+        await update_profile_rating(db, data.reviewee_id, profile.role)
 
     await db.refresh(review)
     return review

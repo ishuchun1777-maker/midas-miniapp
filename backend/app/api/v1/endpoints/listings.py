@@ -12,26 +12,10 @@ from app.services.listing_service import (
     toggle_favorite, get_user_favorites, get_featured_listings
 )
 from app.core.config import settings
+from app.api.v1.endpoints import serialize_user
 
 
-def _owner_dict(owner):
-    if not owner:
-        return {"id": 0, "telegram_id": 0, "first_name": "Unknown",
-                "language_code": "uz", "is_verified": False, "created_at": None}
-    return {
-        "id": owner.id,
-        "telegram_id": owner.telegram_id,
-        "telegram_username": owner.telegram_username,
-        "first_name": owner.first_name,
-        "last_name": owner.last_name,
-        "photo_url": owner.photo_url,
-        "language_code": owner.language_code or "uz",
-        "is_verified": bool(owner.is_verified),
-        "created_at": owner.created_at.isoformat() if owner.created_at else None,
-    }
-
-
-def sl(l) -> dict:
+def serialize_listing(l) -> dict:
     return {
         "id": l.id,
         "title": l.title,
@@ -59,7 +43,7 @@ def sl(l) -> dict:
         "review_count": l.review_count or 0,
         "tags": l.tags or [],
         "created_at": l.created_at.isoformat() if l.created_at else None,
-        "owner": _owner_dict(l.owner),
+        "owner": serialize_user(l.owner),
     }
 
 
@@ -69,7 +53,7 @@ router = APIRouter()
 @router.get("/featured")
 async def featured_listings(db: AsyncSession = Depends(get_db)):
     items = await get_featured_listings(db)
-    return [sl(l) for l in items]
+    return [serialize_listing(l) for l in items]
 
 
 @router.get("/mine")
@@ -80,7 +64,7 @@ async def my_listings(
     """Faqat shu foydalanuvchining e'lonlari"""
     items, total = await get_listings(db, owner_id=current_user.id, per_page=100)
     return {
-        "items": [sl(l) for l in items],
+        "items": [serialize_listing(l) for l in items],
         "total": total,
         "page": 1,
         "per_page": 100,
@@ -105,7 +89,7 @@ async def list_listings(
         db, category, city, search, min_price, max_price, verified_only, page, per_page
     )
     return {
-        "items": [sl(l) for l in items],
+        "items": [serialize_listing(l) for l in items],
         "total": total,
         "page": page,
         "per_page": per_page,
@@ -120,7 +104,7 @@ async def create_new_listing(
     current_user: User = Depends(get_current_user),
 ):
     listing = await create_listing(db, current_user.id, data)
-    return sl(listing)
+    return serialize_listing(listing)
 
 
 @router.get("/me/favorites")
@@ -129,7 +113,7 @@ async def my_favorites(
     current_user: User = Depends(get_current_user),
 ):
     favs = await get_user_favorites(db, current_user.id)
-    return [sl(l) for l in favs]
+    return [serialize_listing(l) for l in favs]
 
 
 @router.get("/{listing_id}")
@@ -140,7 +124,7 @@ async def get_listing_detail(
     listing = await get_listing(db, listing_id)
     if not listing:
         raise HTTPException(status_code=404, detail="Listing not found")
-    return sl(listing)
+    return serialize_listing(listing)
 
 
 @router.patch("/{listing_id}")
@@ -153,7 +137,7 @@ async def update_listing_endpoint(
     listing = await update_listing(db, listing_id, current_user.id, data)
     if not listing:
         raise HTTPException(status_code=404, detail="Listing not found or not authorized")
-    return sl(listing)
+    return serialize_listing(listing)
 
 
 @router.post("/{listing_id}/favorite")
