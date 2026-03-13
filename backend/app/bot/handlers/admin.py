@@ -1,7 +1,7 @@
 from aiogram import Router, F, types
 from aiogram.filters import Command
 from sqlalchemy.ext.asyncio import AsyncSession
-from app.db.database import SessionLocal
+from app.db.database import AsyncSessionLocal
 from app.models.models import User, Listing, ListingStatus
 from sqlalchemy import select, func, update
 import logging
@@ -14,7 +14,7 @@ async def admin_stats(message: types.Message, user: User = None):
     if not user or not user.is_admin:
         return await message.answer("❌ Siz admin emassiz.")
     
-    async with SessionLocal() as db:
+    async with AsyncSessionLocal() as db:
         user_count = await db.execute(select(func.count(User.id)))
         listing_count = await db.execute(select(func.count(Listing.id)))
         
@@ -34,7 +34,7 @@ async def broadcast(message: types.Message, user: User = None):
     if not msg_text:
         return await message.answer("ℹ️ Foydalanish: `/broadcast xabar matni`", parse_mode="Markdown")
     
-    async with SessionLocal() as db:
+    async with AsyncSessionLocal() as db:
         result = await db.execute(select(User.telegram_id))
         ids = result.scalars().all()
     
@@ -58,7 +58,7 @@ async def approve_listing(message: types.Message, user: User = None):
         return await message.answer("ℹ️ Foydalanish: `/approve_listing <id>`")
         
     l_id = int(parts[1])
-    async with SessionLocal() as db:
+    async with AsyncSessionLocal() as db:
         await db.execute(
             update(Listing)
             .where(Listing.id == l_id)

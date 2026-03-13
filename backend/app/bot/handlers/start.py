@@ -45,12 +45,22 @@ async def cmd_start(message: Message):
         f"🔥 <b>Hoziroq boshlang:</b>"
     )
 
+    # Agar t.me havolasi bo'lsa, startapp parametrini ishlatamiz
+    def get_url(path: str = None):
+        if "t.me/" in MINI_APP_URL:
+            if not path: return MINI_APP_URL
+            sep = "&" if "?" in MINI_APP_URL else "?"
+            return f"{MINI_APP_URL}{sep}startapp={path.replace('/', '_')}"
+        else:
+            if not path: return MINI_APP_URL
+            return f"{MINI_APP_URL.rstrip('/')}/{path.lstrip('/')}"
+
     builder = InlineKeyboardBuilder()
     builder.row(
-        InlineKeyboardButton(text="💎 MIDAS: Ro'yxatdan o'tish", web_app={"url": MINI_APP_URL})
+        InlineKeyboardButton(text="💎 MIDAS: Ro'yxatdan o'tish", web_app={"url": get_url()})
     )
     builder.row(
-        InlineKeyboardButton(text="🔍 Reklama bozorini ko'rish", web_app={"url": f"{MINI_APP_URL}/explore"})
+        InlineKeyboardButton(text="🔍 Reklama bozorini ko'rish", web_app={"url": get_url("explore")})
     )
     builder.row(
         InlineKeyboardButton(text="📢 E'lon joylash", callback_data="list_ad"),

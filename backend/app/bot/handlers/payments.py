@@ -1,7 +1,7 @@
 from aiogram import Router, F, types
 from aiogram.types import PreCheckoutQuery, SuccessfulPayment
 from sqlalchemy.ext.asyncio import AsyncSession
-from app.db.database import SessionLocal
+from app.db.database import AsyncSessionLocal
 from app.models.models import Deal, Payment, PaymentStatus, DealStatus
 from sqlalchemy import select, update
 import logging
@@ -26,7 +26,7 @@ async def on_successful_payment(message: types.Message):
         deal_id = int(parts[1])
         user_id = int(parts[2])
         
-        async with SessionLocal() as db:
+        async with AsyncSessionLocal() as db:
             # Payment yaratish
             new_payment = Payment(
                 user_id=user_id,
