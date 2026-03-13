@@ -190,7 +190,7 @@ function LoadingScreen() {
 
 // ── App Inner ────────────────────────────────────────────────────────────────
 function AppInner() {
-  const { setAuth, logout, isAuthenticated } = useAuthStore()
+  const { setAuth, logout, isAuthenticated, isGuest, setGuest } = useAuthStore()
   const navigate = useNavigate()
   const [loading, setLoading]               = useState(true)
   const [showWelcome, setShowWelcome]       = useState(false)
@@ -243,7 +243,6 @@ function AppInner() {
 
   if (loading) return <LoadingScreen />
 
-  const { isAuthenticated, isGuest, setGuest } = useAuthStore()
 
   // 1. Yangi foydalanuvchi — Welcome screen
   if (showWelcome && !isAuthenticated && !isGuest) {
