@@ -1,0 +1,405 @@
+MIDAS PLATFORMASI – TO‘LIQ TIZIM ISHLASHI
+1. PLATFORMAGA KIRISH
+
+Foydalanuvchi MIDAS platformasiga odatda Telegram orqali kiradi. Telegram bot foydalanuvchini kutib oladi va unga qisqacha platforma haqida ma’lumot beradi. Botdagi asosiy tugma “MIDAS platformasini ochish” bo‘ladi. Bu tugma Telegram Mini App ni ochadi va foydalanuvchini platformaning asosiy interfeysiga olib kiradi.
+
+Foydalanuvchi platformaga kirganida tizim avtomatik ravishda uning Telegram identifikatorini oladi. Agar foydalanuvchi ilgari ro‘yxatdan o‘tmagan bo‘lsa, tizim onboarding jarayonini boshlaydi.
+
+2. RO‘YXATDAN O‘TISH (ONBOARDING)
+
+Foydalanuvchi platformaga birinchi marta kirganda unga quyidagi savol beriladi:
+
+“Siz MIDAS platformasidan nima maqsadda foydalanmoqchisiz?”
+
+Ekranda to‘rtta katta tugma bo‘ladi:
+
+Reklama topish (Business / Buyer)
+
+Reklama joylashtirish (Audience owner)
+
+Marketing xizmatini taklif qilish
+
+Creative xizmat taklif qilish
+
+Foydalanuvchi ushbu tugmalardan birini tanlaydi. Tanlangan tugma foydalanuvchining asosiy rolini aniqlaydi.
+
+2.1 Profil yaratish
+
+Keyingi sahifada foydalanuvchi o‘zining asosiy ma’lumotlarini kiritadi:
+
+Ism yoki kompaniya nomi
+
+Shahar yoki hudud
+
+Faoliyat sohasi
+
+Qisqa tavsif
+
+Aloqa ma’lumotlari
+
+Bu ma’lumotlar Users jadvalida saqlanadi.
+
+Shundan so‘ng tizim foydalanuvchining tanlagan roliga mos profil jadvalini yaratadi.
+
+Business profil uchun
+
+Qo‘shimcha ma’lumotlar:
+
+biznes turi
+
+reklama maqsadi
+
+taxminiy reklama budjeti
+
+ishlatiladigan platformalar
+
+Audience owner profil uchun
+
+platforma turi (Telegram, YouTube, Instagram, TikTok, Billboard, LED)
+
+auditoriya soni
+
+o‘rtacha ko‘rishlar
+
+reklama formatlari
+
+narx diapazoni
+
+Marketing operator profil uchun
+
+xizmat turlari
+
+tajriba yillari
+
+portfolio
+
+ishlagan loyihalar
+
+Creative provider profil uchun
+
+kreativ xizmat turlari
+
+portfolio
+
+ishlatadigan dasturlar
+
+tajriba
+
+3. DASHBOARD (ISH PANELI)
+
+Ro‘yxatdan o‘tish tugagach foydalanuvchi shaxsiy dashboard sahifasiga kiradi.
+
+Bu sahifada yuqori qismda asosiy navigatsiya menyusi joylashadi.
+
+Asosiy menyu bo‘limlari:
+
+Home
+
+Explore Ads
+
+Marketing Services
+
+Creative Services
+
+Campaign Requests
+
+Messages
+
+Deals
+
+Analytics
+
+Profile
+
+4. HOME SAHIFASI
+
+Home sahifasi platformaning markaziy discovery qismi hisoblanadi.
+
+Bu yerda quyidagilar ko‘rsatiladi:
+
+Top Telegram kanallar
+
+Top YouTube creatorlar
+
+Top influencerlar
+
+Top billboard va LED joylar
+
+Top marketing mutaxassislari
+
+Top dizaynerlar
+
+Eng yangi campaign requests
+
+Har bir element karta shaklida ko‘rinadi.
+
+Kartaning ichida:
+
+nom
+
+platforma
+
+auditoriya
+
+qisqa tavsif
+
+reyting
+
+bo‘ladi.
+
+Har kartada “View Profile” tugmasi mavjud.
+
+Bu tugma foydalanuvchini to‘liq profil sahifasiga olib boradi.
+
+5. EXPLORE ADS BO‘LIMI
+
+Bu bo‘lim reklama joylari marketplace hisoblanadi.
+
+Filtrlar:
+
+platforma turi
+
+shahar
+
+auditoriya hajmi
+
+narx diapazoni
+
+Kategoriya:
+
+Telegram channels
+
+YouTube creators
+
+Instagram influencers
+
+TikTok creators
+
+Billboards
+
+LED screens
+
+Har listing sahifasida quyidagilar mavjud:
+
+auditoriya statistikasi
+
+reklama formatlari
+
+narx
+
+reyting
+
+reviewlar
+
+Tugmalar:
+
+Contact – chat ochadi
+Send Proposal – taklif yuboradi
+Save – listingni saqlaydi
+
+6. MARKETING SERVICES BO‘LIMI
+
+Bu yerda marketing mutaxassislari joylashadi.
+
+Masalan:
+
+media buyer
+
+SMM manager
+
+marketing strategist
+
+marketing agentlik
+
+Profil sahifasida:
+
+xizmat tavsifi
+
+portfolio
+
+narx paketlari
+
+case study
+
+reyting
+
+Tugmalar:
+
+Hire – xizmat buyurtma qilish
+Message – chat boshlash
+View Packages – xizmat paketlarini ko‘rish
+
+7. CREATIVE SERVICES BO‘LIMI
+
+Bu bo‘lim kreativ xizmatlar uchun.
+
+Kategoriya:
+
+logo design
+
+banner design
+
+billboard design
+
+social media creative
+
+video ads
+
+motion graphics
+
+Profil sahifasida:
+
+portfolio
+
+xizmat narxlari
+
+tajriba
+
+rating
+
+Tugmalar:
+
+Order Creative
+Message
+
+8. CAMPAIGN REQUESTS
+
+Bu MIDAS platformasining eng muhim bo‘limi.
+
+Bu yerda Business foydalanuvchilar reklama ehtiyojini joylaydi.
+
+Masalan:
+
+“Telegram botim uchun 10 000 foydalanuvchi kerak”
+
+Campaign yaratish sahifasida quyidagi maydonlar bo‘ladi:
+
+title
+
+goal
+
+platform
+
+location
+
+budget
+
+duration
+
+target audience
+
+Tugma:
+
+Create Campaign
+
+Campaign yaratilib bo‘lgach u Campaign Requests bo‘limida paydo bo‘ladi.
+
+9. PROVIDERLAR TAKLIF YUBORISHI
+
+Providerlar campaign sahifasiga kirib quyidagi tugmani bosadi:
+
+Send Proposal
+
+Taklif shaklida:
+
+taklif narxi
+
+expected result
+
+qisqa tavsif
+
+Bu ma’lumot Campaign Proposals jadvaliga saqlanadi.
+
+10. CHAT TIZIMI
+
+Foydalanuvchilar platforma ichida chat orqali gaplashadi.
+
+Chat sahifasida:
+
+message yuborish
+
+fayl yuborish
+
+kampaniya tafsilotlarini muhokama qilish
+
+Chatdagi har bir xabar Messages jadvaliga saqlanadi.
+
+11. DEAL JARAYONI
+
+Kelishuv jarayoni quyidagicha:
+
+proposal yuboriladi
+
+buyer qabul qiladi
+
+kelishuv yaratiladi
+
+kampaniya boshlanadi
+
+kampaniya yakunlanadi
+
+Deal tugagach foydalanuvchilar bir-biriga review qoldiradi.
+
+Reviewlar Reviews jadvaliga yoziladi.
+
+12. ANALYTICS
+
+Analytics bo‘limida foydalanuvchi quyidagilarni ko‘radi:
+
+Provider uchun:
+
+profil ko‘rishlar
+
+incoming leads
+
+konversiya
+
+Business uchun:
+
+kampaniya reach
+
+natijalar
+
+engagement
+
+13. PROFIL SAHIFASI
+
+Profil sahifasida foydalanuvchi:
+
+profil ma’lumotlarini tahrirlashi
+
+portfolio qo‘shishi
+
+listing qo‘shishi
+
+verification jarayonidan o‘tishi mumkin.
+
+14. VERIFICATION
+
+Foydalanuvchilar quyidagilarni tasdiqlashi mumkin:
+
+identity verification
+
+business verification
+
+channel ownership verification
+
+Tasdiqlangan foydalanuvchilarga Verified badge beriladi.
+
+XULOSA
+
+MIDAS platformasi reklama ekotizimining barcha ishtirokchilarini bir tizimga birlashtiradi.
+
+Platforma quyidagilarni birlashtiradi:
+
+reklama joylari
+
+marketing xizmatlari
+
+kreativ xizmatlar
+
+reklama kampaniyalari
+
+hamkorlik tizimi
+
+Natijada foydalanuvchilar MIDAS platformasida reklama kampaniyasini rejalashtirish, hamkor topish, reklama joyi tanlash va marketing xizmatlarini boshqarish imkoniyatiga ega bo‘ladi.

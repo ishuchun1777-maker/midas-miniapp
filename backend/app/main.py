@@ -35,6 +35,8 @@ async def run_bot():
         from aiogram.fsm.storage.memory import MemoryStorage
         from app.bot.handlers.start import router as start_router
         from app.bot.handlers.notifications import router as notif_router
+        from app.bot.handlers.payments import router as payments_router
+        from app.bot.handlers.admin import router as bot_admin_router
         from app.bot.middlewares.auth import AuthMiddleware
 
         bot = Bot(token=token, default=DefaultBotProperties(parse_mode=ParseMode.HTML))
@@ -42,6 +44,8 @@ async def run_bot():
         dp.message.middleware(AuthMiddleware())
         dp.include_router(start_router)
         dp.include_router(notif_router)
+        dp.include_router(payments_router)
+        dp.include_router(bot_admin_router)
         logger.info("Bot polling started!")
         await dp.start_polling(bot, allowed_updates=dp.resolve_used_update_types())
     except Exception as e:
@@ -60,6 +64,14 @@ async def lifespan(app: FastAPI):
 
     # Bot task boshlash
     logger.info("Launching bot task...")
+    
+    # Bot obyektini app.state ga saqlash (API dan foydalanish uchun)
+    from aiogram import Bot
+    from aiogram.client.default import DefaultBotProperties
+    from aiogram.enums import ParseMode
+    if settings.TELEGRAM_BOT_TOKEN:
+        app.state.bot = Bot(token=settings.TELEGRAM_BOT_TOKEN, default=DefaultBotProperties(parse_mode=ParseMode.HTML))
+    
     bot_task = asyncio.create_task(run_bot())
     logger.info("Bot task created!")
 

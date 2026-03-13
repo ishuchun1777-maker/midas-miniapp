@@ -1,0 +1,454 @@
+MIDAS PLATFORM – UI SCREEN MAP (TO‘LIQ SAHIFALAR TIZIMI)
+1️⃣ ENTRY SCREEN (PLATFORMAGA KIRISH)
+
+Foydalanuvchi Telegram bot yoki web orqali kiradi.
+
+Ekran elementlari
+
+MIDAS logo
+
+qisqa tavsif
+
+platforma haqida qisqa video yoki preview
+
+Tugmalar
+
+Open Platform
+→ Mini App ochiladi
+
+How MIDAS Works
+→ platforma haqida tushuntirish sahifasi
+
+2️⃣ ONBOARDING SCREEN
+
+Agar foydalanuvchi yangi bo‘lsa bu sahifa ochiladi.
+
+Savol
+
+"Siz MIDAS platformasidan nima maqsadda foydalanmoqchisiz?"
+
+Tugmalar
+
+Find Advertising
+→ Business onboarding
+
+Sell Advertising
+→ Audience owner onboarding
+
+Offer Marketing Services
+→ Marketing operator onboarding
+
+Offer Creative Services
+→ Creative provider onboarding
+
+3️⃣ PROFILE SETUP SCREEN
+
+Foydalanuvchi profil ma’lumotlarini kiritadi.
+
+Inputlar
+
+Name / Company
+
+Location
+
+Category
+
+Description
+
+Contact
+
+Tugma
+
+Continue
+
+→ Dashboard
+
+4️⃣ MAIN DASHBOARD (HOME)
+
+Bu platformaning markaziy sahifasi.
+
+Bo‘limlar
+
+Featured Ads
+
+Top Creators
+
+Top Billboards
+
+Top Marketing Experts
+
+Top Designers
+
+Active Campaign Requests
+
+Tugmalar
+
+View Profile
+→ Provider profile
+
+Save
+→ Favorites
+
+Contact
+→ Chat
+
+5️⃣ EXPLORE ADS SCREEN
+
+Bu reklama joylari katalogi.
+
+Filtrlar
+
+Platform
+
+Location
+
+Audience size
+
+Price
+
+Kategoriyalar
+
+Telegram
+
+YouTube
+
+Instagram
+
+TikTok
+
+Billboard
+
+LED
+
+Tugmalar
+
+Open Listing
+→ Ad profile
+
+6️⃣ AD PROFILE SCREEN
+
+Reklama joyi to‘liq sahifasi.
+
+Ma’lumotlar
+
+audience stats
+
+engagement
+
+ad formats
+
+price
+
+reviews
+
+Tugmalar
+
+Send Proposal
+
+→ Proposal form
+
+Message
+
+→ Chat
+
+Save
+
+→ Favorites
+
+7️⃣ MARKETING SERVICES SCREEN
+
+Marketing mutaxassislari katalogi.
+
+Kategoriyalar
+
+Media buyers
+
+SMM managers
+
+Marketing strategists
+
+Agencies
+
+Tugmalar
+
+View Profile
+
+→ Provider profile
+
+8️⃣ MARKETING PROFILE SCREEN
+Ma’lumotlar
+
+services
+
+portfolio
+
+case studies
+
+reviews
+
+Tugmalar
+
+Hire
+
+→ Deal process
+
+Message
+
+→ Chat
+
+9️⃣ CREATIVE SERVICES SCREEN
+
+Creative mutaxassislar katalogi.
+
+Kategoriyalar
+
+Logo design
+
+Banner design
+
+Video ads
+
+Motion graphics
+
+Branding
+
+Tugmalar
+
+View Profile
+
+→ Creative profile
+
+🔟 CREATIVE PROFILE SCREEN
+Ma’lumotlar
+
+portfolio
+
+services
+
+price
+
+reviews
+
+Tugmalar
+
+Order Creative
+
+→ Proposal
+
+Message
+
+→ Chat
+
+1️⃣1️⃣ CREATE CAMPAIGN SCREEN
+
+Business foydalanuvchi kampaniya yaratadi.
+
+Inputlar
+
+Campaign title
+
+Goal
+
+Target audience
+
+Budget
+
+Platforms
+
+Location
+
+Duration
+
+Tugma
+
+Create Campaign
+
+→ Campaign published
+
+1️⃣2️⃣ CAMPAIGN MARKET SCREEN
+
+Providerlar ochiq kampaniyalarni ko‘radi.
+
+Ko‘rsatiladi
+
+goal
+
+budget
+
+location
+
+audience
+
+Tugmalar
+
+Open Campaign
+
+→ Campaign details
+
+1️⃣3️⃣ CAMPAIGN DETAILS SCREEN
+Ma’lumotlar
+
+campaign description
+
+budget
+
+target
+
+Tugmalar
+
+Send Proposal
+
+→ Proposal form
+
+Message Buyer
+
+→ Chat
+
+1️⃣4️⃣ PROPOSAL FORM SCREEN
+
+Provider taklif yuboradi.
+
+Inputlar
+
+Price offer
+
+Expected results
+
+Message
+
+Tugma
+
+Submit Proposal
+
+1️⃣5️⃣ CHAT SCREEN
+
+Buyer va provider muloqot qiladi.
+
+Tugmalar
+
+Send message
+
+Send file
+
+Send offer
+
+1️⃣6️⃣ DEAL SCREEN
+
+Kelishuv sahifasi.
+
+Ko‘rsatiladi
+
+agreed price
+
+campaign details
+
+participants
+
+Tugmalar
+
+Accept deal
+
+Cancel
+
+1️⃣7️⃣ ANALYTICS SCREEN
+Provider analytics
+
+profile views
+
+leads
+
+deals
+
+conversion
+
+Business analytics
+
+campaign reach
+
+engagement
+
+performance
+
+1️⃣8️⃣ PROFILE SCREEN
+
+Foydalanuvchi profili.
+
+Tugmalar
+
+Edit profile
+
+Add listing
+
+Add portfolio
+
+Verify account
+
+1️⃣9️⃣ VERIFICATION SCREEN
+Variantlar
+
+identity verification
+
+business verification
+
+channel verification
+
+outdoor verification
+
+2️⃣0️⃣ NOTIFICATIONS SCREEN
+Bildirishnomalar
+
+new proposal
+
+new message
+
+campaign update
+
+deal status
+
+PLATFORMADA FOYDALANUVCHI HARAKATI
+
+Platforma ichidagi asosiy yo‘l:
+
+User enters platform
+↓
+Onboarding
+↓
+Dashboard
+↓
+Explore marketplace
+↓
+Contact provider
+↓
+Send proposal
+↓
+Chat
+↓
+Deal
+↓
+Campaign execution
+↓
+Review
+MIDAS PLATFORMNING YAKUNIY ARXITEKTURASI
+
+Platforma quyidagi 5 ustunga tayanadi:
+
+Users
+Listings
+Campaigns
+Proposals
+Deals
+XULOSA
+
+MIDAS platformasi quyidagilarni birlashtiradi:
+
+reklama joylari
+
+marketing xizmatlari
+
+kreativ xizmatlar
+
+reklama kampaniyalari
+
+hamkorlik tizimi
+
+Natijada foydalanuvchi platformada reklama topishi, hamkor topishi, kampaniya yaratishi va reklama jarayonini boshqarishi mumkin

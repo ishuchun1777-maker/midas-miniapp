@@ -15,6 +15,7 @@ router = APIRouter()
 @router.post("/initiate", response_model=dict)
 async def initiate_payment(
     data: PaymentInitiate,
+    request: Request,
     db: AsyncSession = Depends(get_db),
     current_user: User = Depends(get_current_user),
 ):
@@ -29,19 +30,34 @@ async def initiate_payment(
         return await create_click_payment(
             db, current_user.id, deal.id, deal.price, data.return_url
         )
-    elif data.provider == "payme":
-        merchant_id = __import__("app.core.config", fromlist=["settings"]).settings.PAYME_MERCHANT_ID
-        amount_tiyin = int(deal.price * 100)
-        checkout_url = (
-            f"https://checkout.paycom.uz/{merchant_id}"
-            f"?amount={amount_tiyin}&order_id={deal.id}"
-        )
-        return {
-            "checkout_url": checkout_url,
-            "amount": deal.price,
-            "currency": "UZS",
-            "provider": "payme",
-        }
+    elif data.provider == "stars":
+        bot = request.app.state.bot
+        if not bot:
+            raise HTTPException(status_code=500, detail="Bot not initialized")
+        
+        # Stars narxi (taxminan 1 star = 250 UZS desak)
+        # Aslida bu biznes mantiqiga bog'liq
+        stars_amount = max(1, int(deal.price / 250))
+        
+        from aiogram.types import LabeledPrice
+        try:
+            invoice_link = await bot.create_invoice_link(
+                title=f"MIDAS: {deal.title}",
+                description=f"Bitim #{deal.id} uchun to'lov",
+                payload=f"deal_{deal.id}_{current_user.id}",
+                provider_token="",  # Stars uchun bo'sh qoladi
+                currency="XTR",
+                prices=[LabeledPrice(label="To'lov", amount=stars_amount)]
+            )
+            return {
+                "checkout_url": invoice_link,
+                "amount": stars_amount,
+                "currency": "XTR",
+                "provider": "stars",
+                "deal_id": deal.id
+            }
+        except Exception as e:
+            raise HTTPException(status_code=500, detail=f"Stars error: {str(e)}")
 
     raise HTTPException(status_code=400, detail="Invalid payment provider")
 

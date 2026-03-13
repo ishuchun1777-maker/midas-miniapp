@@ -7,6 +7,7 @@ import clsx from 'clsx'
 import { useAuthStore } from './store/authStore'
 import { authApi } from './utils/api'
 import './styles/globals.css'
+import { I18nProvider } from './i18n/I18nContext'
 
 // Pages
 import MiniHomePage        from './pages/MiniHomePage'
@@ -18,6 +19,7 @@ import WelcomePage         from './pages/WelcomePage'
 import OnboardingPage      from './pages/OnboardingPage'
 import MyListingsPage from './pages/MyListingsPage'
 import CreateListingPage   from './pages/CreateListingPage'
+import CreateCampaignPage  from './pages/CreateCampaignPage'
 import ListingDetailPage   from './pages/ListingDetailPage'
 import CampaignDetailPage  from './pages/CampaignDetailPage'
 import ProposalPage        from './pages/ProposalPage'
@@ -265,6 +267,7 @@ function AppInner() {
         <Route path="/explore"                 element={<MiniExplorePage />} />
         <Route path="/listings/mine"          element={<AuthGuard><MyListingsPage /></AuthGuard>} />
         <Route path="/listing/create"          element={<AuthGuard><CreateListingPage /></AuthGuard>} />
+        <Route path="/campaign/create"         element={<AuthGuard><CreateCampaignPage /></AuthGuard>} />
         <Route path="/listing/:id"             element={<ListingDetailPage />} />
         <Route path="/campaign/:id"            element={<CampaignDetailPage />} />
         <Route path="/user/:id"                element={<UserProfilePage />} />
@@ -305,9 +308,11 @@ function AppInner() {
 export default function App() {
   return (
     <QueryClientProvider client={queryClient}>
-      <HashRouter>
-        <AppInner />
-      </HashRouter>
+      <I18nProvider>
+        <HashRouter>
+          <AppInner />
+        </HashRouter>
+      </I18nProvider>
     </QueryClientProvider>
   )
 }

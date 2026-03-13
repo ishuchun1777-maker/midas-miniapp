@@ -1,9 +1,9 @@
 import { useState } from 'react'
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
 import { motion, AnimatePresence } from 'framer-motion'
-import { Link } from 'react-router-dom'
+import { Link, useNavigate } from 'react-router-dom'
 import {
-  Plus, X, Target, CaretRight, Megaphone,
+  Plus, Target, CaretRight, Megaphone,
   Calendar, Users, CurrencyDollar, PaintBrush
 } from '@phosphor-icons/react'
 import { campaignsApi, Campaign } from '../utils/api'
@@ -11,12 +11,6 @@ import { useAuthStore } from '../store/authStore'
 import { formatPrice } from '../utils/format'
 import toast from 'react-hot-toast'
 import clsx from 'clsx'
-
-const PLATFORMS = [
-  { v: 'telegram', l: 'Telegram' }, { v: 'instagram', l: 'Instagram' },
-  { v: 'youtube', l: 'YouTube' }, { v: 'tiktok', l: 'TikTok' },
-  { v: 'billboard', l: 'Billboard' }, { v: 'led', l: 'LED' },
-]
 
 function CampaignCard({ c }: { c: Campaign }) {
   return (
@@ -87,179 +81,10 @@ function CampaignCard({ c }: { c: Campaign }) {
   )
 }
 
-function CreateCampaignModal({ onClose }: { onClose: () => void }) {
-  const qc = useQueryClient()
-  const [form, setForm] = useState({
-    title: '', description: '', goal: '', city: '',
-    budget_min: '', budget_max: '', duration_days: '',
-    target_platforms: [] as string[],
-    needs_creative: false, needs_management: false,
-  })
-  const [errors, setErrors] = useState<Record<string, string>>({})
 
-  const validate = () => {
-    const e: Record<string, string> = {}
-    if (!form.title.trim()) e.title = "Kampaniya nomi majburiy"
-    else if (form.title.trim().length < 3) e.title = "Nom kamida 3 ta harf bo'lsin"
-    return e
-  }
-
-  const handleSubmit = () => {
-    const e = validate()
-    setErrors(e)
-    if (Object.keys(e).length === 0) mutation.mutate()
-  }
-
-  const mutation = useMutation({
-    mutationFn: () => {
-      // Backend kutgan fieldlar aniq yuboriladi
-      const payload: Record<string, unknown> = {
-        title: form.title.trim(),
-        target_platforms: form.target_platforms,
-        needs_creative: form.needs_creative,
-        needs_management: form.needs_management,
-        currency: 'UZS',
-      }
-      if (form.description.trim()) payload.description = form.description.trim()
-      if (form.city.trim()) payload.city = form.city.trim()
-      if (form.budget_min) payload.budget_min = Number(form.budget_min)
-      if (form.budget_max) payload.budget_max = Number(form.budget_max)
-      if (form.duration_days) payload.duration_days = Number(form.duration_days)
-      return campaignsApi.create(payload)
-    },
-    onSuccess: () => {
-      qc.invalidateQueries({ queryKey: ['campaigns'] })
-      qc.invalidateQueries({ queryKey: ['campaigns-home'] })
-      toast.success("Kampaniya muvaffaqiyatli yaratildi!")
-      onClose()
-    },
-    onError: (e: unknown) => {
-      const err = e as { response?: { data?: { detail?: unknown }; status?: number } }
-      const msg = err?.response?.data?.detail
-      const status = err?.response?.status
-      if (Array.isArray(msg)) {
-        const details = (msg as Record<string,unknown>[])
-          .map(m => {
-            const loc = Array.isArray(m.loc) ? (m.loc as string[]).slice(1).join('.') : ''
-            return loc ? `${loc}: ${m.msg}` : String(m.msg)
-          }).join(' | ')
-        toast.error(details, { duration: 6000 })
-        console.error('Validation errors:', msg)
-      } else {
-        toast.error(`${status ?? ''} ${String(msg || 'Server xatosi')}`, { duration: 5000 })
-      }
-    },
-  })
-
-  const togglePlatform = (v: string) =>
-    setForm(f => ({ ...f, target_platforms: f.target_platforms.includes(v) ? f.target_platforms.filter(p => p !== v) : [...f.target_platforms, v] }))
-
-  return (
-    <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }}
-      className="fixed inset-0 z-50 flex flex-col justify-end" style={{ background: 'rgba(6,8,9,0.92)', backdropFilter: 'blur(8px)' }}
-      onClick={e => e.target === e.currentTarget && onClose()}>
-      <motion.div initial={{ y: '100%' }} animate={{ y: 0 }} exit={{ y: '100%' }} transition={{ type: 'spring', damping: 25 }}
-        className="border-t border-obs-700 rounded-t-3xl max-h-[92vh] overflow-y-auto" style={{ background: '#0f1419' }}>
-        <div className="flex justify-center pt-3 pb-1">
-          <div className="w-10 h-1 bg-obs-600 rounded-full" />
-        </div>
-        <div className="px-4 pb-28">
-          <div className="flex items-center justify-between mb-5">
-            <h2 className="text-white font-bold text-lg">Yangi kampaniya</h2>
-            <button onClick={onClose} className="w-9 h-9 rounded-xl bg-obs-800 flex items-center justify-center">
-              <X size={16} color="#64748b" weight="bold" />
-            </button>
-          </div>
-
-          <div className="space-y-4">
-            <div>
-              <label className="text-xs font-medium mb-1.5 block"
-                style={{color: errors.title ? '#ef4444' : '#94a3b8'}}>
-                Kampaniya nomi <span style={{color:'#ef4444'}}>*</span>
-              </label>
-              <input
-                className="input"
-                style={errors.title ? {borderColor:'#ef4444'} : {}}
-                placeholder="Masalan: Restoran ochilish kampaniyasi"
-                value={form.title}
-                onChange={e => {
-                  setForm({ ...form, title: e.target.value })
-                  if (errors.title) setErrors(p => ({ ...p, title: '' }))
-                }} />
-              {errors.title && <p className="text-xs mt-1" style={{color:'#ef4444'}}>{errors.title}</p>}
-            </div>
-            <div>
-              <label className="text-xs text-obs-300 font-medium mb-1.5 block">Maqsad / tavsif</label>
-              <textarea className="input h-20 resize-none"
-                placeholder="Kampaniya maqsadi, kutilgan natija..."
-                value={form.description} onChange={e => setForm({ ...form, description: e.target.value })} />
-            </div>
-            <div className="grid grid-cols-2 gap-3">
-              <div>
-                <label className="text-xs text-obs-300 font-medium mb-1.5 block">Budjet (dan)</label>
-                <input className="input" type="number" placeholder="500 000"
-                  value={form.budget_min} onChange={e => setForm({ ...form, budget_min: e.target.value })} />
-              </div>
-              <div>
-                <label className="text-xs text-obs-300 font-medium mb-1.5 block">Budjet (gacha)</label>
-                <input className="input" type="number" placeholder="2 000 000"
-                  value={form.budget_max} onChange={e => setForm({ ...form, budget_max: e.target.value })} />
-              </div>
-            </div>
-            <div className="grid grid-cols-2 gap-3">
-              <div>
-                <label className="text-xs text-obs-300 font-medium mb-1.5 block">Davomiyligi (kun)</label>
-                <input className="input" type="number" placeholder="30"
-                  value={form.duration_days} onChange={e => setForm({ ...form, duration_days: e.target.value })} />
-              </div>
-              <div>
-                <label className="text-xs text-obs-300 font-medium mb-1.5 block">Shahar</label>
-                <input className="input" placeholder="Toshkent"
-                  value={form.city} onChange={e => setForm({ ...form, city: e.target.value })} />
-              </div>
-            </div>
-            <div>
-              <label className="text-xs text-obs-300 font-medium mb-2 block">Platformalar</label>
-              <div className="flex flex-wrap gap-2">
-                {PLATFORMS.map(({ v, l }) => (
-                  <button key={v} onClick={() => togglePlatform(v)}
-                    className={clsx('px-3 py-1.5 rounded-xl text-xs font-bold transition-all', form.target_platforms.includes(v) ? 'text-white' : 'bg-obs-800 text-obs-300 border border-obs-700')}
-                    style={form.target_platforms.includes(v) ? { background: 'linear-gradient(135deg,#0d9488,#0f766e)' } : {}}>
-                    {l}
-                  </button>
-                ))}
-              </div>
-            </div>
-            <div className="flex gap-3">
-              <button onClick={() => setForm({ ...form, needs_creative: !form.needs_creative })}
-                className={clsx('flex-1 py-2.5 rounded-xl text-xs font-bold border transition-all flex items-center justify-center gap-1.5',
-                  form.needs_creative ? 'text-gold-500' : 'bg-obs-800 border-obs-700 text-obs-400')}
-                style={form.needs_creative ? { background: 'rgba(200,168,75,0.1)', borderColor: 'rgba(200,168,75,0.3)' } : {}}>
-                <PaintBrush size={12} weight="bold" /> Kreativ kerak
-              </button>
-              <button onClick={() => setForm({ ...form, needs_management: !form.needs_management })}
-                className={clsx('flex-1 py-2.5 rounded-xl text-xs font-bold border transition-all flex items-center justify-center gap-1.5',
-                  form.needs_management ? 'text-teal-400' : 'bg-obs-800 border-obs-700 text-obs-400')}
-                style={form.needs_management ? { background: 'rgba(13,148,136,0.1)', borderColor: 'rgba(13,148,136,0.3)' } : {}}>
-                <Target size={12} weight="bold" /> Boshqaruv kerak
-              </button>
-            </div>
-            <button onClick={handleSubmit} disabled={mutation.isPending}
-              className="w-full py-3.5 rounded-2xl font-bold text-sm text-white flex items-center justify-center transition-all"
-              style={{ background: 'linear-gradient(135deg,#0d9488,#0f766e)' }}>
-              {mutation.isPending
-                ? <div className="w-5 h-5 border-2 border-white border-t-transparent rounded-full animate-spin" />
-                : 'Kampaniya yaratish'}
-            </button>
-          </div>
-        </div>
-      </motion.div>
-    </motion.div>
-  )
-}
 
 export default function MiniCampaignsPage() {
-  const [showCreate, setShowCreate] = useState(false)
+  const navigate = useNavigate()
   const [tab, setTab] = useState<'all' | 'mine'>('all')
   const { isAuthenticated } = useAuthStore()
 
@@ -276,10 +101,10 @@ export default function MiniCampaignsPage() {
 
   const handleCreate = () => {
     if (!isAuthenticated) { toast.error('Kampaniya yaratish uchun kirish kerak'); return }
-    setShowCreate(true)
+    navigate('/campaign/create')
   }
 
-  const campaigns = tab === 'mine' ? (myCampaigns?.data || []) : (allCampaigns?.items || [])
+  const campaigns = tab === 'mine' ? (myCampaigns as any)?.data || [] : (allCampaigns?.items || [])
 
   return (
     <div className="min-h-screen bg-obs-900">
@@ -318,7 +143,7 @@ export default function MiniCampaignsPage() {
           </div>
         ) : (
           <div className="space-y-3">
-            {campaigns.map((c, i) => (
+            {campaigns.map((c: any, i: number) => (
               <motion.div key={c.id} initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: i * 0.05 }}>
                 <CampaignCard c={c} />
               </motion.div>
@@ -326,10 +151,6 @@ export default function MiniCampaignsPage() {
           </div>
         )}
       </div>
-
-      <AnimatePresence>
-        {showCreate && <CreateCampaignModal onClose={() => setShowCreate(false)} />}
-      </AnimatePresence>
     </div>
   )
 }

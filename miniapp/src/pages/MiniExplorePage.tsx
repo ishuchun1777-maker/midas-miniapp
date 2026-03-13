@@ -13,6 +13,8 @@ import { Listing } from '../utils/api'
 import toast from 'react-hot-toast'
 import clsx from 'clsx'
 
+import { useI18n } from '../i18n/I18nContext'
+
 const CATS = [
   { id: '', label: 'Hammasi' },
   { id: 'telegram_channel', label: 'Telegram', icon: TelegramLogo },
@@ -98,6 +100,7 @@ function ListingCard({ listing }: { listing: Listing }) {
 }
 
 export default function MiniExplorePage() {
+  const { t } = useI18n()
   const [search, setSearch] = useState('')
   const [cat, setCat] = useState('')
   const [page, setPage] = useState(1)
@@ -122,7 +125,7 @@ export default function MiniExplorePage() {
         <div className="flex items-center gap-2 mb-3">
           <div className="relative flex-1">
             <MagnifyingGlass size={16} color="#64748b" weight="bold" className="absolute left-3 top-1/2 -translate-y-1/2" />
-            <input className="input pl-9 py-2.5 text-sm" placeholder="Qidirish..."
+            <input className="input pl-9 py-2.5 text-sm" placeholder={t('search')}
               value={search} onChange={e => { setSearch(e.target.value); setPage(1) }} />
             {search && (
               <button onClick={() => setSearch('')} className="absolute right-3 top-1/2 -translate-y-1/2">

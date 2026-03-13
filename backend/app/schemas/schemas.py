@@ -370,7 +370,7 @@ class NotificationPublic(BaseModel):
 
 class PaymentInitiate(BaseModel):
     deal_id: int
-    provider: str = Field(..., pattern="^(click|payme)$")
+    provider: str = Field(..., pattern="^(click|payme|stars)$")
     return_url: Optional[str] = None
 
 

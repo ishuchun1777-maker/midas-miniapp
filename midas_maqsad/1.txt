@@ -1,0 +1,349 @@
+MIDAS PLATFORM – TO‘LIQ UX FLOW
+1️⃣ PLATFORMAGA KIRISH
+
+Foydalanuvchi MIDAS platformasiga kiradi.
+
+Kirish yo‘llari:
+
+Telegram Bot
+↓
+Open MIDAS Platform
+↓
+Telegram Mini App ochiladi
+
+yoki
+
+Web site
+↓
+Enter platform
+2️⃣ AUTHENTICATION
+
+Tizim foydalanuvchini tekshiradi.
+
+User exists?
+
+Agar foydalanuvchi mavjud bo‘lsa:
+
+Dashboard → Home
+
+Agar mavjud bo‘lmasa:
+
+Start onboarding
+3️⃣ ONBOARDING FLOW
+
+Foydalanuvchiga savol beriladi:
+
+Siz platformada nima qilmoqchisiz?
+
+Variantlar:
+
+Find Advertising (Business)
+Sell Advertising (Audience Owner)
+Offer Marketing Services
+Offer Creative Services
+
+Foydalanuvchi variant tanlaydi.
+
+4️⃣ PROFILE SETUP
+
+Foydalanuvchi asosiy ma’lumotlarni kiritadi.
+
+Name
+Company
+Location
+Description
+Contact info
+
+Tizim:
+
+users table
++
+role specific profile
+
+yaratadi.
+
+5️⃣ DASHBOARD
+
+Foydalanuvchi platformaga kiradi.
+
+Top navigation:
+
+Home
+Explore Ads
+Marketing Services
+Creative Services
+Campaign Requests
+Messages
+Deals
+Analytics
+Profile
+6️⃣ HOME DISCOVERY FLOW
+
+Home sahifasi:
+
+Featured Ads
+Top Creators
+Top Billboards
+Top Marketing Experts
+Top Designers
+Active Campaign Requests
+
+Har element karta shaklida.
+
+Har kartada tugmalar:
+
+View Profile
+Save
+Contact
+7️⃣ EXPLORE ADS FLOW
+
+Foydalanuvchi reklama joylarini qidiradi.
+
+Filtrlar:
+
+Platform
+Location
+Audience
+Price
+Category
+
+Kategoriya:
+
+Telegram
+YouTube
+Instagram
+TikTok
+Billboard
+LED
+
+Listing sahifasi:
+
+Audience stats
+Ad formats
+Price
+Reviews
+
+Tugmalar:
+
+Contact
+Send Proposal
+Save Listing
+8️⃣ MARKETING SERVICES FLOW
+
+Foydalanuvchi marketing mutaxassislarini qidiradi.
+
+Profil sahifasi:
+
+Services
+Portfolio
+Case studies
+Reviews
+
+Tugmalar:
+
+Hire
+Message
+View Packages
+9️⃣ CREATIVE SERVICES FLOW
+
+Creative xizmatlar bo‘limi.
+
+Kategoriya:
+
+Logo design
+Banner design
+Video ads
+Motion graphics
+Branding
+
+Profil sahifasi:
+
+Portfolio
+Experience
+Reviews
+
+Tugmalar:
+
+Order Creative
+Message
+🔟 CAMPAIGN CREATION FLOW
+
+Business foydalanuvchi kampaniya yaratadi.
+
+Form:
+
+Campaign Title
+Goal
+Target Audience
+Budget
+Location
+Platforms
+Duration
+
+Tugma:
+
+Create Campaign
+
+Campaign bazaga saqlanadi.
+
+1️⃣1️⃣ CAMPAIGN MARKET FLOW
+
+Providerlar campaignlarni ko‘radi.
+
+Campaign sahifasi:
+
+Goal
+Budget
+Audience
+Location
+
+Tugmalar:
+
+Send Proposal
+Message Buyer
+1️⃣2️⃣ PROPOSAL FLOW
+
+Provider taklif yuboradi.
+
+Form:
+
+Price offer
+Expected result
+Message
+
+Tugma:
+
+Submit Proposal
+
+Taklif bazaga yoziladi.
+
+1️⃣3️⃣ CHAT FLOW
+
+Buyer va provider chat boshlaydi.
+
+Chat funksiyalar:
+
+Message
+Send files
+Send offer
+Discuss campaign
+
+Chat barcha xabarlarni saqlaydi.
+
+1️⃣4️⃣ DEAL FLOW
+
+Kelishuv jarayoni.
+
+Proposal
+↓
+Negotiation
+↓
+Agreement
+↓
+Campaign Execution
+↓
+Completion
+↓
+Review
+
+Deal bazada saqlanadi.
+
+1️⃣5️⃣ REVIEW FLOW
+
+Kampaniya tugagach:
+
+Rate user
+Leave review
+
+Bu foydalanuvchi reputatsiyasini oshiradi.
+
+1️⃣6️⃣ ANALYTICS FLOW
+
+Provider analytics:
+
+Profile views
+Leads
+Deals
+Conversion
+
+Business analytics:
+
+Campaign performance
+Reach
+Engagement
+1️⃣7️⃣ PROFILE FLOW
+
+Profil sahifasi.
+
+Tugmalar:
+
+Edit profile
+Add listing
+Upload portfolio
+Verify account
+1️⃣8️⃣ VERIFICATION FLOW
+
+Verification bo‘limi.
+
+Variantlar:
+
+Identity verification
+Business verification
+Channel verification
+Outdoor verification
+
+Tasdiqlangan foydalanuvchilarga:
+
+Verified badge
+
+beriladi.
+
+1️⃣9️⃣ GROWTH LOOP
+
+Platforma o‘sish jarayoni.
+
+Creator joins
+↓
+Creator advertises MIDAS
+↓
+Brands join
+↓
+Advertising deals
+↓
+Creator earns
+↓
+More creators join
+2️⃣0️⃣ PLATFORM ECOSYSTEM
+
+MIDAS ekotizimi:
+
+Business
+↓
+Marketing Operator
+↓
+Creative Provider
+↓
+Audience Owner
+↓
+Advertising Campaign
+↓
+Result
+YAKUNIY NATIJA
+
+MIDAS platformasi quyidagilarni birlashtiradi:
+
+Ad Marketplace
++
+Marketing Services
++
+Creative Services
++
+Campaign System
++
+Collaboration
+
+Natijada MIDAS oddiy marketplace emas.
+
+Bu:
+
+Advertising Operating System.
