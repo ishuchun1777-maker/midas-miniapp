@@ -129,8 +129,8 @@ export default function WelcomePage({ onEnter, onGuest }: Props) {
               background: 'linear-gradient(135deg, #0d9488, #0f766e)', 
               boxShadow: '0 8px 32px rgba(13,148,136,0.3)' 
             }}>
-            <TelegramLogo size={20} weight="fill" />
-            Telegram orqali ro'yxatdan o'tish
+            <Lightning size={20} weight="fill" />
+            Platformada ro'yxatdan o'tish
           </motion.button>
 
           <motion.button

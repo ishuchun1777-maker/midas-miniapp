@@ -123,9 +123,9 @@ export function AuthGuard({ children }: { children: React.ReactNode }) {
           {loggingIn ? (
             <div className="w-5 h-5 border-2 border-white/30 border-t-white rounded-full animate-spin" />
           ) : (
-            <TelegramLogo size={20} weight="fill" />
+            <Lightning size={20} weight="fill" />
           )}
-          Telegram orqali kirish
+          Platformada ro'yxatdan o'tish
         </button>
 
         <button onClick={() => navigate("/explore")} className="mt-4 text-obs-500 text-xs font-bold uppercase tracking-widest hover:text-obs-300">
@@ -328,7 +328,7 @@ function AppInner() {
         {/* Auth required */}
         <Route path="/campaigns"               element={<AuthGuard><MiniCampaignsPage /></AuthGuard>} />
         <Route path="/messages"                element={<AuthGuard><MiniChatPage /></AuthGuard>} />
-        <Route path="/profile"                 element={<MiniProfilePage />} />
+        <Route path="/profile"                 element={<AuthGuard><MiniProfilePage /></AuthGuard>} />
         <Route path="/notifications"           element={<AuthGuard><NotificationsPage /></AuthGuard>} />
         <Route path="/deals"                   element={<AuthGuard><DealsPage /></AuthGuard>} />
         <Route path="/favorites"               element={<AuthGuard><FavoritesPage /></AuthGuard>} />
