@@ -37,16 +37,30 @@ async def cmd_start(message: Message):
 
     text = (
         f"<b>Salom, {user_name}! 👋</b>\n\n"
-        f"<b>MIDAS</b> ga xush kelibsiz — O'zbekistondagi birinchi professional reklama hamkorlik platformasi.\n\n"
-        f"🎯 <b>Bu yerda siz:</b>\n"
-        f"• Telegram kanallar va influencerlarni topasiz\n"
-        f"• Media buyer va targetologlar bilan ishlaysiz\n"
-        f"• Dizayner va kreativlar topasiz\n"
-        f"• Kampaniyalarni tuzib, natija olasiz\n\n"
-        f"Boshlash uchun quyidagi tugmani bosing 👇"
+        f"<b>MIDAS</b> — O'zbekistondagi professional reklama munosabatlari va hamkorlik platformasiga xush kelibsiz.\n\n"
+        f"🚀 <b>Platforma imkoniyatlari:</b>\n"
+        f"• <b>Reklama beruvchilar uchun:</b> Eng top Telegram kanallar, Influencerlar va LED ekranlar bazasi.\n"
+        f"• <b>Ijrochilar uchun:</b> Doimiy buyurtmalar oqimi va xavfsiz to'lovlar (Telegram Stars, Click, Payme).\n"
+        f"• <b>Xavfsiz bitim:</b> Midas barcha bitimlarda kafil (garant) sifatida ishtirok etadi.\n\n"
+        f"🔥 <b>Hoziroq boshlang:</b>"
     )
 
-    await message.answer(text, reply_markup=main_keyboard())
+    builder = InlineKeyboardBuilder()
+    builder.row(
+        InlineKeyboardButton(text="💎 MIDAS: Ro'yxatdan o'tish", web_app={"url": MINI_APP_URL})
+    )
+    builder.row(
+        InlineKeyboardButton(text="🔍 Reklama bozorini ko'rish", web_app={"url": f"{MINI_APP_URL}/explore"})
+    )
+    builder.row(
+        InlineKeyboardButton(text="📢 E'lon joylash", callback_data="list_ad"),
+        InlineKeyboardButton(text="📋 Kampaniyalar", callback_data="campaigns")
+    )
+    builder.row(
+        InlineKeyboardButton(text="❓ Yordam va Qo'llab-quvvatlash", callback_data="help")
+    )
+
+    await message.answer(text, reply_markup=builder.as_markup())
 
 
 @router.message(Command("help"))

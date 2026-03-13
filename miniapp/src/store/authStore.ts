@@ -16,7 +16,9 @@ interface AuthState {
   user: User | null
   token: string | null
   isAuthenticated: boolean
+  isGuest: boolean
   setAuth: (token: string, user: User) => void
+  setGuest: (val: boolean) => void
   logout: () => void
 }
 
@@ -26,18 +28,20 @@ export const useAuthStore = create<AuthState>()(
       user: null,
       token: null,
       isAuthenticated: false,
+      isGuest: false,
       setAuth: (token, user) => {
         localStorage.setItem('midas_token', token)
-        set({ token, user, isAuthenticated: true })
+        set({ token, user, isAuthenticated: true, isGuest: false })
       },
+      setGuest: (val) => set({ isGuest: val, isAuthenticated: false }),
       logout: () => {
         localStorage.removeItem('midas_token')
-        set({ user: null, token: null, isAuthenticated: false })
+        set({ user: null, token: null, isAuthenticated: false, isGuest: false })
       },
     }),
     {
       name: 'midas-mini-auth',
-      partialize: (s) => ({ token: s.token, user: s.user }),
+      partialize: (s) => ({ token: s.token, user: s.user, isGuest: s.isGuest }),
     }
   )
 )

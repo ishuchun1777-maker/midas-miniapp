@@ -3,6 +3,7 @@ import { HashRouter, Routes, Route, Link, useLocation, useNavigate } from 'react
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query'
 import { Toaster, toast } from 'react-hot-toast'
 import { House, Compass, Megaphone, ChatCircle, User, Lightning, TelegramLogo } from '@phosphor-icons/react'
+import { motion } from 'framer-motion'
 import clsx from 'clsx'
 import { useAuthStore } from './store/authStore'
 import { authApi } from './utils/api'
@@ -53,7 +54,7 @@ declare global {
 
 // ── Auth Guard ──────────────────────────────────────────────────────────────
 export function AuthGuard({ children }: { children: React.ReactNode }) {
-  const { isAuthenticated, setAuth } = useAuthStore()
+  const { isAuthenticated, setAuth, isGuest } = useAuthStore()
   const navigate = useNavigate()
   const [loggingIn, setLoggingIn] = useState(false)
 
@@ -68,11 +69,8 @@ export function AuthGuard({ children }: { children: React.ReactNode }) {
       const res = await authApi.telegramLogin(tg.initData)
       setAuth(res.data.access_token, res.data.user)
       toast.success("Muvaffaqiyatli kirildi!")
-    } catch (e: unknown) {
-      const err = e as { response?: { data?: { detail?: string }; status?: number } }
-      const detail = err?.response?.data?.detail || "Xatolik yuz berdi"
-      const status = err?.response?.status
-      toast.error(`${detail} (${status ?? "ulanmadi"})`)
+    } catch (e: any) {
+      toast.error(e.response?.data?.detail || "Xatolik yuz berdi")
     } finally {
       setLoggingIn(false)
     }
@@ -80,27 +78,34 @@ export function AuthGuard({ children }: { children: React.ReactNode }) {
 
   if (!isAuthenticated) {
     return (
-      <div className="flex flex-col items-center justify-center min-h-[70vh] px-6 text-center">
-        <div className="w-16 h-16 rounded-2xl flex items-center justify-center mb-4"
-          style={{ background: "rgba(13,148,136,0.1)", border: "1px solid rgba(13,148,136,0.2)" }}>
-          <Lightning size={28} color="#0d9488" weight="fill" />
-        </div>
-        <h2 className="text-white font-bold text-lg mb-2">Ro'yxatdan o'tish</h2>
-        <p className="text-obs-300 text-sm mb-6 leading-relaxed">
-          Bu bo'limdan foydalanish uchun Telegram akkauntingiz bilan kiring
+      <div className="flex flex-col items-center justify-center py-24 px-8 text-center bg-obs-900 min-h-screen">
+        <motion.div initial={{ scale: 0.8 }} animate={{ scale: 1 }}
+          className="w-20 h-20 rounded-3xl flex items-center justify-center mb-6"
+          style={{ background: 'linear-gradient(135deg, rgba(13,148,136,0.1), rgba(200,168,75,0.05))', border: '1px solid rgba(13,148,136,0.2)' }}>
+          <Lightning size={36} color="#0d9488" weight="fill" />
+        </motion.div>
+        
+        <h2 className="text-white font-bold text-xl mb-3">Ro'yxatdan o'ting</h2>
+        <p className="text-obs-400 text-sm mb-8 leading-relaxed">
+          Ushbu amalni bajarish uchun platformada ro'yxatdan o'tishingiz shart. 
+          Bu bir necha soniya vaqt oladi.
         </p>
+
         <button
           onClick={handleLogin}
           disabled={loggingIn}
-          className="w-full max-w-xs py-3.5 rounded-2xl font-bold text-sm text-white flex items-center justify-center gap-2 mb-3 active:scale-95 transition-transform disabled:opacity-60"
-          style={{ background: "linear-gradient(135deg,#0d9488,#0f766e)" }}>
-          {loggingIn
-            ? <><div className="w-4 h-4 border-2 border-white border-t-transparent rounded-full animate-spin" /> Kirilmoqda...</>
-            : <><TelegramLogo size={18} weight="fill" /> Telegram orqali kirish</>
-          }
+          className="w-full py-4 rounded-2xl text-white font-bold text-sm flex items-center justify-center gap-3 active:scale-[0.98] transition-all disabled:opacity-50"
+          style={{ background: 'linear-gradient(135deg, #0d9488, #0f766e)', boxShadow: '0 8px 24px rgba(13,148,136,0.25)' }}>
+          {loggingIn ? (
+            <div className="w-5 h-5 border-2 border-white/30 border-t-white rounded-full animate-spin" />
+          ) : (
+            <TelegramLogo size={20} weight="fill" />
+          )}
+          Telegram orqali kirish
         </button>
-        <button onClick={() => navigate("/")} className="text-obs-400 text-sm py-2">
-          Bosh sahifaga qaytish
+
+        <button onClick={() => navigate("/explore")} className="mt-4 text-obs-500 text-xs font-bold uppercase tracking-widest hover:text-obs-300">
+          Keyinroq • Orqaga qaytish
         </button>
       </div>
     )
@@ -238,13 +243,22 @@ function AppInner() {
 
   if (loading) return <LoadingScreen />
 
+  const { isAuthenticated, isGuest, setGuest } = useAuthStore()
+
   // 1. Yangi foydalanuvchi — Welcome screen
-  if (showWelcome) {
+  if (showWelcome && !isAuthenticated && !isGuest) {
     return (
-      <WelcomePage onEnter={() => {
-        setShowWelcome(false)
-        setShowOnboarding(true)
-      }} />
+      <WelcomePage 
+        onEnter={() => {
+          setShowWelcome(false)
+          setShowOnboarding(true)
+        }} 
+        onGuest={() => {
+          setGuest(true)
+          setShowWelcome(false)
+          navigate('/explore')
+        }}
+      />
     )
   }
 

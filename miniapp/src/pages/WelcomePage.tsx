@@ -1,10 +1,13 @@
 import { motion } from 'framer-motion'
 import {
-  TelegramLogo, Lightning, Buildings, ChartLineUp,
-  Star, Users, ArrowRight, CheckCircle
+  TelegramLogo, Lightning, Buildings, 
+  Star, Users, CheckCircle
 } from '@phosphor-icons/react'
 
-interface Props { onEnter: () => void }
+interface Props { 
+  onEnter: () => void
+  onGuest: () => void
+}
 
 const LISTINGS = [
   { icon: '📡', name: 'Toshkent Yangiliklari', type: 'Telegram kanal', stat: '👥 120K', price: '500K so\'m/post', verified: true },
@@ -13,23 +16,23 @@ const LISTINGS = [
   { icon: '🎨', name: 'DesignUz Studio', type: 'Kreativ dizayn', stat: '✅ Pro', price: '800K so\'m/loyiha', verified: true },
 ]
 
-export default function WelcomePage({ onEnter }: Props) {
+export default function WelcomePage({ onEnter, onGuest }: Props) {
   return (
-    <div className="fixed inset-0 bg-obs-900 overflow-y-auto">
+    <div className="fixed inset-0 bg-obs-900 overflow-y-auto overflow-x-hidden">
       {/* Ambient glows */}
       <div className="pointer-events-none fixed top-0 right-0 w-64 h-64 rounded-full"
         style={{ background: 'radial-gradient(circle, rgba(13,148,136,0.12) 0%, transparent 70%)' }} />
       <div className="pointer-events-none fixed bottom-32 left-0 w-72 h-72 rounded-full"
         style={{ background: 'radial-gradient(circle, rgba(200,168,75,0.08) 0%, transparent 70%)' }} />
 
-      <div className="px-5 pt-10 pb-32 relative z-10">
+      <div className="px-5 pt-10 pb-40 relative z-10">
 
         {/* Live badge */}
         <motion.div initial={{ opacity: 0, y: -10 }} animate={{ opacity: 1, y: 0 }}
           className="inline-flex items-center gap-2 mb-6 px-3 py-1.5 rounded-full border"
           style={{ background: 'rgba(13,148,136,0.08)', borderColor: 'rgba(13,148,136,0.2)' }}>
           <span className="w-2 h-2 rounded-full bg-teal-400 animate-pulse" />
-          <span className="text-teal-400 text-xs font-semibold tracking-wide">O'ZBEKISTON #1 AD PLATFORM</span>
+          <span className="text-teal-400 text-xs font-semibold tracking-wide uppercase">MIDAS: Professional Reklama Maydoni</span>
         </motion.div>
 
         {/* Logo */}
@@ -39,126 +42,108 @@ export default function WelcomePage({ onEnter }: Props) {
               style={{ background: 'linear-gradient(135deg, #0d9488, #0f766e)', boxShadow: '0 8px 24px rgba(13,148,136,0.3)' }}>
               <Lightning size={24} color="#fff" weight="fill" />
             </div>
-            <span className="font-display text-5xl tracking-widest midas-gradient">MIDAS</span>
+            <span className="font-display text-5xl tracking-widest font-bold italic midas-gradient">MIDAS</span>
           </div>
-          <p className="text-obs-100 font-semibold text-lg leading-snug mb-2">
-            Reklama. Marketing.<br />Hamkorlik.
+          <h1 className="text-white font-bold text-2xl leading-tight mb-3">
+            O'zbekistondagi eng yirik reklama boti
+          </h1>
+          <p className="text-obs-300 text-sm leading-relaxed mb-6">
+            Midas — bu reklama beruvchilar va ijrochilar (kanal egalari, dizaynerlar, targetologlar)ni birlashtiruvchi markazdir. 
+            Xavfsiz to'lovlar, keng bozor va qulay interfeys bilan reklama kampaniyalaringizni boshqaring.
           </p>
-          <p className="text-obs-300 text-sm leading-relaxed">
-            Brendlar, kanallar, agentliklar va kreativ mutaxassislarni birlashtiruvchi professional platforma
-          </p>
         </motion.div>
 
-        {/* Stats */}
-        <motion.div initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.15 }}
-          className="grid grid-cols-3 gap-3 mt-6 mb-6">
-          {[
-            { icon: <TelegramLogo size={16} weight="fill" color="#2dd4bf" />, val: '2.4K+', label: 'Kanallar' },
-            { icon: <Buildings size={16} weight="fill" color="#c8a84b" />, val: '850+', label: 'Brendlar' },
-            { icon: <ChartLineUp size={16} weight="bold" color="#2dd4bf" />, val: '4.2M+', label: 'Bitimlar' },
-          ].map(({ icon, val, label }) => (
-            <div key={label} className="bg-obs-800 border border-obs-700 rounded-2xl p-3 text-center">
-              <div className="flex justify-center mb-1">{icon}</div>
-              <div className="font-display text-xl midas-gradient">{val}</div>
-              <div className="text-obs-300 text-[10px] font-medium mt-0.5">{label}</div>
-            </div>
-          ))}
-        </motion.div>
-
-        {/* Featured listings */}
-        <motion.div initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.22 }}>
-          <div className="flex items-center justify-between mb-3">
-            <span className="text-obs-300 text-xs font-bold tracking-widest uppercase">Top reklama joylari</span>
-            <span className="text-[10px] font-bold px-2 py-0.5 rounded-full"
-              style={{ background: 'rgba(200,168,75,0.1)', color: '#c8a84b', border: '1px solid rgba(200,168,75,0.2)' }}>
-              ✦ Verified
-            </span>
+        {/* Info Grid */}
+        <motion.div initial={{ opacity: 0, scale: 0.95 }} animate={{ opacity: 1, scale: 1 }} transition={{ delay: 0.2 }}
+          className="grid grid-cols-2 gap-3 mb-8">
+          <div className="bg-obs-800/50 backdrop-blur border border-obs-700 p-4 rounded-2xl">
+            <div className="text-teal-400 mb-2"><TelegramLogo size={24} weight="fill" /></div>
+            <div className="text-white font-bold text-sm mb-1 font-display uppercase tracking-wider">Reklama bering</div>
+            <div className="text-obs-400 text-[10px]">O'zingizga mos kanal va ijrochilarni toping</div>
           </div>
+          <div className="bg-obs-800/50 backdrop-blur border border-obs-700 p-4 rounded-2xl">
+            <div className="text-gold-500 mb-2"><Buildings size={24} weight="fill" /></div>
+            <div className="text-white font-bold text-sm mb-1 font-display uppercase tracking-wider">Daromad qiling</div>
+            <div className="text-obs-400 text-[10px]">E'lon joylang va buyurtmalar qabul qiling</div>
+          </div>
+        </motion.div>
 
-          <div className="flex gap-3 overflow-x-auto pb-2 scrollbar-hide -mx-1 px-1">
-            {LISTINGS.map((l, i) => (
-              <motion.div key={i}
-                initial={{ opacity: 0, x: 20 }} animate={{ opacity: 1, x: 0 }}
-                transition={{ delay: 0.25 + i * 0.06 }}
-                className="flex-shrink-0 w-[140px] bg-obs-800 border border-obs-700 rounded-2xl p-3">
-                <div className="flex items-center gap-2 mb-3">
-                  <div className="w-9 h-9 rounded-xl bg-obs-700 flex items-center justify-center text-lg flex-shrink-0">
-                    {l.icon}
-                  </div>
-                  <div className="min-w-0">
-                    <div className="text-white text-[11px] font-semibold truncate-safe">{l.name}</div>
-                    <div className="text-obs-300 text-[9px] truncate-safe">{l.type}</div>
-                  </div>
+        {/* Featured Title */}
+        <div className="flex items-center justify-between mb-4">
+          <span className="text-obs-300 text-[10px] font-bold tracking-widest uppercase">Reklama bozori ko'rinishi</span>
+          <div className="h-[1px] flex-1 bg-obs-700 mx-4" />
+        </div>
+
+        {/* Featured listings - visual only for welcome */}
+        <div className="flex gap-3 overflow-x-auto pb-4 scrollbar-hide -mx-1 px-1 mb-8">
+          {LISTINGS.map((l, i) => (
+            <motion.div key={i}
+              initial={{ opacity: 0, x: 20 }} animate={{ opacity: 1, x: 0 }}
+              transition={{ delay: 0.35 + i * 0.06 }}
+              className="flex-shrink-0 w-[160px] bg-obs-800 border border-obs-700 rounded-2xl p-4">
+              <div className="flex items-center gap-3 mb-3">
+                <div className="w-10 h-10 rounded-xl bg-obs-700 flex items-center justify-center text-xl shadow-inner">
+                  {l.icon}
                 </div>
-                <div className="flex items-center gap-1 mb-1">
-                  <span className="text-[10px] px-1.5 py-0.5 rounded-md font-medium"
-                    style={{ background: 'rgba(13,148,136,0.12)', color: '#2dd4bf' }}>{l.stat}</span>
-                  {l.verified && (
-                    <CheckCircle size={12} color="#c8a84b" weight="fill" />
-                  )}
+                <div className="min-w-0">
+                  <div className="text-white text-[11px] font-bold truncate">{l.name}</div>
+                  <div className="text-obs-400 text-[9px] truncate">{l.type}</div>
                 </div>
-                <div className="text-gold-500 text-[10px] font-bold mb-2 truncate-safe">{l.price}</div>
-                <button className="w-full h-7 rounded-lg text-white text-[9px] font-bold"
-                  style={{ background: 'linear-gradient(135deg, #0d9488, #0f766e)' }}>
-                  Ko'rish
-                </button>
-              </motion.div>
-            ))}
-          </div>
-        </motion.div>
-
-        {/* Trust row */}
-        <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} transition={{ delay: 0.45 }}
-          className="flex items-center gap-3 mt-5 mb-6 p-3 bg-obs-800 border border-obs-700 rounded-2xl">
-          <div className="flex">
-            {['👤', '👤', '👤', '👤'].map((av, i) => (
-              <div key={i} className="w-7 h-7 rounded-full bg-obs-700 border-2 border-obs-800 flex items-center justify-center text-xs"
-                style={{ marginLeft: i > 0 ? '-8px' : '0' }}>{av}</div>
-            ))}
-          </div>
-          <div className="flex-1 min-w-0">
-            <div className="text-white text-xs font-semibold">
-              <span style={{ color: '#2dd4bf' }}>1,200+</span> mutaxassis
-            </div>
-            <div className="text-obs-300 text-[10px]">allaqachon platformada ishlaydi</div>
-          </div>
-          <div className="flex">
-            {[1,2,3,4,5].map(i => <Star key={i} size={10} color="#c8a84b" weight="fill" />)}
-          </div>
-        </motion.div>
-
-        {/* Features */}
-        <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} transition={{ delay: 0.5 }}
-          className="space-y-2 mb-6">
-          {[
-            { icon: <TelegramLogo size={14} weight="fill" color="#2dd4bf" />, text: 'Telegram, YouTube, Billboard, LED ekranlar' },
-            { icon: <Users size={14} weight="bold" color="#c8a84b" />, text: 'Media buyer, targetolog, dizayner, agentlik' },
-            { icon: <ChartLineUp size={14} weight="bold" color="#2dd4bf" />, text: 'Kampaniya → Taklif → Chat → Kelishuv' },
-          ].map(({ icon, text }, i) => (
-            <div key={i} className="flex items-center gap-3 text-obs-200 text-xs">
-              <div className="w-6 h-6 rounded-lg flex items-center justify-center flex-shrink-0 bg-obs-800 border border-obs-700">
-                {icon}
               </div>
-              <span className="leading-relaxed">{text}</span>
-            </div>
+              <div className="flex items-center gap-1.5 mb-2">
+                <span className="text-[9px] px-2 py-0.5 rounded-full font-bold"
+                  style={{ background: 'rgba(13,148,136,0.15)', color: '#2dd4bf' }}>{l.stat}</span>
+                {l.verified && <CheckCircle size={12} color="#c8a84b" weight="fill" />}
+              </div>
+              <div className="text-gold-500 text-xs font-bold">{l.price}</div>
+            </motion.div>
           ))}
+        </div>
+
+        {/* Platform trust */}
+        <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} transition={{ delay: 0.6 }}
+          className="bg-obs-800/30 border border-obs-700/50 rounded-2xl p-4 text-center mb-10">
+          <p className="text-obs-300 text-xs mb-3">Siz yuzlab professionallar bilan birgasiz</p>
+          <div className="flex justify-center -space-x-2 mb-2">
+            {[1, 2, 3, 4, 5].map(i => (
+              <div key={i} className="w-8 h-8 rounded-full border-2 border-obs-900 bg-obs-700 flex items-center justify-center text-[10px]">👤</div>
+            ))}
+          </div>
+          <div className="flex justify-center text-gold-500 gap-0.5">
+            {[1, 2, 3, 4, 5].map(i => <Star key={i} size={12} weight="fill" />)}
+          </div>
         </motion.div>
+
       </div>
 
-      {/* CTA fixed at bottom */}
-      <div className="fixed bottom-0 left-0 right-0 z-20 px-5 pb-safe pt-3"
-        style={{ background: 'linear-gradient(to top, #060809 60%, transparent)' }}>
-        <motion.button
-          initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.55 }}
-          onClick={onEnter}
-          className="w-full py-4 rounded-2xl text-white font-bold text-sm flex items-center justify-center gap-2"
-          style={{ background: 'linear-gradient(135deg, #0d9488, #0f766e)', boxShadow: '0 8px 28px rgba(13,148,136,0.35)' }}>
-          <TelegramLogo size={18} weight="fill" />
-          Telegram orqali kirish
-          <ArrowRight size={16} weight="bold" />
-        </motion.button>
-        <p className="text-center text-obs-400 text-[10px] mt-2 pb-1">
-          Bepul • Bir daqiqada ro'yxatdan o'ting
+      {/* FIXED CTAs */}
+      <div className="fixed bottom-0 left-0 right-0 z-30 px-5 pb-8 pt-6"
+        style={{ background: 'linear-gradient(to top, #060809 85%, transparent)' }}>
+        
+        <div className="flex flex-col gap-3">
+          <motion.button
+            initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.7 }}
+            onClick={onEnter}
+            className="w-full py-4 rounded-2xl text-white font-bold text-sm flex items-center justify-center gap-3 active:scale-[0.98] transition-all"
+            style={{ 
+              background: 'linear-gradient(135deg, #0d9488, #0f766e)', 
+              boxShadow: '0 8px 32px rgba(13,148,136,0.3)' 
+            }}>
+            <TelegramLogo size={20} weight="fill" />
+            Telegram orqali ro'yxatdan o'tish
+          </motion.button>
+
+          <motion.button
+            initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.75 }}
+            onClick={onGuest}
+            className="w-full py-4 rounded-2xl text-obs-200 font-bold text-sm flex items-center justify-center gap-2 border border-obs-700 bg-obs-800/50 active:scale-[0.98] transition-all">
+            <Users size={18} weight="bold" />
+            Ro'yxatdan o'tmasdan bozorni ko'rish
+          </motion.button>
+        </div>
+
+        <p className="text-center text-obs-500 text-[10px] mt-4 font-medium uppercase tracking-widest">
+          MIDAS v1.5 • 2024
         </p>
       </div>
     </div>
