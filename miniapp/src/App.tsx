@@ -10,6 +10,30 @@ import { authApi } from './utils/api'
 import './styles/globals.css'
 import { I18nProvider } from './i18n/I18nContext'
 
+declare global {
+  interface Window {
+    Telegram?: {
+      WebApp: {
+        initData: string;
+        initDataUnsafe: {
+          user?: any;
+          start_param?: string;
+        };
+        ready: () => void;
+        expand: () => void;
+        close: () => void;
+        HapticFeedback: {
+          impactOccurred: (style: 'light' | 'medium' | 'heavy' | 'rigid' | 'soft') => void;
+          notificationOccurred: (type: 'error' | 'success' | 'warning') => void;
+          selectionChanged: () => void;
+        };
+        setBackgroundColor: (color: string) => void;
+        setHeaderColor: (color: string) => void;
+      }
+    }
+  }
+}
+
 // Pages
 import MiniHomePage        from './pages/MiniHomePage'
 import MiniExplorePage     from './pages/MiniExplorePage'
@@ -205,13 +229,29 @@ function AppInner() {
     const safetyTimer = setTimeout(() => setLoading(false), 10000)
 
     const tg = window.Telegram?.WebApp
-    if (tg) {
-      tg.expand()
-      tg.ready()
-      try { tg.setBackgroundColor('#060809') } catch {}
-      try { tg.setHeaderColor('#060809') } catch {}
+      if (tg) {
+        tg.expand()
+        tg.ready()
+        try { tg.setBackgroundColor('#060809') } catch {}
+        try { tg.setHeaderColor('#060809') } catch {}
 
-      if (tg.initData) {
+        // ── Start Param Handling (Deep Links) ──
+        const startParam = tg.initDataUnsafe?.start_param
+        if (startParam) {
+          if (startParam === 'explore') {
+            navigate('/explore')
+          } else if (startParam.startsWith('listing_')) {
+            const id = startParam.split('_')[1]
+            navigate(`/listing/${id}`)
+          } else if (startParam.startsWith('campaign_')) {
+            const id = startParam.split('_')[1]
+            navigate(`/campaign/${id}`)
+          } else if (startParam === 'profile') {
+            navigate('/profile')
+          }
+        }
+
+        if (tg.initData) {
         // Har doim yangi token olish (eski token invalid bo'lishi mumkin)
         authApi.telegramLogin(tg.initData)
           .then(res => {

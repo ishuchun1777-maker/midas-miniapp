@@ -9,24 +9,32 @@ router = Router()
 MINI_APP_URL = os.getenv("TELEGRAM_MINI_APP_URL", "https://t.me/MidasUzBot/app")
 
 
+def get_url(path: str | None = None):
+    """Deep link yoki oddiy URL qaytaradi"""
+    base = os.getenv("TELEGRAM_MINI_APP_URL", "https://t.me/MidasUzBot/app")
+    if "t.me/" in base:
+        if not path: return base
+        sep = "&" if "?" in base else "?"
+        return f"{base}{sep}startapp={path.replace('/', '_')}"
+    else:
+        if not path: return base
+        return f"{base.rstrip('/')}/{path.lstrip('/')}"
+
+
 def main_keyboard() -> InlineKeyboardMarkup:
     builder = InlineKeyboardBuilder()
     builder.row(
-        InlineKeyboardButton(
-            text="🚀 MIDAS ni ochish",
-            web_app={"url": MINI_APP_URL},
-        )
+        InlineKeyboardButton(text="💎 MIDAS: Platformani ochish", web_app={"url": get_url()})
     )
     builder.row(
-        InlineKeyboardButton(text="📢 Reklama joylash", callback_data="list_ad"),
-        InlineKeyboardButton(text="🔍 Reklama topish", callback_data="find_ad"),
+        InlineKeyboardButton(text="🔍 Reklama bozorini ko'rish", web_app={"url": get_url("explore")})
     )
     builder.row(
-        InlineKeyboardButton(text="📊 Kampaniyalar", callback_data="campaigns"),
-        InlineKeyboardButton(text="💬 Xabarlar", callback_data="messages"),
+        InlineKeyboardButton(text="📢 E'lon joylash", callback_data="list_ad"),
+        InlineKeyboardButton(text="📊 Kampaniyalar", callback_data="campaigns")
     )
     builder.row(
-        InlineKeyboardButton(text="❓ Yordam", callback_data="help"),
+        InlineKeyboardButton(text="❓ Yordam", callback_data="help")
     )
     return builder.as_markup()
 
@@ -45,32 +53,7 @@ async def cmd_start(message: Message):
         f"🔥 <b>Hoziroq boshlang:</b>"
     )
 
-    # Agar t.me havolasi bo'lsa, startapp parametrini ishlatamiz
-    def get_url(path: str = None):
-        if "t.me/" in MINI_APP_URL:
-            if not path: return MINI_APP_URL
-            sep = "&" if "?" in MINI_APP_URL else "?"
-            return f"{MINI_APP_URL}{sep}startapp={path.replace('/', '_')}"
-        else:
-            if not path: return MINI_APP_URL
-            return f"{MINI_APP_URL.rstrip('/')}/{path.lstrip('/')}"
-
-    builder = InlineKeyboardBuilder()
-    builder.row(
-        InlineKeyboardButton(text="💎 MIDAS: Ro'yxatdan o'tish", web_app={"url": get_url()})
-    )
-    builder.row(
-        InlineKeyboardButton(text="🔍 Reklama bozorini ko'rish", web_app={"url": get_url("explore")})
-    )
-    builder.row(
-        InlineKeyboardButton(text="📢 E'lon joylash", callback_data="list_ad"),
-        InlineKeyboardButton(text="📋 Kampaniyalar", callback_data="campaigns")
-    )
-    builder.row(
-        InlineKeyboardButton(text="❓ Yordam va Qo'llab-quvvatlash", callback_data="help")
-    )
-
-    await message.answer(text, reply_markup=builder.as_markup())
+    await message.answer(text, reply_markup=main_keyboard())
 
 
 @router.message(Command("help"))
@@ -81,8 +64,6 @@ async def cmd_help(message: Message):
         "/start — Bosh menyu\n"
         "/profile — Mening profilim\n"
         "/listings — Mening e'lonlarim\n"
-        "/deals — Faol bitimlar\n"
-        "/notifications — Bildirishnomalar\n\n"
         "💡 <b>Savol va takliflar uchun:</b>\n"
         "@MidasUzSupport ga yozing"
     )
@@ -93,45 +74,33 @@ async def cmd_help(message: Message):
 async def cb_list_ad(callback: CallbackQuery):
     builder = InlineKeyboardBuilder()
     builder.row(
-        InlineKeyboardButton(
-            text="📱 E'lon yaratish",
-            web_app={"url": f"{MINI_APP_URL}?page=create-listing"},
-        )
+        InlineKeyboardButton(text="📱 E'lon yaratish", web_app={"url": get_url("listing/create")})
     )
     builder.row(InlineKeyboardButton(text="⬅️ Orqaga", callback_data="back_main"))
     await callback.message.edit_text(
         "<b>📢 Reklama joylashtirish</b>\n\n"
-        "Quyidagi turlardan birini tanlang:\n\n"
-        "📱 Telegram kanal\n"
-        "📺 YouTube kanal\n"
-        "🖼 Billboard / LED\n"
-        "🎯 Media buyer xizmati\n"
-        "🎨 Kreativ xizmat\n\n"
-        "E'lon yaratish uchun MIDAS ni oching 👇",
+        "Quyidagi turlardan biri bo'yicha e'lon yarating:\n\n"
+        "• Telegram / YouTube / Social Media\n"
+        "• Billboard / LED / Transport\n"
+        "• Marketing / Creative xizmatlar\n\n"
+        "Davom etish uchun pastdagi tugmani bosing 👇",
         reply_markup=builder.as_markup()
     )
     await callback.answer()
 
 
-@router.callback_query(F.data == "find_ad")
-async def cb_find_ad(callback: CallbackQuery):
+@router.callback_query(F.data == "campaigns")
+async def cb_campaigns(callback: CallbackQuery):
     builder = InlineKeyboardBuilder()
     builder.row(
-        InlineKeyboardButton(
-            text="🔍 Bozorni ko'rish",
-            web_app={"url": f"{MINI_APP_URL}?page=explore"},
-        )
+        InlineKeyboardButton(text="📋 Kampaniyalarni ko'rish", web_app={"url": get_url("campaigns")})
     )
     builder.row(InlineKeyboardButton(text="⬅️ Orqaga", callback_data="back_main"))
     await callback.message.edit_text(
-        "<b>🔍 Reklama topish</b>\n\n"
-        "Sizga kerakli reklama turini topishga yordam beramiz:\n\n"
-        "• Telegram kanallar\n"
-        "• YouTube creatorlar\n"
-        "• Billboard va LED ekranlar\n"
-        "• Media buyerlar\n"
-        "• Dizaynerlar\n\n"
-        "MIDAS bozorini ochib ko'ring 👇",
+        "<b>📋 Kampaniyalar bo'limi</b>\n\n"
+        "Tadbirkorlarning reklama so'rovlari va kastinglari.\n"
+        "Taklif bering va buyurtma oling.\n\n"
+        "MIDAS da ko'rish uchun 👇",
         reply_markup=builder.as_markup()
     )
     await callback.answer()
@@ -142,28 +111,23 @@ async def cb_back_main(callback: CallbackQuery):
     user_name = callback.from_user.first_name if callback.from_user else "Foydalanuvchi"
     await callback.message.edit_text(
         f"<b>Salom, {user_name}! 👋</b>\n\n"
-        f"<b>MIDAS</b> ga xush kelibsiz — professional reklama platformasi.\n\n"
+        f"<b>MIDAS</b> — Professional reklama platformasi.\n\n"
         f"Boshlash uchun tanlang 👇",
         reply_markup=main_keyboard()
     )
     await callback.answer()
 
 
-@router.callback_query(F.data == "campaigns")
-async def cb_campaigns(callback: CallbackQuery):
-    builder = InlineKeyboardBuilder()
-    builder.row(
-        InlineKeyboardButton(
-            text="📋 Kampaniyalarni ko'rish",
-            web_app={"url": f"{MINI_APP_URL}?page=campaigns"},
-        )
-    )
-    builder.row(InlineKeyboardButton(text="⬅️ Orqaga", callback_data="back_main"))
+@router.callback_query(F.data == "help")
+async def cb_help(callback: CallbackQuery):
     await callback.message.edit_text(
-        "<b>📋 Kampaniyalar</b>\n\n"
-        "Tadbirkorlarning reklama brieflariga taklif bering\n"
-        "yoki o'zingizning kampaniyangizni yarating.\n\n"
-        "MIDAS da ko'rish uchun 👇",
-        reply_markup=builder.as_markup()
+        "<b>💡 Yordam</b>\n\n"
+        "MIDAS platformasi haqida savollaringiz bormi?\n\n"
+        "• Har bir bitim xavfsiz garant orqali amalga oshadi.\n"
+        "• To'lovlar Telegram Stars, Click va Payme orqali.\n\n"
+        "Bog'lanish: @MidasUzSupport",
+        reply_markup=InlineKeyboardMarkup(inline_keyboard=[
+            [InlineKeyboardButton(text="⬅️ Orqaga", callback_data="back_main")]
+        ])
     )
     await callback.answer()
