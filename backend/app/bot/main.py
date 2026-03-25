@@ -18,7 +18,7 @@ logger = logging.getLogger(__name__)
 
 BOT_TOKEN = os.getenv("TELEGRAM_BOT_TOKEN", "")
 MINI_APP_URL = os.getenv("TELEGRAM_MINI_APP_URL", "")
-
+app = FastAPI(redirect_slashes=False)
 
 async def main():
     bot = Bot(
