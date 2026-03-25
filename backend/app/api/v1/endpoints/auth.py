@@ -11,10 +11,9 @@ logger = logging.getLogger(__name__)
 router = APIRouter()
 
 
-@router.post("/telegram", response_model=TelegramAuthResponse)
-async def telegram_auth(
+async def _telegram_auth_handler(
     request: TelegramAuthRequest,
-    db: AsyncSession = Depends(get_db),
+    db: AsyncSession,
 ):
     """Authenticate via Telegram Mini App initData"""
     logger.info(f"Auth attempt, init_data length: {len(request.init_data)}")
@@ -55,12 +54,27 @@ async def telegram_auth(
         await update_user_last_seen(db, user.id)
 
     token = create_access_token(user.id, telegram_id)
-
     return TelegramAuthResponse(
         access_token=token,
         user=user,
         is_new_user=is_new_user,
     )
+
+
+@router.post("/telegram", response_model=TelegramAuthResponse)
+async def telegram_auth(
+    request: TelegramAuthRequest,
+    db: AsyncSession = Depends(get_db),
+):
+    return await _telegram_auth_handler(request, db)
+
+
+@router.post("/telegram/", response_model=TelegramAuthResponse, include_in_schema=False)
+async def telegram_auth_slash(
+    request: TelegramAuthRequest,
+    db: AsyncSession = Depends(get_db),
+):
+    return await _telegram_auth_handler(request, db)
 
 
 @router.get("/me")
