@@ -34,6 +34,7 @@ def verify_telegram_init_data(init_data: str) -> Optional[Dict[str, Any]]:
             raw_parsed[key] = value
 
         hash_value = raw_parsed.pop("hash", None)
+        raw_parsed.pop("signature", None)  # ✅ signature ni chiqarib tashlash
 
         if not hash_value:
             logger.warning("No hash in initData")
@@ -67,16 +68,11 @@ def verify_telegram_init_data(init_data: str) -> Optional[Dict[str, Any]]:
             logger.error("TELEGRAM_BOT_TOKEN not set")
             return None
 
-        # ✅ Debug — to'g'ri joyda
-        token = settings.TELEGRAM_BOT_TOKEN.strip()  # strip() — bo'sh joy bo'lsa ham ishlaydi
-        logger.info(f"TOKEN (first 15): '{token[:15]}'")
-        logger.info(f"TOKEN length: {len(token)}")
+        token = settings.TELEGRAM_BOT_TOKEN.strip()
 
-        # data_check_string — raw_parsed dagi qiymatlar URL-decode qilinmagan holda
         data_check_string = "\n".join(
             f"{k}={v}" for k, v in sorted(raw_parsed.items())
         )
-        logger.info(f"data_check_string: {data_check_string[:200]}")
 
         secret_key = hmac_lib.new(
             b"WebAppData",
@@ -89,9 +85,6 @@ def verify_telegram_init_data(init_data: str) -> Optional[Dict[str, Any]]:
             data_check_string.encode(),
             hashlib.sha256,
         ).hexdigest()
-
-        logger.info(f"computed: {computed}")
-        logger.info(f"received: {hash_value}")
 
         if not hmac_lib.compare_digest(computed, hash_value):
             logger.warning("Hash mismatch — rejecting initData")
