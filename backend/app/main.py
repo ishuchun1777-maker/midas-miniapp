@@ -8,9 +8,12 @@ import asyncio
 import sys
 import traceback
 
+
 def handle_exception(exc_type, exc_value, exc_tb):
     logging.error("STARTUP ERROR:")
     logging.error("".join(traceback.format_exception(exc_type, exc_value, exc_tb)))
+
+
 sys.excepthook = handle_exception
 
 from app.core.config import settings
@@ -21,7 +24,7 @@ logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
 
 
-async def run_bot(bot):  # ← bot tashqaridan uzatiladi
+async def run_bot(bot):
     logger.info("Bot polling started!")
     try:
         from aiogram import Dispatcher
@@ -43,6 +46,8 @@ async def run_bot(bot):  # ← bot tashqaridan uzatiladi
         await bot.delete_webhook(drop_pending_updates=True)
 
         await dp.start_polling(bot, allowed_updates=dp.resolve_used_update_types())
+    except asyncio.CancelledError:
+        logger.info("Bot polling cancelled.")
     except Exception as e:
         logger.error(f"Bot error: {e}", exc_info=True)
 
@@ -51,33 +56,38 @@ async def run_bot(bot):  # ← bot tashqaridan uzatiladi
 async def lifespan(app: FastAPI):
     logger.info("=== MIDAS API starting up ===")
 
+    # DB yaratish
     async with engine.begin() as conn:
         await conn.run_sync(Base.metadata.create_all)
     logger.info("Database tables created/verified")
 
+    # Bot obyektini tayorlab qo'yamiz
     bot = None
-    bot_task = None
-
     if settings.TELEGRAM_BOT_TOKEN:
         from aiogram import Bot
         from aiogram.client.default import DefaultBotProperties
         from aiogram.enums import ParseMode
 
-        # Bitta Bot obyekti — ikkalasida ishlatiladi
         bot = Bot(
             token=settings.TELEGRAM_BOT_TOKEN,
             default=DefaultBotProperties(parse_mode=ParseMode.HTML)
         )
         app.state.bot = bot
-
-        logger.info("Launching bot task...")
-        bot_task = asyncio.create_task(run_bot(bot))  # ← bir xil bot uzatiladi
-        logger.info("Bot task created!")
+        logger.info("Bot instance created.")
     else:
         logger.warning("TELEGRAM_BOT_TOKEN not set — bot ishga tushmadi")
 
+    # ✅ Avval yield — port ochilsin, server tayyor bo'lsin
     yield
 
+    # ✅ Bot yield DAN KEYIN ishga tushadi — Render port muammosi bo'lmaydi
+    bot_task = None
+    if bot:
+        logger.info("Launching bot task...")
+        bot_task = asyncio.create_task(run_bot(bot))
+        logger.info("Bot task created!")
+
+    # Shutdown
     if bot_task:
         bot_task.cancel()
         try:
@@ -87,14 +97,16 @@ async def lifespan(app: FastAPI):
 
     if bot:
         await bot.session.close()
+        logger.info("Bot session closed.")
 
 
 app = FastAPI(
     title="MIDAS API",
     version="1.0.0",
     lifespan=lifespan,
-    redirect_slashes=False,  # ← qo'shildi
+    redirect_slashes=False,
 )
+
 
 @app.exception_handler(RequestValidationError)
 async def validation_exception_handler(request: Request, exc: RequestValidationError):
