@@ -20,7 +20,6 @@ security = HTTPBearer(auto_error=False)
 
 
 def verify_telegram_init_data(init_data: str) -> Optional[Dict[str, Any]]:
-    """Verify Telegram Mini App initData — returns None on invalid data"""
     try:
         if not init_data or not init_data.strip():
             logger.warning("Empty initData")
@@ -36,17 +35,21 @@ def verify_telegram_init_data(init_data: str) -> Optional[Dict[str, Any]]:
 
         hash_value = raw_parsed.pop("hash", None)
 
-        # auth_date tekshirish — 24 soatdan eski bo'lmasin
+        if not hash_value:
+            logger.warning("No hash in initData")
+            return None
+
+        # auth_date tekshirish
         try:
             auth_date = int(raw_parsed.get("auth_date", "0"))
             age = time.time() - auth_date
-            if age > 86400 * 7:  # 7 kun — keng chegara
+            if age > 86400 * 7:
                 logger.warning(f"initData too old: {age:.0f}s")
                 return None
         except (ValueError, TypeError):
             pass
 
-        # user ni URL-decode qilib parse
+        # user parse
         user_raw = raw_parsed.get("user", "")
         if not user_raw:
             logger.warning("No user field in initData")
@@ -60,29 +63,35 @@ def verify_telegram_init_data(init_data: str) -> Optional[Dict[str, Any]]:
             logger.warning("No user.id in initData")
             return None
 
-        # Hash tekshirish
         if not settings.TELEGRAM_BOT_TOKEN:
-            logger.error("TELEGRAM_BOT_TOKEN not set — cannot verify initData")
-            return None
-            
-        if not hash_value:
-            logger.warning("No hash in initData")
+            logger.error("TELEGRAM_BOT_TOKEN not set")
             return None
 
-        # Hash tekshirish
+        # ✅ Debug — to'g'ri joyda
+        token = settings.TELEGRAM_BOT_TOKEN.strip()  # strip() — bo'sh joy bo'lsa ham ishlaydi
+        logger.info(f"TOKEN (first 15): '{token[:15]}'")
+        logger.info(f"TOKEN length: {len(token)}")
+
+        # data_check_string — raw_parsed dagi qiymatlar URL-decode qilinmagan holda
         data_check_string = "\n".join(
             f"{k}={v}" for k, v in sorted(raw_parsed.items())
         )
+        logger.info(f"data_check_string: {data_check_string[:200]}")
+
         secret_key = hmac_lib.new(
             b"WebAppData",
-            settings.TELEGRAM_BOT_TOKEN.encode(),
+            token.encode(),
             hashlib.sha256,
         ).digest()
+
         computed = hmac_lib.new(
             secret_key,
             data_check_string.encode(),
             hashlib.sha256,
         ).hexdigest()
+
+        logger.info(f"computed: {computed}")
+        logger.info(f"received: {hash_value}")
 
         if not hmac_lib.compare_digest(computed, hash_value):
             logger.warning("Hash mismatch — rejecting initData")
