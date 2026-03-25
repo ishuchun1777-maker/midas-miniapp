@@ -21,17 +21,10 @@ logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
 
 
-async def run_bot():
-    token = settings.TELEGRAM_BOT_TOKEN
-    logger.info(f"BOT TOKEN CHECK: {'SET' if token else 'EMPTY'}")
-    if not token:
-        logger.warning("TELEGRAM_BOT_TOKEN not set — bot ishga tushmadi")
-        return
-    logger.info("Starting bot...")
+async def run_bot(bot):  # ← bot tashqaridan uzatiladi
+    logger.info("Bot polling started!")
     try:
-        from aiogram import Bot, Dispatcher
-        from aiogram.enums import ParseMode
-        from aiogram.client.default import DefaultBotProperties
+        from aiogram import Dispatcher
         from aiogram.fsm.storage.memory import MemoryStorage
         from app.bot.handlers.start import router as start_router
         from app.bot.handlers.notifications import router as notif_router
@@ -39,14 +32,16 @@ async def run_bot():
         from app.bot.handlers.admin import router as bot_admin_router
         from app.bot.middlewares.auth import AuthMiddleware
 
-        bot = Bot(token=token, default=DefaultBotProperties(parse_mode=ParseMode.HTML))
         dp = Dispatcher(storage=MemoryStorage())
         dp.message.middleware(AuthMiddleware())
         dp.include_router(start_router)
         dp.include_router(notif_router)
         dp.include_router(payments_router)
         dp.include_router(bot_admin_router)
-        logger.info("Bot polling started!")
+
+        # Eski webhook/polling ni tozalash
+        await bot.delete_webhook(drop_pending_updates=True)
+
         await dp.start_polling(bot, allowed_updates=dp.resolve_used_update_types())
     except Exception as e:
         logger.error(f"Bot error: {e}", exc_info=True)
@@ -55,53 +50,63 @@ async def run_bot():
 @asynccontextmanager
 async def lifespan(app: FastAPI):
     logger.info("=== MIDAS API starting up ===")
-    logger.info("Starting MIDAS API...")
 
-    # DB yaratish
     async with engine.begin() as conn:
         await conn.run_sync(Base.metadata.create_all)
     logger.info("Database tables created/verified")
 
-    # Bot task boshlash
-    logger.info("Launching bot task...")
-    
-    # Bot obyektini app.state ga saqlash (API dan foydalanish uchun)
-    from aiogram import Bot
-    from aiogram.client.default import DefaultBotProperties
-    from aiogram.enums import ParseMode
+    bot = None
+    bot_task = None
+
     if settings.TELEGRAM_BOT_TOKEN:
-        app.state.bot = Bot(token=settings.TELEGRAM_BOT_TOKEN, default=DefaultBotProperties(parse_mode=ParseMode.HTML))
-    
-    bot_task = asyncio.create_task(run_bot())
-    logger.info("Bot task created!")
+        from aiogram import Bot
+        from aiogram.client.default import DefaultBotProperties
+        from aiogram.enums import ParseMode
+
+        # Bitta Bot obyekti — ikkalasida ishlatiladi
+        bot = Bot(
+            token=settings.TELEGRAM_BOT_TOKEN,
+            default=DefaultBotProperties(parse_mode=ParseMode.HTML)
+        )
+        app.state.bot = bot
+
+        logger.info("Launching bot task...")
+        bot_task = asyncio.create_task(run_bot(bot))  # ← bir xil bot uzatiladi
+        logger.info("Bot task created!")
+    else:
+        logger.warning("TELEGRAM_BOT_TOKEN not set — bot ishga tushmadi")
 
     yield
 
-    # Shutdown
-    bot_task.cancel()
-    try:
-        await bot_task
-    except asyncio.CancelledError:
-        logger.info("Bot task stopped.")
+    if bot_task:
+        bot_task.cancel()
+        try:
+            await bot_task
+        except asyncio.CancelledError:
+            logger.info("Bot task stopped.")
+
+    if bot:
+        await bot.session.close()
 
 
-app = FastAPI(title="MIDAS API", version="1.0.0", lifespan=lifespan)
+app = FastAPI(
+    title="MIDAS API",
+    version="1.0.0",
+    lifespan=lifespan,
+    redirect_slashes=False,  # ← qo'shildi
+)
 
 @app.exception_handler(RequestValidationError)
 async def validation_exception_handler(request: Request, exc: RequestValidationError):
     errors = exc.errors()
     logger.error(f"422 Validation error on {request.method} {request.url.path}")
     logger.error(f"Errors: {errors}")
-    # Body ni ham log ga chiqaramiz
     try:
         body = await request.json()
         logger.error(f"Request body: {body}")
     except Exception:
         pass
-    return JSONResponse(
-        status_code=422,
-        content={"detail": errors}
-    )
+    return JSONResponse(status_code=422, content={"detail": errors})
 
 
 app.add_middleware(
