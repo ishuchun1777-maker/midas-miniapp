@@ -42,9 +42,6 @@ async def run_bot(bot):
         dp.include_router(payments_router)
         dp.include_router(bot_admin_router)
 
-        # Eski webhook/polling ni tozalash
-        await bot.delete_webhook(drop_pending_updates=True)
-
         await dp.start_polling(bot, allowed_updates=dp.resolve_used_update_types())
     except asyncio.CancelledError:
         logger.info("Bot polling cancelled.")
@@ -61,8 +58,9 @@ async def lifespan(app: FastAPI):
         await conn.run_sync(Base.metadata.create_all)
     logger.info("Database tables created/verified")
 
-    # Bot obyektini tayorlab qo'yamiz
     bot = None
+    bot_task = None
+
     if settings.TELEGRAM_BOT_TOKEN:
         from aiogram import Bot
         from aiogram.client.default import DefaultBotProperties
@@ -74,18 +72,18 @@ async def lifespan(app: FastAPI):
         )
         app.state.bot = bot
         logger.info("Bot instance created.")
+
+        # ✅ Webhook tozalash — yield DAN OLDIN (conflict oldini olish)
+        await bot.delete_webhook(drop_pending_updates=True)
+        logger.info("Webhook deleted.")
+
+        # ✅ Bot task — yield DAN OLDIN, background da ishlaydi
+        bot_task = asyncio.create_task(run_bot(bot))
+        logger.info("Bot task created!")
     else:
         logger.warning("TELEGRAM_BOT_TOKEN not set — bot ishga tushmadi")
 
-    # ✅ Avval yield — port ochilsin, server tayyor bo'lsin
-    yield
-
-    # ✅ Bot yield DAN KEYIN ishga tushadi — Render port muammosi bo'lmaydi
-    bot_task = None
-    if bot:
-        logger.info("Launching bot task...")
-        bot_task = asyncio.create_task(run_bot(bot))
-        logger.info("Bot task created!")
+    yield  # ✅ Server port ochiladi, requests qabul qiladi
 
     # Shutdown
     if bot_task:
