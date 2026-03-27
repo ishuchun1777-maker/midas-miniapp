@@ -162,17 +162,3 @@ async def get_optional_user(
         return await get_current_user(credentials, db)
     except HTTPException:
         return None
-```
-
----
-
-**Deploy qilgandan keyin Render loglarida quyidagini qidiring:**
-```
-# Muvaffaqiyatli bo'lsa:
-Telegram auth success for user_id=...
-
-# Hali xato bo'lsa:
-Hash mismatch!
-computed : abc123...
-received : xyz789...
-data_check_string: auth_date=...
