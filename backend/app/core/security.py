@@ -25,24 +25,32 @@ def verify_telegram_init_data(init_data: str) -> Optional[Dict[str, Any]]:
             logger.warning("Empty initData")
             return None
 
-        # URL-encoded parse — har bir value unquote qilinadi
+        # RAW qiymatlarni saqlash (hash uchun)
         raw_parsed: Dict[str, str] = {}
+        # DECODED qiymatlar (user parse uchun)
+        decoded_parsed: Dict[str, str] = {}
+
         for item in init_data.split("&"):
             if "=" not in item:
                 continue
             key, _, value = item.partition("=")
-            raw_parsed[key] = unquote(value)  # ✅ barcha value decode
+            raw_parsed[key] = value          # ← original encoded (hash uchun)
+            decoded_parsed[key] = unquote(value)  # ← decoded (user uchun)
 
         hash_value = raw_parsed.pop("hash", None)
+        decoded_parsed.pop("hash", None)
         raw_parsed.pop("signature", None)
+        decoded_parsed.pop("signature", None)
 
         if not hash_value:
             logger.warning("No hash in initData")
             return None
 
-        # auth_date tekshirish (7 kundan eski bo'lsa rad etish)
+        hash_value = unquote(hash_value)  # hash o'zi ham decode qilinadi
+
+        # auth_date tekshirish
         try:
-            auth_date = int(raw_parsed.get("auth_date", "0"))
+            auth_date = int(decoded_parsed.get("auth_date", "0"))
             age = time.time() - auth_date
             if age > 86400 * 7:
                 logger.warning(f"initData too old: {age:.0f}s")
@@ -50,13 +58,12 @@ def verify_telegram_init_data(init_data: str) -> Optional[Dict[str, Any]]:
         except (ValueError, TypeError):
             pass
 
-        # user field mavjudligini tekshirish
-        user_raw = raw_parsed.get("user", "")
+        # user parse — decoded version ishlatiladi
+        user_raw = decoded_parsed.get("user", "")
         if not user_raw:
             logger.warning("No user field in initData")
             return None
 
-        # user allaqachon unquote qilindi — to'g'ridan JSON parse
         try:
             user_data = json.loads(user_raw)
         except json.JSONDecodeError as e:
@@ -73,23 +80,22 @@ def verify_telegram_init_data(init_data: str) -> Optional[Dict[str, Any]]:
 
         token = settings.TELEGRAM_BOT_TOKEN.strip()
 
-        # data_check_string — sorted key=value, "\n" bilan ajratilgan
+        # ✅ data_check_string — RAW (encoded) qiymatlar bilan!
         data_check_string = "\n".join(
             f"{k}={v}" for k, v in sorted(raw_parsed.items())
         )
 
-        logger.debug(f"data_check_string: {data_check_string[:200]}")
+        logger.debug(f"data_check_string:\n{data_check_string[:500]}")
 
-        # ✅ TO'G'RI TARTIB: hmac.new(key, msg, digestmod)
         secret_key = hmac_lib.new(
-            token.encode(),   # key — bot token
-            b"WebAppData",    # msg
+            token.encode(),
+            b"WebAppData",
             hashlib.sha256,
         ).digest()
 
         computed = hmac_lib.new(
-            secret_key,                  # key
-            data_check_string.encode(),  # msg
+            secret_key,
+            data_check_string.encode(),
             hashlib.sha256,
         ).hexdigest()
 
@@ -98,7 +104,7 @@ def verify_telegram_init_data(init_data: str) -> Optional[Dict[str, Any]]:
                 f"Hash mismatch!\n"
                 f"computed : {computed}\n"
                 f"received : {hash_value}\n"
-                f"data_check_string: {data_check_string[:300]}"
+                f"data_check_string:\n{data_check_string}"
             )
             return None
 
